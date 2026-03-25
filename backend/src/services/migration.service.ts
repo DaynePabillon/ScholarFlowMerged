@@ -1,0 +1,948 @@
+import { query } from '../config/database';
+import logger from '../config/logger';
+
+/**
+ * Auto-migration service that ensures database schema is up to date on startup
+ */
+export async function runAutoMigrations(): Promise<void> {
+  logger.info('🔄 Running auto-migrations...');
+
+  try {
+    // Create migrations tracking table if it doesn't exist
+    await query(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Run base schema setup
+    await ensureBaseSchema();
+
+    // Run incremental migrations
+    await runMigrations();
+
+    logger.info('✅ Auto-migrations completed successfully');
+  } catch (error) {
+    logger.error('❌ Auto-migration failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Ensures all base tables and extensions exist
+ */
+async function ensureBaseSchema(): Promise<void> {
+  // Enable UUID extension
+  await query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+
+  // Create organizations table
+  await query(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      domain VARCHAR(255),
+      logo_url TEXT,
+      settings JSONB DEFAULT '{}',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create users table
+  await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      google_id VARCHAR(255) UNIQUE NOT NULL,
+      email VARCHAR(255) UNIQUE NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      profile_picture TEXT,
+      access_token TEXT,
+      refresh_token TEXT,
+      token_expiry TIMESTAMP,
+      onboarding_completed BOOLEAN DEFAULT FALSE,
+      onboarding_data JSONB,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_login TIMESTAMP
+    )
+  `);
+
+  // Create organization_members table
+  await query(`
+    CREATE TABLE IF NOT EXISTS organization_members (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'manager', 'member')),
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'inactive')),
+      invited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      invited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      joined_at TIMESTAMP,
+      UNIQUE(organization_id, user_id)
+    )
+  `);
+
+  // Create projects table
+  await query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+      name VARCHAR(255) NOT NULL,
+      description TEXT,
+      status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('planning', 'active', 'on_hold', 'completed', 'archived')),
+      priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+      start_date DATE,
+      end_date DATE,
+      budget DECIMAL(15, 2),
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      calendar_id VARCHAR(255),
+      drive_folder_id VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Create project_members table
+  await query(`
+    CREATE TABLE IF NOT EXISTS project_members (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+      role VARCHAR(20) DEFAULT 'member' CHECK (role IN ('lead', 'member', 'viewer')),
+      assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      UNIQUE(project_id, user_id)
+    )
+  `);
+
+  // Create tasks table
+  await query(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+      title VARCHAR(500) NOT NULL,
+      description TEXT,
+      status VARCHAR(20) DEFAULT 'todo',
+      priority VARCHAR(20) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+      due_date TIMESTAMP,
+      estimated_hours DECIMAL(10, 2),
+      actual_hours DECIMAL(10, 2),
+      assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      parent_task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMP
+    )
+  `);
+
+  // Create organization_invitations table
+  await query(`
+    CREATE TABLE IF NOT EXISTS organization_invitations (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+      email VARCHAR(255) NOT NULL,
+      role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'manager', 'member')),
+      token VARCHAR(255) UNIQUE NOT NULL,
+      invited_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      expires_at TIMESTAMP NOT NULL,
+      accepted_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(organization_id, email)
+    )
+  `);
+
+  // Create other essential tables
+  await query(`
+    CREATE TABLE IF NOT EXISTS task_comments (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      comment TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS milestones (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+      title VARCHAR(255) NOT NULL,
+      description TEXT,
+      due_date DATE,
+      status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'missed')),
+      completed_at TIMESTAMP,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS drive_files (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      google_drive_id VARCHAR(255) UNIQUE NOT NULL,
+      name VARCHAR(500) NOT NULL,
+      mime_type VARCHAR(100),
+      size BIGINT,
+      web_view_link TEXT,
+      web_content_link TEXT,
+      thumbnail_link TEXT,
+      owner_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+      task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+      parent_folder_id VARCHAR(255),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS calendar_events (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      google_event_id VARCHAR(255) UNIQUE NOT NULL,
+      calendar_id VARCHAR(255) NOT NULL,
+      organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+      project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+      title VARCHAR(500) NOT NULL,
+      description TEXT,
+      location VARCHAR(255),
+      start_time TIMESTAMP NOT NULL,
+      end_time TIMESTAMP NOT NULL,
+      all_day BOOLEAN DEFAULT FALSE,
+      event_type VARCHAR(50),
+      created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS activity_logs (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+      user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      action VARCHAR(100) NOT NULL,
+      entity_type VARCHAR(50),
+      entity_id VARCHAR(255),
+      details JSONB,
+      ip_address INET,
+      user_agent TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  logger.info('📦 Base schema verified');
+}
+
+/**
+ * Run individual migrations that haven't been applied yet
+ */
+async function runMigrations(): Promise<void> {
+  const migrations: { name: string; sql: string }[] = [
+    {
+      name: '001_add_archived_status',
+      sql: `
+        DO $$ 
+        BEGIN
+          ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_status_check;
+          ALTER TABLE tasks ADD CONSTRAINT tasks_status_check 
+            CHECK (status IN ('todo', 'in_progress', 'review', 'done', 'completed', 'blocked', 'archived'));
+        EXCEPTION
+          WHEN others THEN NULL;
+        END $$;
+      `
+    },
+    {
+      name: '002_add_onboarding_fields',
+      sql: `
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_data JSONB;
+      `
+    },
+    {
+      name: '003_create_indexes',
+      sql: `
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_users_email ON users(email); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_organization_members_org_id ON organization_members(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_projects_organization_id ON projects(organization_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '004_fix_missing_columns',
+      sql: `
+        -- Add organization_id to projects if missing
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+        
+        -- Add organization_id to organization_members if missing
+        ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+        
+        -- Add user_id to organization_members if missing
+        ALTER TABLE organization_members ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE CASCADE;
+      `
+    },
+    {
+      name: '005_fix_projects_columns',
+      sql: `
+        -- Add all missing columns to projects table
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS description TEXT;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'medium';
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS start_date DATE;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS end_date DATE;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget DECIMAL(15, 2);
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS calendar_id VARCHAR(255);
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS drive_folder_id VARCHAR(255);
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+        ALTER TABLE projects ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+      `
+    },
+    {
+      name: '006_fix_organizations_columns',
+      sql: `
+        -- Add created_by to organizations if missing
+        ALTER TABLE organizations ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES users(id) ON DELETE SET NULL;
+      `
+    },
+    {
+      name: '007_add_theme_mode',
+      sql: `
+        -- Add theme_mode column for UI preference (professional or aviation)
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_mode VARCHAR(20) DEFAULT 'professional';
+      `
+    },
+    {
+      name: '008_professional_features',
+      sql: `
+        -- Activity Log for tracking all actions
+        CREATE TABLE IF NOT EXISTS activity_log (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_name VARCHAR(255),
+          action VARCHAR(50) NOT NULL,
+          entity_type VARCHAR(50) NOT NULL,
+          entity_id UUID,
+          entity_name VARCHAR(255),
+          details JSONB,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Notifications
+        CREATE TABLE IF NOT EXISTS notifications (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          type VARCHAR(50) NOT NULL,
+          title VARCHAR(255),
+          message TEXT,
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          is_read BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Task Comments
+        CREATE TABLE IF NOT EXISTS task_comments (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_name VARCHAR(255),
+          content TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Time Entries
+        CREATE TABLE IF NOT EXISTS time_entries (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_name VARCHAR(255),
+          hours DECIMAL(5,2) NOT NULL,
+          date DATE DEFAULT CURRENT_DATE,
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Board Widgets (for customizable charts)
+        CREATE TABLE IF NOT EXISTS board_widgets (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          widget_type VARCHAR(50) NOT NULL,
+          title VARCHAR(255),
+          config JSONB DEFAULT '{}',
+          position INTEGER DEFAULT 0,
+          created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Add indexes for performance
+        CREATE INDEX IF NOT EXISTS idx_activity_log_org ON activity_log(organization_id);
+        CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+        CREATE INDEX IF NOT EXISTS idx_comments_task ON task_comments(task_id);
+        CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries(task_id);
+        CREATE INDEX IF NOT EXISTS idx_widgets_org ON board_widgets(organization_id);
+      `
+    },
+    {
+      name: '009_task_followers',
+      sql: `
+        -- Task followers for comment notifications
+        CREATE TABLE IF NOT EXISTS task_followers (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          followed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(task_id, user_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_followers_task ON task_followers(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_followers_user ON task_followers(user_id);
+      `
+    },
+    {
+      name: '010_fix_notifications_task_id',
+      sql: `
+        -- Add task_id column to notifications if it doesn't exist
+        ALTER TABLE notifications ADD COLUMN IF NOT EXISTS task_id UUID REFERENCES tasks(id) ON DELETE CASCADE;
+      `
+    },
+    {
+      name: '011_task_assignees',
+      sql: `
+        -- Task assignees junction table for multi-assignee support
+        CREATE TABLE IF NOT EXISTS task_assignees (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+          assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          UNIQUE(task_id, user_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_assignees_task ON task_assignees(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_assignees_user ON task_assignees(user_id);
+
+        -- Migrate existing assigned_to data to new table
+        INSERT INTO task_assignees (task_id, user_id, assigned_at)
+        SELECT id, assigned_to, updated_at
+        FROM tasks
+        WHERE assigned_to IS NOT NULL
+        ON CONFLICT (task_id, user_id) DO NOTHING;
+      `
+    },
+    {
+      name: '012_comments_support_sheet_tasks',
+      sql: `
+        -- Drop the FK constraint on task_comments so it can accept both tasks and sheet_tasks IDs
+        DO $$ 
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE constraint_name = 'task_comments_task_id_fkey' 
+            AND table_name = 'task_comments'
+          ) THEN
+            ALTER TABLE task_comments DROP CONSTRAINT task_comments_task_id_fkey;
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '013_workspace_sync_tables',
+      sql: `
+        -- Create workspaces table for Google Drive folder sync
+        CREATE TABLE IF NOT EXISTS workspaces (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          name VARCHAR(255) NOT NULL,
+          root_folder_id VARCHAR(255) NOT NULL,
+          root_folder_name VARCHAR(255),
+          sync_status VARCHAR(50) DEFAULT 'active',
+          sync_error TEXT,
+          last_synced_at TIMESTAMP,
+          drive_channel_id VARCHAR(255),
+          drive_channel_expiry TIMESTAMP,
+          created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Create synced_sheets table for Google Sheets connections
+        CREATE TABLE IF NOT EXISTS synced_sheets (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+          team_id UUID,
+          sheet_id VARCHAR(255) NOT NULL,
+          sheet_name VARCHAR(255) NOT NULL,
+          sync_status VARCHAR(50) DEFAULT 'active',
+          last_synced_at TIMESTAMP,
+          column_mapping JSONB DEFAULT '{}',
+          row_count INTEGER DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(workspace_id, sheet_id)
+        );
+
+        -- Create sheet_tasks table for tasks synced from Google Sheets
+        CREATE TABLE IF NOT EXISTS sheet_tasks (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          synced_sheet_id UUID REFERENCES synced_sheets(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
+          sheet_row_index INTEGER NOT NULL,
+          title VARCHAR(500) NOT NULL,
+          description TEXT,
+          status VARCHAR(50) DEFAULT 'todo',
+          priority VARCHAR(20) DEFAULT 'medium',
+          due_date TIMESTAMP,
+          assignee_email VARCHAR(255),
+          synced_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(synced_sheet_id, sheet_row_index)
+        );
+
+        -- Indexes for performance
+        CREATE INDEX IF NOT EXISTS idx_workspaces_org ON workspaces(organization_id);
+        CREATE INDEX IF NOT EXISTS idx_synced_sheets_workspace ON synced_sheets(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_sheet_tasks_synced_sheet ON sheet_tasks(synced_sheet_id);
+      `
+    },
+    {
+      name: '014_fix_workspace_sync_columns',
+      sql: `
+        -- Add missing columns to workspaces table
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'workspaces' AND column_name = 'sync_error') THEN
+            ALTER TABLE workspaces ADD COLUMN sync_error TEXT;
+          END IF;
+        END $$;
+
+        -- Add missing columns to synced_sheets table
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'project_id') THEN
+            ALTER TABLE synced_sheets ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'column_mapping') THEN
+            ALTER TABLE synced_sheets ADD COLUMN column_mapping JSONB DEFAULT '{}';
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'row_count') THEN
+            ALTER TABLE synced_sheets ADD COLUMN row_count INTEGER DEFAULT 0;
+          END IF;
+        END $$;
+
+        -- Rename task_column_mapping to column_mapping if it exists (and column_mapping doesn't)
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'task_column_mapping')
+             AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'column_mapping') THEN
+            ALTER TABLE synced_sheets RENAME COLUMN task_column_mapping TO column_mapping;
+          END IF;
+        END $$;
+
+        -- Add missing columns to sheet_tasks table
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'project_id') THEN
+            ALTER TABLE sheet_tasks ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'assignee_email') THEN
+            ALTER TABLE sheet_tasks ADD COLUMN assignee_email VARCHAR(255);
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'synced_at') THEN
+            ALTER TABLE sheet_tasks ADD COLUMN synced_at TIMESTAMP;
+          END IF;
+        END $$;
+
+        -- Rename assigned_to to assignee_email if it exists (and assignee_email doesn't)
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'assigned_to')
+             AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'assignee_email') THEN
+            ALTER TABLE sheet_tasks RENAME COLUMN assigned_to TO assignee_email;
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '015_ensure_workspace_columns',
+      sql: `
+        -- Ensure sync_error column exists on workspaces
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'workspaces' AND column_name = 'sync_error') THEN
+            ALTER TABLE workspaces ADD COLUMN sync_error TEXT;
+          END IF;
+        END $$;
+
+        -- Ensure column_mapping exists on synced_sheets
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'column_mapping') THEN
+            ALTER TABLE synced_sheets ADD COLUMN column_mapping JSONB DEFAULT '{}';
+          END IF;
+        END $$;
+
+        -- Ensure project_id exists on synced_sheets
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'project_id') THEN
+            ALTER TABLE synced_sheets ADD COLUMN project_id UUID;
+          END IF;
+        END $$;
+
+        -- Ensure row_count exists on synced_sheets
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'synced_sheets' AND column_name = 'row_count') THEN
+            ALTER TABLE synced_sheets ADD COLUMN row_count INTEGER DEFAULT 0;
+          END IF;
+        END $$;
+
+        -- Ensure project_id exists on sheet_tasks
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'project_id') THEN
+            ALTER TABLE sheet_tasks ADD COLUMN project_id UUID;
+          END IF;
+        END $$;
+
+        -- Ensure assignee_email exists on sheet_tasks
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'assignee_email') THEN
+            ALTER TABLE sheet_tasks ADD COLUMN assignee_email VARCHAR(255);
+          END IF;
+        END $$;
+
+        -- Ensure synced_at exists on sheet_tasks
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sheet_tasks' AND column_name = 'synced_at') THEN
+            ALTER TABLE sheet_tasks ADD COLUMN synced_at TIMESTAMP;
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '016_create_sync_logs',
+      sql: `
+        CREATE TABLE IF NOT EXISTS sync_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+          event_type VARCHAR(100) NOT NULL,
+          event_data JSONB DEFAULT '{}',
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_sync_logs_workspace ON sync_logs(workspace_id);
+        CREATE INDEX IF NOT EXISTS idx_sync_logs_created ON sync_logs(created_at);
+      `
+    },
+    {
+      name: '017_add_sync_logs_details',
+      sql: `
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'details') THEN
+            ALTER TABLE sync_logs ADD COLUMN details JSONB DEFAULT '{}';
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '018_bug_reports',
+      sql: `
+        CREATE TABLE IF NOT EXISTS bug_reports (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_email VARCHAR(255) NOT NULL,
+          user_name VARCHAR(255),
+          category VARCHAR(50) NOT NULL DEFAULT 'bug' CHECK (category IN ('bug', 'feature', 'feedback', 'other')),
+          title VARCHAR(255) NOT NULL,
+          description TEXT NOT NULL,
+          page_url TEXT,
+          status VARCHAR(20) DEFAULT 'new' CHECK (status IN ('new', 'reviewed', 'resolved', 'dismissed')),
+          creator_notes TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bug_reports_status ON bug_reports(status);
+        CREATE INDEX IF NOT EXISTS idx_bug_reports_created ON bug_reports(created_at DESC);
+      `
+    },
+    {
+      name: '019_team_board',
+      sql: `
+        -- Team Groups: Represents class teams (e.g., IT332 Team 01)
+        CREATE TABLE IF NOT EXISTS team_groups (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          team_code VARCHAR(100),
+          team_number INTEGER NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          adviser_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          adviser_name VARCHAR(255),
+          leader_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          leader_name VARCHAR(255),
+          source_sheet_id VARCHAR(255),
+          status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'archived')),
+          created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- Team Group Members
+        CREATE TABLE IF NOT EXISTS team_group_members (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          team_group_id UUID REFERENCES team_groups(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          member_number INTEGER NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255),
+          student_id VARCHAR(100),
+          is_leader BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(team_group_id, member_number)
+        );
+
+        -- Team Checkpoints: Adviser-marked progress items
+        CREATE TABLE IF NOT EXISTS team_checkpoints (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          team_group_id UUID REFERENCES team_groups(id) ON DELETE CASCADE,
+          member_id UUID REFERENCES team_group_members(id) ON DELETE SET NULL,
+          title VARCHAR(255) NOT NULL,
+          description TEXT,
+          status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed')),
+          due_date TIMESTAMP,
+          completed_at TIMESTAMP,
+          marked_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- Team Comments
+        CREATE TABLE IF NOT EXISTS team_comments (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          team_group_id UUID REFERENCES team_groups(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          user_name VARCHAR(255),
+          content TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- Indexes
+        CREATE INDEX IF NOT EXISTS idx_team_groups_org ON team_groups(organization_id);
+        CREATE INDEX IF NOT EXISTS idx_team_groups_adviser ON team_groups(adviser_id);
+        CREATE INDEX IF NOT EXISTS idx_team_group_members_group ON team_group_members(team_group_id);
+        CREATE INDEX IF NOT EXISTS idx_team_group_members_user ON team_group_members(user_id);
+        CREATE INDEX IF NOT EXISTS idx_team_checkpoints_group ON team_checkpoints(team_group_id);
+        CREATE INDEX IF NOT EXISTS idx_team_checkpoints_member ON team_checkpoints(member_id);
+        CREATE INDEX IF NOT EXISTS idx_team_comments_group ON team_comments(team_group_id);
+      `
+    },
+    {
+      name: '020_team_groups_unique',
+      sql: `
+        -- Add unique constraint for team import upsert
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_team_groups_org_number'
+          ) THEN
+            ALTER TABLE team_groups ADD CONSTRAINT uq_team_groups_org_number UNIQUE (organization_id, team_number);
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '021_add_progress_column',
+      sql: `
+        -- Add progress tracking column to team_groups table
+        ALTER TABLE team_groups 
+        ADD COLUMN IF NOT EXISTS progress DECIMAL(5,2) DEFAULT 0.00 CHECK (progress >= 0 AND progress <= 100);
+      `
+    },
+    {
+      name: '022_add_ss_group_id_to_projects',
+      sql: `
+        -- Add ss_group_id to projects table for ScholarSync mapping
+        ALTER TABLE projects 
+        ADD COLUMN IF NOT EXISTS ss_group_id UUID;
+        
+        CREATE INDEX IF NOT EXISTS idx_projects_ss_group_id ON projects(ss_group_id);
+      `
+    },
+    {
+      name: '023_progress_sync_trigger',
+      sql: `
+        -- Function to calculate project progress and send notification
+        CREATE OR REPLACE FUNCTION notify_progress_update()
+        RETURNS TRIGGER AS $$
+        DECLARE
+            v_project_id UUID;
+            v_ss_group_id UUID;
+            v_team_id UUID;
+            v_total_tasks INTEGER := 0;
+            v_completed_tasks INTEGER := 0;
+            v_progress DECIMAL(5,2);
+        BEGIN
+            -- Get context from the task
+            v_project_id := COALESCE(NEW.project_id, OLD.project_id);
+            v_team_id := COALESCE(NEW.team_id, OLD.team_id);
+            
+            -- If no team_id, try to get it from synced_sheets if this is a sheet task
+            IF v_team_id IS NULL AND TG_TABLE_NAME = 'sheet_tasks' THEN
+                SELECT team_id INTO v_team_id FROM synced_sheets WHERE id = COALESCE(NEW.synced_sheet_id, OLD.synced_sheet_id);
+            END IF;
+
+            -- 1. Progress for Project-wide ScholarSync mapping
+            SELECT ss_group_id INTO v_ss_group_id FROM projects WHERE id = v_project_id;
+            
+            -- 2. Team Progress Calculation (if team_id exists)
+            IF v_team_id IS NOT NULL THEN
+                -- Count regular tasks
+                SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('done', 'completed', 'Done'))
+                INTO v_total_tasks, v_completed_tasks
+                FROM tasks WHERE team_id = v_team_id AND status != 'archived';
+                
+                -- Add internal sheet tasks
+                DECLARE
+                    vt_sheet_total INTEGER;
+                    vt_sheet_done INTEGER;
+                BEGIN
+                    SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('done', 'completed', 'Done'))
+                    INTO vt_sheet_total, vt_sheet_done
+                    FROM sheet_tasks WHERE team_id = v_team_id;
+                    
+                    v_total_tasks := v_total_tasks + vt_sheet_total;
+                    v_completed_tasks := v_completed_tasks + vt_sheet_done;
+                END;
+
+                -- Add checkpoints
+                DECLARE
+                    v_cp_total INTEGER;
+                    v_cp_done INTEGER;
+                BEGIN
+                    SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'completed')
+                    INTO v_cp_total, v_cp_done
+                    FROM team_checkpoints WHERE team_group_id = v_team_id;
+                    
+                    v_total_tasks := v_total_tasks + v_cp_total;
+                    v_completed_tasks := v_completed_tasks + v_cp_done;
+                END;
+
+                -- Calculate and Update
+                IF v_total_tasks > 0 THEN
+                    v_progress := ROUND((v_completed_tasks::DECIMAL / v_total_tasks::DECIMAL) * 100, 2);
+                ELSE
+                    v_progress := 0.00;
+                END IF;
+
+                UPDATE team_groups SET progress = v_progress, updated_at = NOW() WHERE id = v_team_id;
+            END IF;
+
+            -- 3. ScholarSync Notification (Project-level)
+            IF v_ss_group_id IS NOT NULL THEN
+                -- Re-calculate project-wide progress if needed
+                PERFORM pg_notify('progress_update', json_build_object(
+                    'group_id', v_ss_group_id,
+                    'project_id', v_project_id,
+                    'progress', v_progress,
+                    'timestamp', EXTRACT(EPOCH FROM NOW())
+                )::text);
+            END IF;
+            
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        -- Create trigger on tasks table
+        DROP TRIGGER IF EXISTS task_progress_update ON tasks;
+        CREATE TRIGGER task_progress_update
+        AFTER INSERT OR UPDATE OF status OR DELETE ON tasks
+        FOR EACH ROW EXECUTE FUNCTION notify_progress_update();
+      `
+    },
+    {
+      name: '024_add_team_id_to_synced_sheets',
+      sql: `
+        -- Add team_id column to synced_sheets for linking sheets to team groups
+        ALTER TABLE synced_sheets 
+        ADD COLUMN IF NOT EXISTS team_id UUID REFERENCES team_groups(id) ON DELETE SET NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_synced_sheets_team ON synced_sheets(team_id);
+      `
+    },
+    {
+      name: '025_add_sheet_tasks_columns',
+      sql: `
+        -- Add missing columns to sheet_tasks for WBS sync support
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS team_id UUID;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS wbs_code VARCHAR(100);
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS complexity_weight INTEGER DEFAULT 1;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS is_absolute BOOLEAN DEFAULT FALSE;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMP;
+      `
+    },
+    {
+      name: '026_add_tasks_missing_columns',
+      sql: `
+        -- Add missing columns to tasks table for WBS sync and filtering
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS team_id UUID;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_absolute BOOLEAN DEFAULT FALSE;
+      `
+    },
+    {
+      name: '027_sheet_tasks_progress_trigger',
+      sql: `
+        -- Create trigger on sheet_tasks table
+        DROP TRIGGER IF EXISTS sheet_task_progress_update ON sheet_tasks;
+        CREATE TRIGGER sheet_task_progress_update
+        AFTER INSERT OR UPDATE OF status OR DELETE ON sheet_tasks
+        FOR EACH ROW EXECUTE FUNCTION notify_progress_update();
+      `
+    },
+    {
+      name: '028_fix_synced_sheets_unique_team_sheet',
+      sql: `
+        -- Ensure each team has a unique sheet mapping and one sheet isn't used by multiple teams
+        ALTER TABLE synced_sheets DROP CONSTRAINT IF EXISTS synced_sheets_workspace_id_sheet_id_key;
+        
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'synced_sheets_team_sheet_unique') THEN
+            ALTER TABLE synced_sheets ADD CONSTRAINT synced_sheets_team_sheet_unique UNIQUE(team_id, sheet_id);
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '029_add_luxury_weight_to_tasks',
+      sql: `
+        -- Add luxury_weight column to both tasks and sheet_tasks for column alignment in UNION queries
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS luxury_weight INTEGER DEFAULT 1;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS luxury_weight INTEGER DEFAULT 1;
+        
+        -- Update existing records to have a default value
+        UPDATE tasks SET luxury_weight = 1 WHERE luxury_weight IS NULL;
+        UPDATE sheet_tasks SET luxury_weight = 1 WHERE luxury_weight IS NULL;
+      `
+    }
+  ];
+
+  for (const migration of migrations) {
+    const applied = await query(
+      'SELECT 1 FROM _migrations WHERE name = $1',
+      [migration.name]
+    );
+
+    if (applied.rows.length === 0) {
+      logger.info(`  📝 Applying migration: ${migration.name}`);
+      await query(migration.sql);
+      await query(
+        'INSERT INTO _migrations (name) VALUES ($1)',
+        [migration.name]
+      );
+    }
+  }
+}

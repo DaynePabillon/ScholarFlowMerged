@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Refresh Role</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            text-align: center;
+        }
+        h1 { color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+        .btn {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: #059669;
+            transform: translateY(-2px);
+        }
+        .info {
+            background: #ecfdf5;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            text-align: left;
+            border-left: 4px solid #10b981;
+        }
+        .info strong { color: #065f46; display: block; margin-bottom: 10px; }
+        .info ul { margin: 10px 0; padding-left: 20px; }
+        .info li { margin: 5px 0; color: #047857; }
+        .countdown {
+            font-size: 48px;
+            font-weight: bold;
+            color: #10b981;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Force Role Refresh</h1>
+        <p class="subtitle">Clear cache and reload with fresh data from database</p>
+        
+        <button class="btn" onclick="forceRefresh()">
+            🚀 Clear Cache & Reload Now
+        </button>
+        
+        <div class="countdown" id="countdown"></div>
+        
+        <div class="info">
+            <strong>📋 Current Cache Status:</strong>
+            <ul>
+                <li id="orgsCache">Organizations: <span style="color: #dc2626;">Cached</span></li>
+                <li id="selectedCache">Selected Org: <span style="color: #dc2626;">Cached</span></li>
+            </ul>
+            
+            <strong style="margin-top: 15px;">✨ After clearing:</strong>
+            <ul>
+                <li>App will fetch fresh data from API</li>
+                <li>Your role will update to: <strong>Manager</strong></li>
+                <li>Theme will change to: <strong>Professional Teal</strong></li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Check cache status on load
+        window.addEventListener('load', () => {
+            const orgs = localStorage.getItem('organizations');
+            const selected = localStorage.getItem('selectedOrganization');
+            
+            if (!orgs) {
+                document.getElementById('orgsCache').innerHTML = 'Organizations: <span style="color: #10b981;">✓ Not cached</span>';
+            }
+            if (!selected) {
+                document.getElementById('selectedCache').innerHTML = 'Selected Org: <span style="color: #10b981;">✓ Not cached</span>';
+            }
+        });
+        
+        function forceRefresh() {
+            // Clear ALL localStorage
+            localStorage.clear();
+            
+            // Show countdown
+            const countdownEl = document.getElementById('countdown');
+            countdownEl.style.display = 'block';
+            
+            let count = 3;
+            countdownEl.textContent = count;
+            
+            const interval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else {
+                    clearInterval(interval);
+                    countdownEl.textContent = '🚀';
+                    
+                    // Redirect to login
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 500);
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
