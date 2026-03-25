@@ -28,7 +28,9 @@ import reportsRoutes from './routes/reports.routes';
 import teamGroupRoutes from './routes/team-group.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import wbsRoutes from './routes/wbs.routes';
+import scholarRoutes from './routes/scholar.routes';
 import { runAutoMigrations } from './services/migration.service';
+import passport from 'passport';
 
 dotenv.config();
 
@@ -62,6 +64,7 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(passport.initialize());
 app.use(morgan('combined', {
   stream: {
     write: (message: string) => logger.info(message.trim()),
@@ -100,6 +103,9 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api', teamGroupRoutes);
 app.use('/api', analyticsRoutes);
 app.use('/api/wbs', wbsRoutes);
+
+// ScholarSync Academic Routes (Auth, Courses, Groups, Enrollment, etc.)
+app.use('/', scholarRoutes);
 
 // 404 handler
 app.use((_req: Request, res: Response) => {
