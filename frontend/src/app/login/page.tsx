@@ -15,17 +15,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  const handleGoogleLogin = async () => {
-    try {
-      setIsLoading(true)
-      const response = await fetch(`http://localhost:3001/api/auth/google`)
-      const data = await response.json()
-      window.location.href = data.authUrl
-    } catch (error) {
-      console.error('Failed to initiate Google login:', error)
-      alert('Failed to connect to authentication server. Please try again.')
-      setIsLoading(false)
-    }
+  const handleGoogleLogin = () => {
+    // Redirect to the unified backend's Google OAuth flow
+    window.location.href = `http://localhost:5000/api/auth/google`;
   }
 
   return (
@@ -67,10 +59,10 @@ export default function LoginPage() {
                 <Cloud className="w-8 h-8 text-white" />
               </div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-3 tracking-tight">
-                SkyFlow
+                ScholarFlow
               </h1>
               <p className="text-gray-600 font-light">
-                Sign in to your workspace
+                The unified academic and project management platform
               </p>
             </div>
 

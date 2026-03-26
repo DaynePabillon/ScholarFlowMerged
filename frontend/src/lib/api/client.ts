@@ -3,7 +3,7 @@ import axios from 'axios';
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export const apiClient = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -13,8 +13,18 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const authToken = localStorage.getItem('auth_token');
+    
+    // Proactive synchronization
+    if (token && !authToken) {
+      localStorage.setItem('auth_token', token);
+    } else if (!token && authToken) {
+      localStorage.setItem('token', authToken);
+    }
+
+    const activeToken = token || authToken;
+    if (activeToken) {
+      config.headers.Authorization = `Bearer ${activeToken}`;
     }
   }
   return config;
@@ -28,7 +38,8 @@ apiClient.interceptors.response.use(
       // Token expired or invalid
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
-        window.location.href = '/';
+        localStorage.removeItem('auth_token');
+        window.location.href = '/landing';
       }
     }
     return Promise.reject(error);

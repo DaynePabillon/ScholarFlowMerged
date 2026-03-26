@@ -61,6 +61,8 @@ app.use(helmet());
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -105,6 +107,7 @@ app.use('/api', analyticsRoutes);
 app.use('/api/wbs', wbsRoutes);
 
 // ScholarSync Academic Routes (Auth, Courses, Groups, Enrollment, etc.)
+// Apply verifyToken middleware to scholarRoutes if needed, or within scholar.routes.ts
 app.use('/', scholarRoutes);
 
 // 404 handler

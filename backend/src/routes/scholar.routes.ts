@@ -15,53 +15,26 @@ import logger from '../config/logger';
 
 const router = Router();
 
-// ══════════════════════════════════════
-// PASSPORT GOOGLE OAUTH SETUP
-// ══════════════════════════════════════
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID!,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-  callbackURL: process.env.GOOGLE_REDIRECT_URI || "http://localhost:5000/auth/google/callback"
-},
-  async (accessToken: string, refreshToken: string, profile: any, done: any) => {
-    try {
-      const email = profile.emails?.[0]?.value;
-      const name = profile.displayName;
-
-      if (!email) {
-        return done(new Error("No email found from Google profile"));
-      }
-
-      const { rows } = await pool.query('SELECT * FROM ss_account WHERE "accountEmail" = $1', [email]);
-      const user = rows[0];
-
-      if (!user) {
-        return done(null, { isNew: true, email: email, accessToken } as any);
-      }
-
-      // Store / update access token for Google Drive/Sheets access
-      await pool.query(
-        'UPDATE ss_account SET "googleAccessToken" = $1 WHERE "accountEmail" = $2',
-        [accessToken, email]
-      );
-
-      return done(null, { ...user, id: user.account_id, email: user.accountEmail, accessToken } as any);
-    } catch (err) {
-      return done(err as Error);
-    }
-  }
-));
+// Passport Google OAuth setup removed - consolidated into authRoutes (auth.routes.ts)
 
 // ══════════════════════════════════════
 // MIDDLEWARE HELPERS
 // ══════════════════════════════════════
 const verifyToken = (req: Request, res: Response, next: NextFunction) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.sendStatus(401);
+  const authHeader = req.headers.authorization || req.headers.Authorization;
+  const token = typeof authHeader === 'string' && authHeader.split(' ')[1];
+  
+  if (!token) {
+    logger.warn('[Scholar Auth] Missing token in request to:', req.path);
+    return res.status(401).json({ error: 'Access token required' });
+  }
 
-  jwt.verify(token, process.env.JWT_SECRET || "test", (err: any, user: any) => {
-    if (err) return res.sendStatus(403);
+  const secret = process.env.JWT_SECRET || 'default-secret-key';
+  jwt.verify(token, secret, (err: any, user: any) => {
+    if (err) {
+      logger.warn('[Scholar Auth] Invalid token attempt for:', req.path, 'Reason:', err.message);
+      return res.status(403).json({ error: 'Invalid or expired token' });
+    }
     (req as any).user = user;
     next();
   });
@@ -72,7 +45,7 @@ const verifyAdmin = (req: Request, res: Response, next: NextFunction) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "test", (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", (err: any, user: any) => {
     if (err) return res.sendStatus(403);
     if (user.role !== 'Admin') return res.status(403).json({ error: "Admin access required" });
     (req as any).user = user;
@@ -85,7 +58,7 @@ const verifyInstructor = (req: Request, res: Response, next: NextFunction) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "test", (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", (err: any, user: any) => {
     if (err) return res.sendStatus(403);
     if (user.role !== 'Admin' && user.role !== 'Adviser' && user.role !== 'Advisers') {
       return res.status(403).json({ error: "Instructor access required" });
@@ -100,7 +73,7 @@ const verifyInstructor = (req: Request, res: Response, next: NextFunction) => {
 // ══════════════════════════════════════
 const getAccessToken = async (token: string): Promise<string | null> => {
   try {
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'test');
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     const { rows } = await pool.query('SELECT "googleAccessToken" FROM ss_account WHERE account_id = $1', [decoded.id]);
     return rows[0]?.googleAccessToken || null;
   } catch {
@@ -109,51 +82,7 @@ const getAccessToken = async (token: string): Promise<string | null> => {
 };
 
 // ══════════════════════════════════════
-// AUTH ROUTES
-// ══════════════════════════════════════
-
-// Google OAuth initiation
-router.get('/auth/google',
-  passport.authenticate('google', {
-    scope: [
-      'profile',
-      'email',
-      'https://www.googleapis.com/auth/drive.readonly',
-      'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/spreadsheets.readonly',
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events'
-    ],
-    accessType: 'offline',
-    prompt: 'consent'
-  } as any)
-);
-
-// Google OAuth callback
-router.get('/auth/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: 'http://localhost:3000/login' }),
-  (req: Request, res: Response) => {
-    const user = req.user as any;
-
-    if (user.isNew) {
-      const tempToken = jwt.sign(
-        { email: user.email, accessToken: user.accessToken, isRegistrationToken: true },
-        process.env.JWT_SECRET || "test",
-        { expiresIn: '15m' }
-      );
-      return res.redirect(`http://localhost:3000/complete-profile?token=${tempToken}`);
-    }
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.accountRole, name: user.accountName },
-      process.env.JWT_SECRET || "test",
-      { expiresIn: '24h' }
-    );
-
-    res.redirect(`http://localhost:3000/auth-success?token=${token}`);
-  }
-);
+// Google OAuth routes removed - consolidated into auth.routes.ts ───
 
 // Complete profile (new user registration)
 router.post('/api/complete-profile', async (req: Request, res: Response) => {
@@ -161,7 +90,7 @@ router.post('/api/complete-profile', async (req: Request, res: Response) => {
   if (!token || !name) return res.status(400).json({ error: "Missing token or name" });
 
   try {
-    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "test");
+    const decoded: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     if (!decoded.isRegistrationToken || !decoded.email) {
       return res.status(400).json({ error: "Invalid registration token" });
     }
@@ -178,7 +107,7 @@ router.post('/api/complete-profile', async (req: Request, res: Response) => {
 
     const sessionToken = jwt.sign(
       { id: newUser.account_id, email: newUser.accountEmail, role: newUser.accountRole, name: newUser.accountName },
-      process.env.JWT_SECRET || "test",
+      process.env.JWT_SECRET || "default-secret-key",
       { expiresIn: '24h' }
     );
 
@@ -196,7 +125,7 @@ router.get('/api/me', (req: Request, res: Response) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || 'test', async (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key', async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
     try {
       const { rows } = await pool.query(
@@ -267,7 +196,7 @@ router.get('/api/courses', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    const user: any = jwt.verify(token, process.env.JWT_SECRET || "test");
+    const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
 
     if (user.role === 'Admin') {
       const { rows: allCourses } = await pool.query(
@@ -331,7 +260,7 @@ router.get('/api/courses/:id', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || "test");
+    jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const { rows } = await pool.query(
       `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
        FROM ss_courses c
@@ -380,7 +309,7 @@ router.get('/api/courses/:id/members', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || 'test');
+    jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     const { rows } = await pool.query(
       `SELECT a.account_id, a."accountName", a."accountEmail", a."accountRole"
        FROM ss_account a
@@ -402,7 +331,7 @@ router.get('/api/courses/:id/groupings', async (req: Request, res: Response) => 
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || "test");
+    jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const { rows } = await pool.query(
       `SELECT id, name as "groupName", team_number, adviser_name as adviser, proposed_project, 
               consultation_dates, comments, grade, course_id as "courseID"
@@ -422,7 +351,7 @@ router.get('/api/courses/:id/group-members', async (req: Request, res: Response)
   if (!token) return res.sendStatus(401);
 
   try {
-    const user: any = jwt.verify(token, process.env.JWT_SECRET || "test");
+    const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const accRes = await pool.query('SELECT "accountRole", "accountGroup" FROM ss_account WHERE account_id = $1', [user.id]);
     const account = accRes.rows[0];
 
@@ -467,7 +396,7 @@ router.get('/api/courses/:id/teams', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    const user: any = jwt.verify(token, process.env.JWT_SECRET || "test");
+    const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const courseId = req.params.id;
 
     const accRes = await pool.query('SELECT "accountRole", "accountEmail", "accountGroup", "accountName" FROM ss_account WHERE account_id = $1', [user.id]);
@@ -516,7 +445,7 @@ router.get('/api/courses/:id/consultations', async (req: Request, res: Response)
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || 'test');
+    jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     const { rows } = await pool.query(
       `SELECT "conID", "courseID", "groupName", "conDate", "conType", "conMil",
               "conSum", "conAction", "conAtt", "isDraft", "conStat", "conNotes"
@@ -538,7 +467,7 @@ router.get('/api/courses/:id/groups', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || "test");
+    jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const { rows } = await pool.query(
       'SELECT id, name, team_number FROM team_groups WHERE course_id = $1 ORDER BY team_number',
       [req.params.id]
@@ -556,7 +485,7 @@ router.get('/api/courses/:id/sheets', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || 'test');
+    jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     const { rows } = await pool.query('SELECT * FROM ss_connected_sheets WHERE "courseID" = $1 ORDER BY created_at DESC', [req.params.id]);
     const sheets = rows.map((s: any) => ({
       id: s.id, sheetId: s.sheetId, sheetName: s.sheetName,
@@ -623,7 +552,7 @@ router.post('/api/enroll', async (req: Request, res: Response) => {
   if (!courseKey) return res.status(400).json({ error: "Missing course key" });
 
   try {
-    const user: any = jwt.verify(token, process.env.JWT_SECRET || "test");
+    const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     if (user.role !== 'Student') {
       return res.status(403).json({ error: 'Only students can enroll using a course key.' });
     }
@@ -656,7 +585,7 @@ router.get('/api/groups/:id', async (req: Request, res: Response) => {
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || 'test');
+    jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     const { rows: groups } = await pool.query(
       `SELECT id as "groupID", name as "groupName", team_number, adviser_name as adviser, proposed_project,
               consultation_dates, comments, grade, course_id as "courseID"
@@ -744,15 +673,16 @@ router.get('/api/group/by-member/:email', verifyToken, async (req: Request, res:
 });
 
 // ══════════════════════════════════════
-// TEAM GROUP COMMENTS (Discussion)
+// TEAM GROUP COMMENTS (ScholarSync — prefixed to avoid conflict with SkyFlow's /api/team-groups/:id/comments)
+// Both use the same team_comments table, but different route paths for each frontend.
 // ══════════════════════════════════════
-router.get('/api/team-groups/:id/comments', async (req: Request, res: Response) => {
+router.get('/api/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
   try {
-    jwt.verify(token, process.env.JWT_SECRET || "test");
+    jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const { rows } = await pool.query(
       `SELECT id, user_name, content, created_at FROM team_comments WHERE team_group_id = $1 ORDER BY created_at ASC`,
       [req.params.id]
@@ -763,13 +693,13 @@ router.get('/api/team-groups/:id/comments', async (req: Request, res: Response) 
   }
 });
 
-router.post('/api/team-groups/:id/comments', async (req: Request, res: Response) => {
+router.post('/api/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "test") as any;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key") as any;
     const { content } = req.body;
     if (!content || !content.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
 
@@ -823,7 +753,7 @@ router.put('/api/consultations/:id', verifyInstructor, async (req: Request, res:
 // ══════════════════════════════════════
 // GOOGLE DRIVE & SHEETS (ScholarSync)
 // ══════════════════════════════════════
-router.get('/api/drive/files', async (req: Request, res: Response) => {
+router.get('/api/scholar/drive/files', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
   const accessToken = await getAccessToken(token);
@@ -840,7 +770,7 @@ router.get('/api/drive/files', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/api/drive/folders', async (req: Request, res: Response) => {
+router.get('/api/scholar/drive/folders', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
   const accessToken = await getAccessToken(token);
@@ -848,7 +778,7 @@ router.get('/api/drive/folders', async (req: Request, res: Response) => {
 
   try {
     const response = await axios.get(
-      `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.folder%27&pageSize=50&fields=files(id,name)`,
+      `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.folder%27&pageSize=50&fields=files(id,name)&orderBy=name`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     return res.json({ folders: response.data.files || [] });
@@ -857,7 +787,43 @@ router.get('/api/drive/folders', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/api/sheets/list', async (req: Request, res: Response) => {
+router.post('/api/scholar/sheets/content', async (req: Request, res: Response) => {
+  const { spreadsheetId, range } = req.body;
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  const accessToken = await getAccessToken(token);
+  if (!accessToken) return res.status(403).json({ error: 'No Google access token.' });
+
+  try {
+    const response = await axios.get(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    return res.json(response.data);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch Sheet content.' });
+  }
+});
+
+router.get('/api/scholar/sheets/content', async (req: Request, res: Response) => {
+  const { spreadsheetId, range } = req.query;
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  const accessToken = await getAccessToken(token);
+  if (!accessToken) return res.status(403).json({ error: 'No Google access token.' });
+
+  try {
+    const response = await axios.get(
+      `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    return res.json(response.data);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to fetch Sheet content.' });
+  }
+});
+
+router.get('/api/scholar/sheets/list', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
   const accessToken = await getAccessToken(token);

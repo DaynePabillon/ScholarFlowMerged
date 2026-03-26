@@ -13,7 +13,7 @@ router.get('/google', (req: Request, res: Response) => {
   try {
     const inviteToken = req.query.invite as string;
     const authUrl = GoogleAuthService.getAuthUrl(inviteToken);
-    return res.json({ authUrl });
+    return res.redirect(authUrl);
   } catch (error) {
     logger.error('Error generating auth URL:', error);
     return res.status(500).json({ error: 'Failed to generate authentication URL' });
@@ -182,17 +182,24 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       }
     }
 
+    // 11. Refetch user to get the updated onboarding_completed and role from detections
+    const { rows: finalUserRows } = await dbQuery('SELECT * FROM users WHERE id = $1', [user.id]);
+    const updatedUser = finalUserRows[0];
+    
     // Generate JWT
     console.log('Step 8: Generating JWT...');
-    const jwt = GoogleAuthService.generateJWT(user);
+    const jwt = GoogleAuthService.generateJWT(updatedUser);
     console.log('Step 9: JWT generated');
 
     // Redirect to frontend with token
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     console.log('Step 10: Redirecting to frontend:', frontendUrl);
+    
+    // Always use /auth/callback as the unified entry point
     const redirectUrl = inviteToken
       ? `${frontendUrl}/auth/callback?token=${jwt}&invited=true`
       : `${frontendUrl}/auth/callback?token=${jwt}`;
+    
     console.log('Full redirect URL:', redirectUrl);
     return res.redirect(redirectUrl);
   } catch (error: any) {

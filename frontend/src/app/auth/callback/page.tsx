@@ -15,8 +15,9 @@ function AuthCallbackContent() {
     const token = searchParams.get("token")
 
     if (token) {
-      // Store token in localStorage
-      localStorage.setItem("token", token)
+      // 1. Store token for both SkyFlow and ScholarSync
+      localStorage.setItem("token", token);
+      localStorage.setItem("auth_token", token);
 
       // Show authenticating status for 1 second
       setTimeout(() => {
@@ -39,9 +40,11 @@ function AuthCallbackContent() {
             .then(data => {
               const { organizations, onboarding_data, ...userData } = data
 
-              // Store user data
-              localStorage.setItem('user', JSON.stringify({ ...userData, onboarding_data }))
+              // 2. Store user data in formats expected by both modules
+              const skyflowUser = { ...userData, onboarding_data };
+              localStorage.setItem('user', JSON.stringify(skyflowUser))
               localStorage.setItem('organizations', JSON.stringify(organizations || []))
+              localStorage.setItem('ss_user', JSON.stringify(data)); // For ScholarSync compatibility if needed
 
               // Store onboarding preferences for easy access
               if (onboarding_data) {

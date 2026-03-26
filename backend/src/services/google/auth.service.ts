@@ -150,6 +150,9 @@ export class GoogleAuthService {
       id: user.id,
       email: user.email,
       googleId: user.google_id,
+      name: user.name,
+      // Map the backend role to what the frontend expects
+      role: user.role || 'member'
     };
 
     const secret = process.env.JWT_SECRET || 'default-secret-key';

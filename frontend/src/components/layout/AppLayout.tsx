@@ -102,8 +102,8 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                   style={{
                     backgroundImage: `linear-gradient(90deg, var(--color-primary), var(--color-secondary))`
                   }}
-                >SkyFlow</h1>
-                <p className="text-xs font-medium" style={{ color: 'var(--color-textSecondary)' }}>Project Management</p>
+                >ScholarFlow</h1>
+                <p className="text-xs font-medium" style={{ color: 'var(--color-textSecondary)' }}>Unified Platform</p>
               </div>
             </div>
 
@@ -228,8 +228,12 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
             {/* Navigation links */}
             <div className="space-y-1">
               <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">Navigation</p>
-              <a href="/" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+              <a href="/" className="flex items-center gap-3 px-3 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
                 <LayoutDashboard className="w-5 h-5" />
+                <span className="text-sm font-medium">Portal</span>
+              </a>
+              <a href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+                <BarChart3 className="w-5 h-5" />
                 <span className="text-sm font-medium">Dashboard</span>
               </a>
               <a href="/projects" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
@@ -267,9 +271,21 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
           borderRight: `1px solid var(--color-border)`
         }}>
           <div className="p-6">
-            {/* Dashboard Section */}
-            <nav className="mb-6">
+            {/* Navigation Section */}
+            <nav className="mb-6 space-y-2">
               <a href="/" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
+                style={{ color: 'var(--color-text)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundImage = 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundImage = 'none';
+                }}
+              >
+                <LayoutDashboard className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                <span>Portal Home</span>
+              </a>
+              <a href="/dashboard" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
                 style={{ color: 'var(--color-text)' }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundImage = 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))';

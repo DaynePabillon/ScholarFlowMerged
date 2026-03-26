@@ -3,54 +3,17 @@
 import { Cloud, GraduationCap, ArrowRight, Sparkles, BookOpen, LayoutDashboard } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { apiClient, API_URL } from "@/lib/api/client"
 
-export default function RootPortal() {
+export default function LaunchpadPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem("token") || localStorage.getItem("auth_token")
-      let storedUser = localStorage.getItem("user")
-      
-      if (!token) {
-        console.warn("No token found in portal, redirecting to landing")
-        router.push("/landing")
-        return
-      }
-
-      // Ensure both tokens are set if only one was found (unification)
-      localStorage.setItem('token', token);
-      localStorage.setItem('auth_token', token);
-
-      // If no local user data, or just to verify the session is active
-      try {
-        const response = await apiClient.get('/auth/me');
-        const data = response.data;
-        const { organizations, onboarding_data, ...baseUser } = data;
-        
-        const updatedUser = { ...baseUser, onboarding_data };
-        localStorage.setItem('user', JSON.stringify(updatedUser));
-        localStorage.setItem('organizations', JSON.stringify(organizations || []));
-        
-        setUser(updatedUser);
-        setIsLoading(false);
-      } catch (err) {
-        console.error('Failed to verify session in portal:', err);
-        // Fallback to local data if available and not a 401
-        if (storedUser) {
-          setUser(JSON.parse(storedUser));
-          setIsLoading(false);
-        } else {
-          router.push("/landing");
-        }
-      }
+    const storedUser = localStorage.getItem("user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
     }
-    
-    checkAuth()
-  }, [router])
+  }, [])
 
   const modules = [
     {
@@ -60,7 +23,7 @@ export default function RootPortal() {
       description: "Manage projects, tasks, and team collaboration with AI-powered insights.",
       icon: Cloud,
       color: "from-blue-500 to-cyan-500",
-      href: "/dashboard",
+      href: "/",
       action: "Open Workspace"
     },
     {
@@ -74,14 +37,6 @@ export default function RootPortal() {
       action: "Open Academy"
     }
   ]
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-      </div>
-    )
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 relative overflow-hidden flex flex-col items-center justify-center p-6">
@@ -135,7 +90,7 @@ export default function RootPortal() {
                 </p>
 
                 <div className="flex items-center gap-2 text-gray-800 font-bold group-hover:translate-x-2 transition-transform duration-300">
-                  {module.action} <ArrowRight className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  {module.action} <ArrowRight className={`w-5 h-5 bg-gradient-to-r ${module.color} bg-clip-text`} />
                 </div>
               </div>
 

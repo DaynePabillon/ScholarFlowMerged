@@ -1,7 +1,7 @@
 'use client';
 
 import { GraduationCap } from 'lucide-react';
-import { API_URL } from '@/lib/api/client';
+import { API_URL } from '@/lib/scholar/api';
 
 export default function LoginPage() {
   const handleGoogleLogin = () => {

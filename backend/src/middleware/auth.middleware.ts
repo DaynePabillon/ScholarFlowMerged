@@ -11,17 +11,20 @@ export interface AuthRequest extends Request {
  */
 export const authenticateToken = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+    const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+    const token = typeof authHeader === 'string' && authHeader.split(' ')[1]; 
 
     if (!token) {
+      logger.warn('[Auth] Missing token in request to:', req.path);
+      logger.debug('[Auth] Headers received:', JSON.stringify(req.headers, null, 2));
       res.status(401).json({ error: 'Access token required' });
       return;
     }
 
-    jwt.verify(token, process.env.JWT_SECRET!, (err: any, decoded: any) => {
+    const secret = process.env.JWT_SECRET || 'default-secret-key';
+    jwt.verify(token, secret, (err: any, decoded: any) => {
       if (err) {
-        logger.warn('Invalid token attempt:', err.message);
+        logger.warn('[Auth] Invalid token attempt for:', req.path, 'Reason:', err.message);
         res.status(401).json({ error: 'Invalid or expired token' });
         return;
       }
