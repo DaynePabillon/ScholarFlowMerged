@@ -28,12 +28,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const theme = getThemeForRole(role, mode)
     const root = document.documentElement
 
+    // Apply CSS variables to root
     Object.entries(theme).forEach(([key, value]) => {
       root.style.setProperty(`--color-${key}`, value)
     })
 
     root.style.setProperty('--text-primary', theme.text)
     root.style.setProperty('--text-secondary', theme.textSecondary)
+
+    // Sync dark mode class for Tailwind
+    if (mode === 'dark') {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
 
     localStorage.setItem('themeMode', mode)
   }, [role, mode])

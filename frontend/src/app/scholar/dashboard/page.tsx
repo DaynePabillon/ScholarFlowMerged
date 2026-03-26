@@ -68,158 +68,158 @@ export default function DashboardPage() {
 
   return (
     <SidebarLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
         {/* Header */}
-        <div className="mb-8 animate-fade-in">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+        <div className="mb-12 animate-fade-in">
+          <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
             Dashboard
           </h1>
-          <p className="text-gray-600 mt-2 text-lg">
+          <p className="mt-3 text-2xl" style={{ color: 'var(--color-text)' }}>
             Welcome back, <span className="font-semibold">{user.email?.split('@')[0]}</span>
-            <span className="text-gray-400"> · {user.role}</span>
+            <span style={{ color: 'var(--color-textSecondary)' }}> · {user.role}</span>
           </p>
         </div>
 
         {/* Stats Grid */}
         {user.role !== 'Student' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="glass-card p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-md">
-                <BookOpen className="w-5 h-5 text-white" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+          <div className="glass-card p-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-md">
+                <BookOpen className="w-7 h-7 text-white" />
               </div>
-              <span className="text-sm font-semibold text-gray-700">Courses</span>
+              <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Courses</span>
             </div>
-            <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+            <p className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
               {courses.length}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-sm mt-2" style={{ color: 'var(--color-textSecondary)' }}>
               {isInstructor ? 'Courses managed' : 'Enrolled courses'}
             </p>
           </div>
 
-          <div className="glass-card p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl shadow-md">
-                <Users className="w-5 h-5 text-white" />
+          <div className="glass-card p-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-gradient-to-br from-green-500 to-emerald-500 rounded-xl shadow-md">
+                <Users className="w-7 h-7 text-white" />
               </div>
-              <span className="text-sm font-semibold text-gray-700">Students</span>
+              <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Students</span>
             </div>
-            <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+            <p className="text-5xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
               {courses.reduce((sum: number, c: any) => sum + (c.courseAmount || 0), 0)}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Total enrolled</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-textSecondary)' }}>Total enrolled</p>
           </div>
 
-          <div className="glass-card p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-md">
-                <Layers className="w-5 h-5 text-white" />
+          <div className="glass-card p-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-md">
+                <Layers className="w-7 h-7 text-white" />
               </div>
-              <span className="text-sm font-semibold text-gray-700">Sections</span>
+              <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Sections</span>
             </div>
-            <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            <p className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               {new Set(courses.map((c: any) => c.courseSection)).size}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Unique sections</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-textSecondary)' }}>Unique sections</p>
           </div>
 
-          <div className="glass-card p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl shadow-md">
-                <TrendingUp className="w-5 h-5 text-white" />
+          <div className="glass-card p-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="p-3 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl shadow-md">
+                <TrendingUp className="w-7 h-7 text-white" />
               </div>
-              <span className="text-sm font-semibold text-gray-700">Term</span>
+              <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>Term</span>
             </div>
-            <p className="text-xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+            <p className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
               {courses[0]?.courseTerm || 'No Term'}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Current semester</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--color-textSecondary)' }}>Current semester</p>
           </div>
         </div>
         )}
 
         {/* Quick Actions */}
-        <div className="glass-card p-6 mb-8">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6">
+        <div className="glass-card p-8 mb-12">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-8">
             Quick Actions
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <Link
               href="/scholar/courses"
-              className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
+              className="flex items-center gap-4 p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
             >
-              <BookOpen className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" />
+              <BookOpen className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors" />
               <div>
-                <p className="font-semibold text-gray-800 group-hover:text-white transition-colors">View Courses</p>
-                <p className="text-xs text-gray-500 group-hover:text-white/80 transition-colors">Manage your courses</p>
+                <p className="font-semibold text-base transition-colors group-hover:text-white" style={{ color: 'var(--color-text)' }}>View Courses</p>
+                <p className="text-sm transition-colors group-hover:text-white/80" style={{ color: 'var(--color-textSecondary)' }}>Manage your courses</p>
               </div>
-              <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white ml-auto transition-colors" />
+              <ArrowRight className="w-6 h-6 text-gray-400 dark:text-gray-500 group-hover:text-white ml-auto transition-colors" />
             </Link>
 
             <Link
               href="/drive"
-              className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
+              className="flex items-center gap-4 p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
             >
-              <FolderOpen className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" />
+              <FolderOpen className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors" />
               <div>
-                <p className="font-semibold text-gray-800 group-hover:text-white transition-colors">Google Drive</p>
-                <p className="text-xs text-gray-500 group-hover:text-white/80 transition-colors">Browse your files</p>
+                <p className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-white transition-colors">Google Drive</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-white/80 transition-colors">Browse your files</p>
               </div>
-              <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white ml-auto transition-colors" />
+              <ArrowRight className="w-6 h-6 text-gray-400 dark:text-gray-500 group-hover:text-white ml-auto transition-colors" />
             </Link>
 
             <Link
               href="/sheets"
-              className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
+              className="flex items-center gap-4 p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
             >
-              <FileSpreadsheet className="w-5 h-5 text-blue-600 group-hover:text-white transition-colors" />
+              <FileSpreadsheet className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors" />
               <div>
-                <p className="font-semibold text-gray-800 group-hover:text-white transition-colors">Google Sheets</p>
-                <p className="text-xs text-gray-500 group-hover:text-white/80 transition-colors">View spreadsheets</p>
+                <p className="font-semibold text-base text-gray-900 dark:text-gray-100 group-hover:text-white transition-colors">Google Sheets</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 group-hover:text-white/80 transition-colors">View spreadsheets</p>
               </div>
-              <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white ml-auto transition-colors" />
+              <ArrowRight className="w-6 h-6 text-gray-400 dark:text-gray-500 group-hover:text-white ml-auto transition-colors" />
             </Link>
           </div>
         </div>
 
         {/* Recent Courses */}
-        <div className="glass-card p-6">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-6">
+        <div className="glass-card p-8">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-8">
             {isInstructor ? 'Your Courses' : 'Enrolled Courses'}
           </h2>
           {courses.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {courses.slice(0, 6).map((course: any) => (
                 <Link
                   key={course.id}
                   href={`/courses/${course.id}`}
-                  className="p-4 border border-gray-200 rounded-xl hover:shadow-md hover:border-blue-200 transition-all duration-300 group"
+                  className="p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:shadow-md hover:border-blue-200 dark:hover:border-blue-500 transition-all duration-300 group"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
-                      <BookOpen className="w-4 h-4 text-white" />
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
+                      <BookOpen className="w-6 h-6 text-white" />
                     </div>
-                    <span className="text-xs font-medium px-2 py-1 bg-blue-50 text-blue-600 rounded-full">
+                    <span className="text-sm font-medium px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full">
                       {course.courseSection}
                     </span>
                   </div>
-                  <h3 className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors mb-1">
+                  <h3 className="font-semibold text-base transition-colors group-hover:text-blue-600 dark:group-hover:text-blue-400 mb-2" style={{ color: 'var(--color-text)' }}>
                     {course.courseName}
                   </h3>
-                  <p className="text-sm text-gray-500">{course.courseCode} · {course.courseTerm}</p>
-                  <div className="flex items-center gap-1 mt-3 text-xs text-gray-400">
-                    <Users className="w-3 h-3" />
+                  <p className="text-base" style={{ color: 'var(--color-textSecondary)' }}>{course.courseCode} · {course.courseTerm}</p>
+                  <div className="flex items-center gap-2 mt-4 text-sm text-gray-500 dark:text-gray-400">
+                    <Users className="w-5 h-5" />
                     <span>{course.courseAmount || 0} students</span>
                   </div>
                 </Link>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No courses yet</p>
-              <p className="text-sm text-gray-400 mt-1">
+            <div className="text-center py-16">
+              <Calendar className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-6" />
+              <p className="text-gray-700 dark:text-gray-300 font-medium text-lg">No courses yet</p>
+              <p className="text-base text-gray-600 dark:text-gray-400 mt-2">
                 {isInstructor ? 'Create your first course to get started' : 'Enroll in a course using a course key'}
               </p>
             </div>

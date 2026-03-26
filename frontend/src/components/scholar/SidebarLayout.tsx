@@ -98,8 +98,8 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         { href: '/scholar/courses', label: 'Courses', icon: FolderKanban },
         { href: '/scholar/calendar', label: 'Calendar', icon: Calendar },
         ...(userRole === 'Admin' ? [{ href: '/scholar/workspace-sync', label: 'Workspace Sync', icon: RefreshCw }] : []),
-        ...(normalizedRole === 'admin' || normalizedRole === 'adviser' || normalizedRole === 'advisers' ? [{ href: '/scholar/schedule', label: 'My Schedule', icon: Calendar }] : []),
-        ...(userRole === 'Student' ? [{ href: '/scholar/booking', label: 'Booking', icon: Calendar }] : []),
+        ...(normalizedRole === 'admin' || normalizedRole === 'adviser' || normalizedRole === 'advisers' || normalizedRole === 'manager' ? [{ href: '/scholar/schedule', label: 'My Schedule', icon: Calendar }] : []),
+        ...(userRole === 'Student' || userRole === 'member' ? [{ href: '/scholar/booking', label: 'Course Consultation', icon: Calendar }] : []),
     ];
 
     const isActive = (path: string) => pathname === path;
