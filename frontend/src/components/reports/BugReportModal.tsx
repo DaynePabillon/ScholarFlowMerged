@@ -35,7 +35,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
         setError('');
 
         try {
-            await apiClient.post('/api/reports', {
+            await apiClient.post('/reports', {
                 category,
                 title: title.trim(),
                 description: description.trim(),
@@ -142,10 +142,6 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                             />
                         </div>
 
-                        {/* Page URL Info */}
-                        <div className="text-xs text-gray-500 bg-gray-50 px-3 py-2 rounded-lg">
-                            📍 Current page will be included: {window.location.pathname}
-                        </div>
 
                         {/* Error Message */}
                         {error && (
