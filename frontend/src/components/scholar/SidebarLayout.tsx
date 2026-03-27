@@ -15,12 +15,14 @@ import {
     ChevronDown, 
     Shield,
     LayoutDashboard,
-    RefreshCw
+    RefreshCw,
+    Bug
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import ThemeToggle from './shared/ThemeToggle';
 import { useTheme } from '@/contexts/scholar/ThemeContext';
-import { API_URL } from '@/lib/scholar/api';
+import apiClient from '@/lib/api/client';
+import BugReportModal from '@/components/reports/BugReportModal';
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -32,6 +34,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     const pathname = usePathname();
     const router = useRouter();
     const { toggleMode, setRole } = useTheme();
+    const [showBugReport, setShowBugReport] = useState(false);
 
     useEffect(() => {
         const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
@@ -53,14 +56,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 }
 
                 // Refresh profile from backend so role updates are reflected without re-login
-                fetch(`${API_URL}/api/me`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                })
-                    .then(async (res) => {
-                        if (!res.ok) return null;
-                        return res.json();
-                    })
-                    .then((profile) => {
+                apiClient.get('/api/auth/me')
+                    .then((res) => {
+                        const profile = res.data;
                         if (!profile) return;
                         const refreshedRole = String(profile.role || decoded.role || '');
                         setUserRole(refreshedRole);
@@ -269,6 +267,18 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                     </div>
                 </main>
             </div>
+
+            {/* Floating Bug Report Button */}
+            <button
+                onClick={() => setShowBugReport(true)}
+                className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center z-50 group"
+                title="Report a bug or issue"
+            >
+                <Bug className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+            </button>
+
+            {/* Bug Report Modal */}
+            <BugReportModal isOpen={showBugReport} onClose={() => setShowBugReport(false)} />
         </div>
     );
 }

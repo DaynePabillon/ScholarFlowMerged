@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
-import { API_URL } from '@/lib/scholar/api';
+import { API_URL } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
     FileSpreadsheet,

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
 import Link from 'next/link';
-import apiClient, { API_URL } from '@/lib/scholar/api';
+import apiClient, { API_URL } from '@/lib/api/client';
 import {
   BookOpen,
   Users,

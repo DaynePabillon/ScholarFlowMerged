@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { API_URL } from '@/lib/scholar/api';
+import { API_URL } from '@/lib/api/client';
 import { GraduationCap, Loader2 } from 'lucide-react';
 
 function CompleteProfileForm() {

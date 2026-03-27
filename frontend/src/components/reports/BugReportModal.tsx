@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Bug, X, Send, AlertTriangle, Lightbulb, MessageSquare, HelpCircle } from 'lucide-react';
-import { API_URL } from '@/lib/api/client';
+import apiClient from '@/lib/api/client';
 
 interface BugReportModalProps {
     isOpen: boolean;
@@ -35,38 +35,25 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
         setError('');
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/reports`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    category,
-                    title: title.trim(),
-                    description: description.trim(),
-                    pageUrl: window.location.href,
-                }),
+            await apiClient.post('/api/reports', {
+                category,
+                title: title.trim(),
+                description: description.trim(),
+                pageUrl: window.location.href,
             });
 
-            if (res.ok) {
-                setSuccess(true);
-                setTitle('');
-                setDescription('');
-                setCategory('bug');
-                // Auto close after 2 seconds
-                setTimeout(() => {
-                    setSuccess(false);
-                    onClose();
-                }, 2000);
-            } else {
-                const data = await res.json();
-                setError(data.error || 'Failed to submit report');
-            }
-        } catch (err) {
+            setSuccess(true);
+            setTitle('');
+            setDescription('');
+            setCategory('bug');
+            // Auto close after 2 seconds
+            setTimeout(() => {
+                setSuccess(false);
+                onClose();
+            }, 2000);
+        } catch (err: any) {
             console.error('Error submitting report:', err);
-            setError('Failed to submit report. Please try again.');
+            setError(err.response?.data?.error || 'Failed to submit report. Please try again.');
         } finally {
             setSubmitting(false);
         }

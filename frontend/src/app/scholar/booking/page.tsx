@@ -1,6 +1,6 @@
 "use client"
 
-import { API_URL } from '@/lib/scholar/api'
+import { API_URL } from '@/lib/api/client'
 import { useState, useEffect, useMemo } from "react"
 import {
   Calendar,
