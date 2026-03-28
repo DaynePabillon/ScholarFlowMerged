@@ -113,11 +113,17 @@ app.use('/api', analyticsRoutes);
 app.use('/api/wbs', wbsRoutes);
 
 // ScholarSync Academic Routes (Auth, Courses, Groups, Enrollment, etc.)
-// Apply verifyToken middleware to scholarRoutes if needed, or within scholar.routes.ts
-app.use('/', scholarRoutes);
+// Moving under /api to avoid root conflicts and ensure consistent pathing
+app.use('/api/scholar', scholarRoutes);
 
-// 404 handler
-app.use((_req: Request, res: Response) => {
+// 404 handler for API
+app.use('/api/*', (req: Request, res: Response) => {
+  logger.warn(`API 404: ${req.method} ${req.path}`);
+  res.status(404).json({ error: `Route not found: ${req.path}` });
+});
+
+// Root catch-all (for SPA/Frontend support if needed, but here just a clean 404)
+app.use((req: Request, res: Response) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
