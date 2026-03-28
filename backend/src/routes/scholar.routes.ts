@@ -1,4 +1,4 @@
-﻿// scholar.routes.ts
+// scholar.routes.ts
 // Unified ScholarSync academic routes â€” extracted from ScholarSync server.ts
 // These routes handle: Auth (Google OAuth), Accounts, Courses, Groups, Import,
 // Enrollment, Consultations, Calendar, Drive/Sheets, Member Journals, AI, and Bookings.
@@ -129,17 +129,22 @@ router.get('/me', (req: Request, res: Response) => {
     if (err) return res.sendStatus(403);
     try {
       const { rows } = await pool.query(
-        'SELECT account_id, "accountName", "accountEmail", "accountRole" FROM ss_account WHERE account_id = $1 LIMIT 1',
-        [user.id]
+        'SELECT account_id, "accountName", "accountEmail", "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1',
+        [user.email]
       );
 
       if (rows.length === 0) {
-        return res.json(user);
+        // Fallback for unified users not in ss_account yet
+        return res.json({
+          ...user,
+          role: user.role === 'admin' ? 'Admin' : 'Student' 
+        });
       }
 
       const account = rows[0];
       return res.json({
-        id: account.account_id,
+        id: user.id, // Keep unified UUID
+        academicId: account.account_id,
         name: account.accountName,
         email: account.accountEmail,
         role: account.accountRole,
@@ -198,7 +203,7 @@ router.get('/courses', async (req: Request, res: Response) => {
   try {
     const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
 
-    if (user.role === 'Admin') {
+    if (user.role === 'Admin' || user.role === 'admin') {
       const { rows: allCourses } = await pool.query(
         `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
          FROM ss_courses c
@@ -208,16 +213,18 @@ router.get('/courses', async (req: Request, res: Response) => {
       return res.json(allCourses);
     }
 
-    if (user.role === 'Adviser' || user.role === 'Advisers') {
-      const accountRes = await pool.query(
-        'SELECT "accountEmail", "accountName" FROM ss_account WHERE account_id = $1',
-        [user.id]
-      );
-      const account = accountRes.rows[0];
-      if (!account) return res.json([]);
+    // Helper to find Academic Account
+    const accountRes = await pool.query(
+      'SELECT account_id, "accountEmail", "accountName", "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1',
+      [user.email]
+    );
+    const account = accountRes.rows[0];
 
-      const adviserEmail = String(account.accountEmail || '').toLowerCase().trim();
-      const adviserName = String(account.accountName || '').toLowerCase().trim();
+    const userAcademicRole = account?.accountRole || (user.role === 'admin' ? 'Admin' : 'Student');
+
+    if (userAcademicRole === 'Adviser' || userAcademicRole === 'Advisers') {
+      const adviserEmail = String(user.email || '').toLowerCase().trim();
+      const adviserName = String(user.name || '').toLowerCase().trim();
 
       const { rows } = await pool.query(
         `SELECT DISTINCT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
@@ -233,8 +240,9 @@ router.get('/courses', async (req: Request, res: Response) => {
       return res.json(rows);
     }
 
-    if (user.role === 'Student') {
-      const enrollRes = await pool.query('SELECT course_id FROM ss_enrollments WHERE account_id = $1', [user.id]);
+    if (userAcademicRole === 'Student') {
+      if (!account) return res.json([]);
+      const enrollRes = await pool.query('SELECT course_id FROM ss_enrollments WHERE account_id = $1', [account.account_id]);
       const enrolledCourseIds = enrollRes.rows.map((e: any) => e.course_id);
       if (enrolledCourseIds.length === 0) return res.json([]);
       const { rows } = await pool.query(

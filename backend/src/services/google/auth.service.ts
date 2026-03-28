@@ -151,8 +151,8 @@ export class GoogleAuthService {
       email: user.email,
       googleId: user.google_id,
       name: user.name,
-      // Map the backend role to what the frontend expects
-      role: user.role || 'member'
+      // Map the backend role to what the frontend expects (Unified Admin)
+      role: user.role === 'admin' ? 'Admin' : (user.role || 'member')
     };
 
     const secret = process.env.JWT_SECRET || 'default-secret-key';
