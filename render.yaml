@@ -13,25 +13,17 @@ services:
       - key: PORT
         value: 5000
       - key: DATABASE_URL
-        sync: false # Set this in Render dashboard (Supabase)
+        sync: false # Set this in Render dashboard (Supabase URL)
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
-        fromService:
-          type: web
-          name: scholarflow-api
-          property: host
-        generateValue: "https://${value}/api/auth/google/callback"
+        sync: false # Set this after backend URL is generated (e.g. https://api.onrender.com/api/auth/google/callback)
       - key: FRONTEND_URL
-        fromService:
-          type: web
-          name: scholarflow-web
-          property: host
-        generateValue: "https://${value}"
+        sync: false # Set this to your frontend URL
       - key: JWT_SECRET
-        generateValue: true
+        generateValue: true # Generates a random secret automatically
       - key: RESEND_API_KEY
         sync: false
       - key: GEMINI_API_KEY
@@ -47,10 +39,6 @@ services:
     startCommand: npm run start
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: scholarflow-api
-          property: host
-        generateValue: "https://${value}"
+        sync: false # Set this to your backend URL
       - key: PORT
         value: 3000
