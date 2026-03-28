@@ -112,6 +112,14 @@ app.use('/api', teamGroupRoutes);
 app.use('/api', analyticsRoutes);
 app.use('/api/wbs', wbsRoutes);
 
+// --- CONVENIENCE REDIRECTS ---
+// These handle cases where the /api prefix is omitted (common for manual testing)
+app.get('/auth/google', (req: Request, res: Response) => res.redirect('/api/auth/google'));
+app.get('/auth/google/callback', (req: Request, res: Response) => {
+  const queryString = req.url.split('?')[1] || '';
+  res.redirect(`/api/auth/google/callback${queryString ? '?' + queryString : ''}`);
+});
+
 // ScholarSync Academic Routes (Auth, Courses, Groups, Enrollment, etc.)
 // Moving under /api to avoid root conflicts and ensure consistent pathing
 app.use('/api/scholar', scholarRoutes);
