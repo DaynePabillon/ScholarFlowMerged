@@ -1,5 +1,5 @@
-// scholar.routes.ts
-// Unified ScholarSync academic routes — extracted from ScholarSync server.ts
+﻿// scholar.routes.ts
+// Unified ScholarSync academic routes â€” extracted from ScholarSync server.ts
 // These routes handle: Auth (Google OAuth), Accounts, Courses, Groups, Import,
 // Enrollment, Consultations, Calendar, Drive/Sheets, Member Journals, AI, and Bookings.
 
@@ -17,9 +17,9 @@ const router = Router();
 
 // Passport Google OAuth setup removed - consolidated into authRoutes (auth.routes.ts)
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // MIDDLEWARE HELPERS
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const verifyToken = (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization || req.headers.Authorization;
   const token = typeof authHeader === 'string' && authHeader.split(' ')[1];
@@ -68,9 +68,9 @@ const verifyInstructor = (req: Request, res: Response, next: NextFunction) => {
   });
 };
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // HELPER: Get Google Access Token
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 const getAccessToken = async (token: string): Promise<string | null> => {
   try {
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
@@ -81,11 +81,11 @@ const getAccessToken = async (token: string): Promise<string | null> => {
   }
 };
 
-// ══════════════════════════════════════
-// Google OAuth routes removed - consolidated into auth.routes.ts ───
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Google OAuth routes removed - consolidated into auth.routes.ts â”€â”€â”€
 
 // Complete profile (new user registration)
-router.post('/api/complete-profile', async (req: Request, res: Response) => {
+router.post('/complete-profile', async (req: Request, res: Response) => {
   const { token, name } = req.body;
   if (!token || !name) return res.status(400).json({ error: "Missing token or name" });
 
@@ -117,10 +117,10 @@ router.post('/api/complete-profile', async (req: Request, res: Response) => {
   }
 });
 
-// ══════════════════════════════════════
-// /api/me — Current user info
-// ══════════════════════════════════════
-router.get('/api/me', (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// /me â€” Current user info
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.get('/me', (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -150,10 +150,10 @@ router.get('/api/me', (req: Request, res: Response) => {
   });
 });
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ACCOUNTS (Admin CRUD)
-// ══════════════════════════════════════
-router.get('/api/accounts', verifyAdmin, async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.get('/accounts', verifyAdmin, async (req: Request, res: Response) => {
   try {
     const { rows } = await pool.query('SELECT account_id, "accountName", "accountEmail", "accountRole" FROM ss_account ORDER BY "accountName"');
     res.json(rows);
@@ -162,7 +162,7 @@ router.get('/api/accounts', verifyAdmin, async (req: Request, res: Response) => 
   }
 });
 
-router.put('/api/accounts/:id/role', verifyAdmin, async (req: Request, res: Response) => {
+router.put('/accounts/:id/role', verifyAdmin, async (req: Request, res: Response) => {
   const accountId = req.params.id;
   const { role } = req.body;
   if (!role) return res.status(400).json({ error: "Missing role" });
@@ -178,7 +178,7 @@ router.put('/api/accounts/:id/role', verifyAdmin, async (req: Request, res: Resp
   }
 });
 
-router.delete('/api/accounts/:id', verifyAdmin, async (req: Request, res: Response) => {
+router.delete('/accounts/:id', verifyAdmin, async (req: Request, res: Response) => {
   try {
     await pool.query('DELETE FROM ss_account WHERE account_id = $1', [req.params.id]);
     res.json({ success: true });
@@ -187,10 +187,10 @@ router.delete('/api/accounts/:id', verifyAdmin, async (req: Request, res: Respon
   }
 });
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // COURSES
-// ══════════════════════════════════════
-router.get('/api/courses', async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.get('/courses', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -254,7 +254,7 @@ router.get('/api/courses', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/api/courses/:id', async (req: Request, res: Response) => {
+router.get('/courses/:id', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -275,7 +275,7 @@ router.get('/api/courses/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/api/courses', verifyInstructor, async (req: Request, res: Response) => {
+router.post('/courses', verifyInstructor, async (req: Request, res: Response) => {
   const { courseName, courseCode, courseSection, courseTerm } = req.body;
   const user = (req as any).user;
 
@@ -302,8 +302,8 @@ router.post('/api/courses', verifyInstructor, async (req: Request, res: Response
   }
 });
 
-// ── Course members ──
-router.get('/api/courses/:id/members', async (req: Request, res: Response) => {
+// â”€â”€ Course members â”€â”€
+router.get('/courses/:id/members', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -324,8 +324,8 @@ router.get('/api/courses/:id/members', async (req: Request, res: Response) => {
   }
 });
 
-// ── Course groupings ──
-router.get('/api/courses/:id/groupings', async (req: Request, res: Response) => {
+// â”€â”€ Course groupings â”€â”€
+router.get('/courses/:id/groupings', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -344,8 +344,8 @@ router.get('/api/courses/:id/groupings', async (req: Request, res: Response) => 
   }
 });
 
-// ── Course group members ──
-router.get('/api/courses/:id/group-members', async (req: Request, res: Response) => {
+// â”€â”€ Course group members â”€â”€
+router.get('/courses/:id/group-members', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -389,8 +389,8 @@ router.get('/api/courses/:id/group-members', async (req: Request, res: Response)
   }
 });
 
-// ── Course teams (role-filtered) ──
-router.get('/api/courses/:id/teams', async (req: Request, res: Response) => {
+// â”€â”€ Course teams (role-filtered) â”€â”€
+router.get('/courses/:id/teams', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -438,8 +438,8 @@ router.get('/api/courses/:id/teams', async (req: Request, res: Response) => {
   }
 });
 
-// ── Course consultations ──
-router.get('/api/courses/:id/consultations', async (req: Request, res: Response) => {
+// â”€â”€ Course consultations â”€â”€
+router.get('/courses/:id/consultations', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -460,8 +460,8 @@ router.get('/api/courses/:id/consultations', async (req: Request, res: Response)
   }
 });
 
-// ── Course groups (for schedule page) ──
-router.get('/api/courses/:id/groups', async (req: Request, res: Response) => {
+// â”€â”€ Course groups (for schedule page) â”€â”€
+router.get('/courses/:id/groups', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -478,8 +478,8 @@ router.get('/api/courses/:id/groups', async (req: Request, res: Response) => {
   }
 });
 
-// ── Course sheets (connected sheets) ──
-router.get('/api/courses/:id/sheets', async (req: Request, res: Response) => {
+// â”€â”€ Course sheets (connected sheets) â”€â”€
+router.get('/courses/:id/sheets', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -497,7 +497,7 @@ router.get('/api/courses/:id/sheets', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/api/courses/:id/connect-sheet', verifyInstructor, async (req: Request, res: Response) => {
+router.post('/courses/:id/connect-sheet', verifyInstructor, async (req: Request, res: Response) => {
   const courseId = req.params.id;
   const { sheetUrl } = req.body;
   if (!sheetUrl) return res.status(400).json({ error: 'Missing sheet URL' });
@@ -531,7 +531,7 @@ router.post('/api/courses/:id/connect-sheet', verifyInstructor, async (req: Requ
   }
 });
 
-router.delete('/api/connected-sheets/:id', verifyInstructor, async (req: Request, res: Response) => {
+router.delete('/connected-sheets/:id', verifyInstructor, async (req: Request, res: Response) => {
   try {
     await pool.query('DELETE FROM ss_connected_sheets WHERE id = $1', [req.params.id]);
     return res.json({ success: true });
@@ -540,10 +540,10 @@ router.delete('/api/connected-sheets/:id', verifyInstructor, async (req: Request
   }
 });
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // ENROLLMENT
-// ══════════════════════════════════════
-router.post('/api/enroll', async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.post('/enroll', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -576,10 +576,10 @@ router.post('/api/enroll', async (req: Request, res: Response) => {
   }
 });
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // GROUPS
-// ══════════════════════════════════════
-router.get('/api/groups/:id', async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.get('/groups/:id', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -614,11 +614,11 @@ router.get('/api/groups/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/api/groups/:id/tasks', async (_req: Request, res: Response) => {
+router.get('/groups/:id/tasks', async (_req: Request, res: Response) => {
   return res.json([]);
 });
 
-router.get('/api/group/by-member/:email', verifyToken, async (req: Request, res: Response) => {
+router.get('/group/by-member/:email', verifyToken, async (req: Request, res: Response) => {
   try {
     const rawEmail = String(req.params.email || '').trim().toLowerCase();
     if (!rawEmail) return res.status(400).json({ error: 'Missing member email' });
@@ -672,11 +672,11 @@ router.get('/api/group/by-member/:email', verifyToken, async (req: Request, res:
   }
 });
 
-// ══════════════════════════════════════
-// TEAM GROUP COMMENTS (ScholarSync — prefixed to avoid conflict with SkyFlow's /api/team-groups/:id/comments)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// TEAM GROUP COMMENTS (ScholarSync â€” prefixed to avoid conflict with SkyFlow's /team-groups/:id/comments)
 // Both use the same team_comments table, but different route paths for each frontend.
-// ══════════════════════════════════════
-router.get('/api/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.get('/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -693,7 +693,7 @@ router.get('/api/scholar/team-groups/:id/comments', async (req: Request, res: Re
   }
 });
 
-router.post('/api/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
+router.post('/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -720,10 +720,10 @@ router.post('/api/scholar/team-groups/:id/comments', async (req: Request, res: R
   }
 });
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // CONSULTATIONS (CRUD)
-// ══════════════════════════════════════
-router.post('/api/consultations', verifyToken, async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.post('/consultations', verifyToken, async (req: Request, res: Response) => {
   const { courseID, groupName, conDate, conType, conMil, conSum, conAction, conAtt, isDraft, conStat, conNotes } = req.body;
   try {
     const { rows } = await pool.query(
@@ -737,7 +737,7 @@ router.post('/api/consultations', verifyToken, async (req: Request, res: Respons
   }
 });
 
-router.put('/api/consultations/:id', verifyInstructor, async (req: Request, res: Response) => {
+router.put('/consultations/:id', verifyInstructor, async (req: Request, res: Response) => {
   const { conSum, conAction, conAtt, isDraft, conStat, conNotes } = req.body;
   try {
     const { rows } = await pool.query(
@@ -750,10 +750,10 @@ router.put('/api/consultations/:id', verifyInstructor, async (req: Request, res:
   }
 });
 
-// ══════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // GOOGLE DRIVE & SHEETS (ScholarSync)
-// ══════════════════════════════════════
-router.get('/api/scholar/drive/files', async (req: Request, res: Response) => {
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+router.get('/scholar/drive/files', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
   const accessToken = await getAccessToken(token);
@@ -770,7 +770,7 @@ router.get('/api/scholar/drive/files', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/api/scholar/drive/folders', async (req: Request, res: Response) => {
+router.get('/scholar/drive/folders', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
   const accessToken = await getAccessToken(token);
@@ -787,7 +787,7 @@ router.get('/api/scholar/drive/folders', async (req: Request, res: Response) => 
   }
 });
 
-router.post('/api/scholar/sheets/content', async (req: Request, res: Response) => {
+router.post('/scholar/sheets/content', async (req: Request, res: Response) => {
   const { spreadsheetId, range } = req.body;
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -805,7 +805,7 @@ router.post('/api/scholar/sheets/content', async (req: Request, res: Response) =
   }
 });
 
-router.get('/api/scholar/sheets/content', async (req: Request, res: Response) => {
+router.get('/scholar/sheets/content', async (req: Request, res: Response) => {
   const { spreadsheetId, range } = req.query;
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
@@ -823,7 +823,7 @@ router.get('/api/scholar/sheets/content', async (req: Request, res: Response) =>
   }
 });
 
-router.get('/api/scholar/sheets/list', async (req: Request, res: Response) => {
+router.get('/scholar/sheets/list', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
   const accessToken = await getAccessToken(token);
@@ -840,6 +840,6 @@ router.get('/api/scholar/sheets/list', async (req: Request, res: Response) => {
   }
 });
 
-logger.info('📚 ScholarSync academic routes registered');
+logger.info('ðŸ“š ScholarSync academic routes registered');
 
 export default router;
