@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
 import AIResultModal from '@/components/scholar/AIResultModal';
 import { useAIStore } from '@/store/scholar/ai.store';
-import axios from 'axios';
+import { apiClient } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import { Sparkles, TrendingUp, ChevronDown } from 'lucide-react';
 
@@ -88,16 +88,16 @@ export default function GroupPage() {
         return `${hour12}:${String(m).padStart(2, '0')} ${period}`;
     };
 
-    const fetchGroupData = async (token: string) => {
+    const fetchGroupData = async () => {
         try {
             console.log("DEBUG: fetchGroupData for groupId:", groupId);
-            const groupRes = await axios.get(`http://localhost:5000/api/groups/${groupId}`, { headers: { Authorization: `Bearer ${token}` } });
+            const groupRes = await apiClient.get(`/groups/${groupId}`);
             setGroup(groupRes.data);
 
-            const tasksRes = await axios.get(`http://localhost:5000/api/groups/${groupId}/tasks`, { headers: { Authorization: `Bearer ${token}` } });
+            const tasksRes = await apiClient.get(`/groups/${groupId}/tasks`);
             setTasks(tasksRes.data);
 
-            const consRes = await axios.get(`http://localhost:5000/api/courses/${courseId}/consultations`, { headers: { Authorization: `Bearer ${token}` } });
+            const consRes = await apiClient.get(`/courses/${courseId}/consultations`);
             // Filter down to published consultations associated specifically with this exact group Name
             // Using robust comparison (trim and lowercase)
             const currentGroupName = groupRes.data.groupName?.trim().toLowerCase();
@@ -108,7 +108,7 @@ export default function GroupPage() {
 
             // Fetch consultation logs
             try {
-                const logsRes = await axios.get(`http://localhost:5000/api/consultation/group/${groupId}/logs`, { headers: { Authorization: `Bearer ${token}` } });
+                const logsRes = await apiClient.get(`/consultation/group/${groupId}/logs`);
                 setConsultationLogs(logsRes.data?.logs || []);
             } catch (logErr: any) {
                 console.error("Error fetching consultation logs:", logErr);
@@ -137,7 +137,7 @@ export default function GroupPage() {
             return;
         }
 
-        fetchGroupData(token);
+        fetchGroupData();
     }, [groupId, router]);
 
     useEffect(() => {
@@ -150,12 +150,9 @@ export default function GroupPage() {
 
             try {
                 setFetchingJournalDetails(true);
-                const token = localStorage.getItem('auth_token');
-                if (!token) return;
-
                 const [attRes, partRes] = await Promise.all([
-                    axios.get(`http://localhost:5000/api/consultations/${selectedJournal.conID}/attendance`, { headers: { Authorization: `Bearer ${token}` } }),
-                    axios.get(`http://localhost:5000/api/consultations/${selectedJournal.conID}/participation`, { headers: { Authorization: `Bearer ${token}` } })
+                    apiClient.get(`/consultations/${selectedJournal.conID}/attendance`),
+                    apiClient.get(`/consultations/${selectedJournal.conID}/participation`)
                 ]);
 
                 setJournalAttendance(attRes.data || {});
@@ -175,10 +172,7 @@ export default function GroupPage() {
         
         try {
             setExportingDocs(true);
-            const token = localStorage.getItem('auth_token');
-            const res = await axios.post(`http://localhost:5000/api/consultations/${selectedJournal.conID}/export-docs`, {}, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const res = await apiClient.post(`/consultations/${selectedJournal.conID}/export-docs`, {});
 
             if (res.data.url) {
                 window.open(res.data.url, '_blank');
@@ -199,11 +193,7 @@ export default function GroupPage() {
 
         try {
             setCreatingTask(true);
-            const token = localStorage.getItem('auth_token');
-            await axios.post(`http://localhost:5000/api/groups/${groupId}/tasks`,
-                { taskTitle, taskAssign, taskDeadline, taskInfo },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            await apiClient.post(`/groups/${groupId}/tasks`, { taskTitle, taskAssign, taskDeadline, taskInfo });
 
             setShowTaskModal(false);
             setTaskTitle('');
@@ -211,7 +201,7 @@ export default function GroupPage() {
             setTaskDeadline('');
             setTaskInfo('');
             
-            if (token) await fetchGroupData(token);
+            await fetchGroupData();
         } catch (err: any) {
             alert(err.response?.data?.error || "Failed to create task.");
         } finally {

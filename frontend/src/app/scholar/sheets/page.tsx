@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
-import { API_URL } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
     FileSpreadsheet,
@@ -35,25 +35,17 @@ export default function SheetsPage() {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         try { setUser(jwtDecode(token)); } catch { router.push('/login'); return; }
-        fetchSheets(token);
+        fetchSheets();
     }, [router]);
 
-    const fetchSheets = async (token?: string) => {
+    const fetchSheets = async () => {
         setLoading(true);
         setError('');
-        const t = token || localStorage.getItem('auth_token');
         try {
-            const res = await fetch(`${API_URL}/api/scholar/sheets/list`, {
-                headers: { Authorization: `Bearer ${t}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setSheets(data.files || []);
-            } else {
-                setError(data.error || 'Failed to load Google Sheets');
-            }
-        } catch {
-            setError('Could not connect to Google Sheets');
+            const res = await apiClient.get('/scholar/sheets/list');
+            setSheets(res.data.files || []);
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Could not connect to Google Sheets');
         } finally {
             setLoading(false);
         }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
-import { API_URL } from '@/lib/scholar/api';
+import apiClient from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
     ArrowLeft,
@@ -174,29 +174,21 @@ export default function CourseDetailsPage() {
             router.push('/login'); 
             return; 
         }
-        fetchCourse(token);
-        fetchGroups(token);
+        fetchCourse();
+        fetchGroups();
     }, [courseId, router]);
 
-    const fetchCourse = async (token: string) => {
+    const fetchCourse = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/courses/${courseId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) setCourse(await res.json());
-            else setError('Course not found');
-        } catch { setError('Failed to load course'); }
+            const res = await apiClient.get(`/courses/${courseId}`);
+            setCourse(res.data);
+        } catch { setError('Course not found'); }
     };
 
-    const fetchGroups = async (token: string) => {
+    const fetchGroups = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/courses/${courseId}/group-members`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data: Group[] = await res.json();
-                setGroups(data);
-            }
+            const res = await apiClient.get(`/courses/${courseId}/group-members`);
+            setGroups(res.data);
         } catch { /* empty */ }
         finally { setLoading(false); }
     };
@@ -251,7 +243,6 @@ export default function CourseDetailsPage() {
 
         setIsSubmittingJournal(true);
         try {
-            const token = localStorage.getItem('auth_token');
             const data = {
                 courseID: course.id,
                 groupName: selectedGroup.groupName,
@@ -266,60 +257,31 @@ export default function CourseDetailsPage() {
                 conNotes: `Submitted by ${user?.email}`
             };
 
-            const res = await fetch(`${API_URL}/api/consultations`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(data)
-            });
-
-            if (res.ok) {
-                resetJournalForm();
-                fetchGroupJournals(selectedGroup.groupName);
-            } else {
-                const errorData = await res.json();
-                alert(errorData.error || "Failed to submit journal entry.");
-            }
-        } catch (err) {
+            await apiClient.post('/consultations', data);
+            resetJournalForm();
+            fetchGroupJournals(selectedGroup.groupName);
+        } catch (err: any) {
             console.error("Journal Submission Error:", err);
-            alert("An error occurred while submitting the journal.");
+            alert(err.response?.data?.error || "Failed to submit journal entry.");
         } finally {
             setIsSubmittingJournal(false);
         }
     };
 
     const fetchGroupJournals = async (groupName: string) => {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
         try {
-            const res = await fetch(`${API_URL}/api/courses/${courseId}/consultations`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const groupJournals = (data || []).filter((c: any) => c.groupName === groupName && !c.isDraft);
-                setJournals(groupJournals);
-            }
+            const res = await apiClient.get(`/courses/${courseId}/consultations`);
+            const groupJournals = (res.data || []).filter((c: any) => c.groupName === groupName && !c.isDraft);
+            setJournals(groupJournals);
         } catch (err) {
             console.error("Error fetching journals:", err);
         }
     };
 
     const fetchConsultationLogs = async (groupId: string) => {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
         try {
-            const res = await fetch(`${API_URL}/api/consultation/group/${groupId}/logs`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setConsultationLogs(data.logs || []);
-            } else {
-                setConsultationLogs([]);
-            }
+            const res = await apiClient.get(`/consultation/group/${groupId}/logs`);
+            setConsultationLogs(res.data.logs || []);
         } catch (err) {
             console.error("Error fetching consultation logs:", err);
             setConsultationLogs([]);
@@ -327,19 +289,10 @@ export default function CourseDetailsPage() {
     };
 
     const fetchMemberJournals = async (groupId: string) => {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
         setLoadingMemberJournals(true);
         try {
-            const res = await fetch(`${API_URL}/api/member-journals/course/${courseId}/group/${groupId}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setMemberJournals(data.journals || []);
-            } else {
-                setMemberJournals([]);
-            }
+            const res = await apiClient.get(`/member-journals/course/${courseId}/group/${groupId}`);
+            setMemberJournals(res.data.journals || []);
         } catch (err) {
             console.error('Error fetching member journals:', err);
             setMemberJournals([]);
@@ -360,35 +313,19 @@ export default function CourseDetailsPage() {
         setSubmittingMemberJournal(true);
         setMemberJournalError(null);
         try {
-            const token = localStorage.getItem('auth_token');
-            if (!token) {
-                setMemberJournalError('Authentication token not found.');
-                return;
-            }
+            const data = {
+                courseID: course.id,
+                groupID: selectedGroup.id,
+                member_email: selectedMemberFolder.email,
+                journal_date: effectiveJournalDate,
+                journal_text: memberJournalForm.journalText,
+                journal_label: memberJournalForm.journalLabel
+            };
 
-            const endpoint = editingMemberJournalId
-                ? `${API_URL}/api/member-journals/${editingMemberJournalId}`
-                : `${API_URL}/api/member-journals`;
-
-            const res = await fetch(endpoint, {
-                method: editingMemberJournalId ? 'PUT' : 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    courseID: course.id,
-                    groupID: selectedGroup.id,
-                    member_email: selectedMemberFolder.email,
-                    journal_date: effectiveJournalDate,
-                    journal_text: memberJournalForm.journalText,
-                    journal_label: memberJournalForm.journalLabel
-                })
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Failed to create member journal.');
+            if (editingMemberJournalId) {
+                await apiClient.put(`/member-journals/${editingMemberJournalId}`, data);
+            } else {
+                await apiClient.post('/member-journals', data);
             }
 
             setMemberJournalForm({
@@ -400,8 +337,8 @@ export default function CourseDetailsPage() {
             setIsJournalFormOpen(false);
             await fetchMemberJournals(selectedGroup.id);
         } catch (err: any) {
-            console.error('Error creating member journal:', err);
-            setMemberJournalError(err.message || 'Failed to create member journal.');
+            console.error('Error saving member journal:', err);
+            setMemberJournalError(err.response?.data?.error || 'Failed to save member journal.');
         } finally {
             setSubmittingMemberJournal(false);
         }
@@ -435,23 +372,7 @@ export default function CourseDetailsPage() {
         if (!confirmed) return;
 
         try {
-            const token = localStorage.getItem('auth_token');
-            if (!token) {
-                setMemberJournalError('Authentication token not found.');
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/api/member-journals/${entry.id}`, {
-                method: 'DELETE',
-                headers: {
-                    Authorization: `Bearer ${token}`
-                }
-            });
-
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error || 'Failed to delete member journal.');
-            }
+            await apiClient.delete(`/member-journals/${entry.id}`);
 
             if (editingMemberJournalId === entry.id) {
                 setEditingMemberJournalId(null);
@@ -463,7 +384,7 @@ export default function CourseDetailsPage() {
                 await fetchMemberJournals(selectedGroup.id);
             }
         } catch (err: any) {
-            setMemberJournalError(err?.message || 'Failed to delete member journal.');
+            setMemberJournalError(err.response?.data?.error || 'Failed to delete member journal.');
         }
     };
 
@@ -512,7 +433,7 @@ export default function CourseDetailsPage() {
                 })
                 .join('\n\n');
             
-            let response;
+            let responseData;
             if (type === 'summary') {
                 const summaryConsultationHistory = sortedConsultationLogs
                     .map((log, idx) => [
@@ -534,26 +455,15 @@ export default function CourseDetailsPage() {
                     throw new Error('No consultation history available for synthesis.');
                 }
 
-                const res = await fetch(`${API_URL}/api/ai/summary`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        Authorization: `Bearer ${token}` 
-                    },
-                    body: JSON.stringify({ 
-                        context,
-                        consultationHistory: summaryConsultationHistory,
-                        courseID: course.id,
-                        groupName: selectedGroup.groupName,
-                        forceRefresh 
-                    })
+                const res = await apiClient.post('/ai/summary', { 
+                    context,
+                    consultationHistory: summaryConsultationHistory,
+                    courseID: course.id,
+                    groupName: selectedGroup.groupName,
+                    forceRefresh 
                 });
-                if (!res.ok) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
-                }
-                response = await res.json();
-                setAiResult({ type: 'summary', content: sanitizeAIContent(response.summary), cached: response.cached });
+                responseData = res.data;
+                setAiResult({ type: 'summary', content: sanitizeAIContent(responseData.summary), cached: responseData.cached });
             } else {
                 const latestConsultation = sortedConsultationLogs.find(log => typeof log.conID === 'number');
                 const targetConID = latestConsultation?.conID;
@@ -562,30 +472,19 @@ export default function CourseDetailsPage() {
                     throw new Error("No consultation history found for participation analysis.");
                 }
 
-                const res = await fetch(`${API_URL}/api/ai/participation`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json', 
-                        Authorization: `Bearer ${token}` 
-                    },
-                    body: JSON.stringify({ 
-                        conID: targetConID,
-                        consultationHistory,
-                        courseID: course.id,
-                        groupName: selectedGroup.groupName,
-                        forceRefresh 
-                    })
+                const res = await apiClient.post('/ai/participation', { 
+                    conID: targetConID,
+                    consultationHistory,
+                    courseID: course.id,
+                    groupName: selectedGroup.groupName,
+                    forceRefresh 
                 });
-                if (!res.ok) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
-                }
-                response = await res.json();
-                setAiResult({ type: 'insights', content: sanitizeAIContent(response.insight), cached: response.cached });
+                responseData = res.data;
+                setAiResult({ type: 'insights', content: sanitizeAIContent(responseData.insight), cached: responseData.cached });
             }
         } catch (err: any) {
             console.error("AI Generation Error:", err);
-            setAiError(err.message || "An unexpected error occurred during AI generation.");
+            setAiError(err.response?.data?.error || err.message || "An unexpected error occurred during AI generation.");
         } finally {
             setGeneratingAI(false);
         }
@@ -603,66 +502,36 @@ export default function CourseDetailsPage() {
         setCustomAnalysisResult('');
 
         try {
-            const token = localStorage.getItem('auth_token');
-            if (!token) {
-                setCustomAnalysisError('Authentication token not found.');
-                return;
-            }
-
-            const res = await fetch(`${API_URL}/api/ai/custom-analysis`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    courseId: course.id,
-                    instruction: customInstruction.trim()
-                })
+            const res = await apiClient.post('/ai/custom-analysis', {
+                courseId: course.id,
+                instruction: customInstruction.trim()
             });
 
-            if (!res.ok) {
-                const errorData = await res.json().catch(() => ({}));
-                throw new Error(errorData.error || `HTTP error! status: ${res.status}`);
-            }
-
-            const data = await res.json();
-            setCustomAnalysisResult(sanitizeAIContent(data.analysis || ''));
+            setCustomAnalysisResult(sanitizeAIContent(res.data.analysis || ''));
         } catch (err: any) {
             console.error('Custom Analysis Error:', err);
-            setCustomAnalysisError(err.message || 'Failed to run custom analysis.');
+            setCustomAnalysisError(err.response?.data?.error || err.message || 'Failed to run custom analysis.');
         } finally {
             setCustomAnalysisLoading(false);
         }
     };
 
     const fetchComments = async (groupId: string) => {
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
         try {
-            const res = await fetch(`${API_URL}/api/team-groups/${groupId}/comments`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) setComments(await res.json());
+            const res = await apiClient.get(`/team-groups/${groupId}/comments`);
+            setComments(res.data);
         } catch { /* ignore */ }
     };
 
     const submitComment = async () => {
         if (!newComment.trim() || !selectedGroup || submittingComment) return;
-        const token = localStorage.getItem('auth_token');
-        if (!token) return;
         setSubmittingComment(true);
         try {
-            const res = await fetch(`${API_URL}/api/team-groups/${selectedGroup.id}/comments`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ content: newComment.trim() })
+            const res = await apiClient.post(`/team-groups/${selectedGroup.id}/comments`, { 
+                content: newComment.trim() 
             });
-            if (res.ok) {
-                const saved = await res.json();
-                setComments(prev => [...prev, saved]);
-                setNewComment('');
-            }
+            setComments(prev => [...prev, res.data]);
+            setNewComment('');
         } catch { /* ignore */ }
         finally { setSubmittingComment(false); }
     };

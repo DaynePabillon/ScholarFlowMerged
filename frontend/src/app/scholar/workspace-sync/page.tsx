@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
-import { API_URL } from '@/lib/api/client';
+import { apiClient, API_URL } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
     FileSpreadsheet,
@@ -95,22 +95,17 @@ export default function WorkspaceSyncPage() {
             }
             setUser(decoded);
         } catch { router.push('/login'); return; }
-        fetchCourses(token);
+        fetchCourses();
         fetchDriveSheets();
     }, [router]);
 
-    const fetchCourses = async (token: string) => {
+    const fetchCourses = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/courses`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setCourses(data);
-                if (data.length > 0) {
-                    setSelectedCourse(data[0]);
-                    fetchConnectedSheets(data[0].id, token);
-                }
+            const res = await apiClient.get('/courses');
+            setCourses(res.data);
+            if (res.data.length > 0) {
+                setSelectedCourse(res.data[0]);
+                fetchConnectedSheets(res.data[0].id);
             }
         } catch { }
         finally { setLoading(false); }
@@ -119,34 +114,20 @@ export default function WorkspaceSyncPage() {
     const fetchDriveSheets = async () => {
         setLoadingSheets(true);
         setSheetsError('');
-        const token = localStorage.getItem('auth_token');
         try {
-            const res = await fetch(`${API_URL}/api/scholar/sheets/list`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setDriveSheets(data.files || []);
-            } else {
-                setSheetsError(data.error || 'Failed to load sheets');
-            }
-        } catch {
-            setSheetsError('Could not reach Google Sheets API');
+            const res = await apiClient.get('/scholar/sheets/list');
+            setDriveSheets(res.data.files || []);
+        } catch (err: any) {
+            setSheetsError(err.response?.data?.error || 'Could not reach Google Sheets API');
         } finally {
             setLoadingSheets(false);
         }
     };
 
-    const fetchConnectedSheets = async (courseId: string, token?: string) => {
-        const t = token || localStorage.getItem('auth_token');
+    const fetchConnectedSheets = async (courseId: string) => {
         try {
-            const res = await fetch(`${API_URL}/api/courses/${courseId}/sheets`, {
-                headers: { Authorization: `Bearer ${t}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setConnectedSheets(data.sheets || []);
-            }
+            const res = await apiClient.get(`/courses/${courseId}/sheets`);
+            setConnectedSheets(res.data.sheets || []);
         } catch { }
     };
 
@@ -170,45 +151,42 @@ export default function WorkspaceSyncPage() {
             setImportedCourses([]);
         }
 
-        const token = localStorage.getItem('auth_token');
         try {
-            const res = await fetch(`${API_URL}/api/import-from-sheet`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sheetId: pendingSheet.id, forceReplace })
+            const res = await apiClient.post('/import-from-sheet', {
+                sheetId: pendingSheet.id,
+                forceReplace
             });
-            const data = await res.json();
-
-            if (res.ok) {
-                setImportResult({ type: 'success', message: data.message });
-                setImportedCourses(data.courses || []);
-                // Refresh courses list and connected sheets
-                const t = localStorage.getItem('auth_token') || '';
-                fetchCourses(t);
-                showToast(data.message);
-            } else if (res.status === 409) {
-                setImportResult({ type: 'conflict', message: data.message, existingCourses: data.existingCourses });
+            setImportResult({ type: 'success', message: res.data.message });
+            setImportedCourses(res.data.courses || []);
+            // Refresh courses list and connected sheets
+            fetchCourses();
+            showToast(res.data.message);
+        } catch (err: any) {
+            if (err.response?.status === 409) {
+                setImportResult({
+                    type: 'conflict',
+                    message: err.response.data.message,
+                    existingCourses: err.response.data.existingCourses
+                });
             } else {
-                setImportResult({ type: 'error', message: data.error || 'Import failed' });
+                setImportResult({
+                    type: 'error',
+                    message: err.response?.data?.error || 'Import failed'
+                });
             }
-        } catch {
-            setImportResult({ type: 'error', message: 'Network error. Check backend is running.' });
         } finally {
             setImporting(false);
         }
     };
 
     const deleteConnectedSheet = async (sheetId: string) => {
-        const token = localStorage.getItem('auth_token');
         try {
-            const res = await fetch(`${API_URL}/api/connected-sheets/${sheetId}`, {
-                method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) {
-                showToast('Sheet removed');
-                if (selectedCourse) fetchConnectedSheets(selectedCourse.id);
-            }
-        } catch { showToast('Failed to remove', 'error'); }
+            await apiClient.delete(`/connected-sheets/${sheetId}`);
+            showToast('Sheet removed');
+            if (selectedCourse) fetchConnectedSheets(selectedCourse.id);
+        } catch {
+            showToast('Failed to remove', 'error');
+        }
     };
 
     const formatDate = (str: string) => {

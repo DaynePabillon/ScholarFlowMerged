@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { 
     ChevronRight, 
     ChevronDown, 
@@ -12,7 +12,7 @@ import {
     Filter,
     Table as TableIcon
 } from 'lucide-react'
-import { API_URL } from '@/lib/api/client'
+import apiClient from '@/lib/api/client'
 
 interface WBSTask {
     id: string
@@ -48,17 +48,14 @@ export default function AdvisorWBSExplorer({ sheetId, organizationId }: AdvisorW
         }
     }, [sheetId])
 
-    const fetchTasks = async () => {
+    const fetchTasks = useCallback(async () => {
         if (!sheetId) return
         setLoading(true)
         setError(null)
         try {
-            const token = localStorage.getItem('token')
-            const tasksRes = await fetch(`${API_URL}/api/workspaces/sheets/${sheetId}/tasks`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (tasksRes.ok) {
-                const data = await tasksRes.json()
+            const response = await apiClient.get(`/workspaces/sheets/${sheetId}/tasks`)
+            if (response.data) {
+                const data = response.data
                 const taskList = Array.isArray(data) ? data : (data.tasks || [])
                 setTasks(taskList)
                 // Expand all by default initially
@@ -71,7 +68,7 @@ export default function AdvisorWBSExplorer({ sheetId, organizationId }: AdvisorW
         } finally {
             setLoading(false)
         }
-    }
+    }, [sheetId])
 
     const toggleRow = (id: string) => {
         const newExpanded = new Set(expandedRows)
@@ -92,10 +89,12 @@ export default function AdvisorWBSExplorer({ sheetId, organizationId }: AdvisorW
         }
     }
 
-    const filteredTasks = tasks.filter(t => 
-        t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        t.wbs_code?.includes(searchQuery)
-    )
+    const filteredTasks = useMemo(() => {
+        return tasks.filter(t => 
+            t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            t.wbs_code?.includes(searchQuery)
+        )
+    }, [tasks, searchQuery])
 
     // Helper to render hierarchical rows
     const renderRows = (parentId: string | null = null, depth = 0): JSX.Element[] => {

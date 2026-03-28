@@ -1,7 +1,7 @@
 "use client"
 
-import { API_URL } from '@/lib/api/client'
-import { useState, useEffect, Suspense } from "react"
+import apiClient, { API_URL } from '@/lib/api/client'
+import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
 import ProfessionalKanban from "@/components/tasks/ProfessionalKanban"
@@ -16,9 +16,12 @@ import {
     FileText, BarChart3, ChevronUp, FolderKanban, FileSpreadsheet, ShieldCheck,
     Clock, MessageSquare, Send, Trash2
 } from "lucide-react"
-import GoogleSheetImportModal from "@/components/tasks/GoogleSheetImportModal"
-import TeamSelector from "@/components/shared/TeamSelector"
 import AdvisorWBSExplorer from "@/components/tasks/AdvisorWBSExplorer"
+import KanbanView from "@/components/boards/KanbanView"
+import TeamsView from "@/components/boards/TeamsView"
+import AdvisorView from "@/components/boards/AdvisorView"
+import TeamSelector from "@/components/shared/TeamSelector"
+import GoogleSheetImportModal from "@/components/tasks/GoogleSheetImportModal"
 
 interface Task {
     id: string
@@ -38,9 +41,6 @@ interface Task {
     is_absolute?: boolean
     complexity_weight?: number
     wbs_code?: string
-    parent_task_id?: string | null
-    start_date?: string | null
- luxury_weight?: number
 }
 
 interface SyncedSheet {
@@ -172,15 +172,11 @@ function BoardsContent() {
             // If we have token but no user data, fetch from backend
             if (token && !storedUser) {
                 try {
-                    console.log('📡 Fetching user data from backend...')
-                    const response = await fetch(`${API_URL}/api/auth/me`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    })
+                    console.log('📡 Fetching user data from backend via apiClient...')
+                    const response = await apiClient.get('/auth/me');
                     
-                    console.log('API response status:', response.status)
-                    
-                    if (response.ok) {
-                        const data = await response.json()
+                    if (response.data) {
+                        const data = response.data;
                         console.log('User data received:', { email: data.email, organizations: data.organizations?.length })
                         
                         const { organizations, onboarding_data, ...userData } = data
@@ -192,11 +188,6 @@ function BoardsContent() {
                         storedUser = JSON.stringify({ ...userData, onboarding_data })
                         storedOrgs = JSON.stringify(organizations || [])
                         console.log('✅ User data fetched and stored successfully')
-                    } else {
-                        console.error('❌ Failed to fetch user data, status:', response.status)
-                        console.log('Redirecting to /')
-                        router.push('/')
-                        return
                     }
                 } catch (error) {
                     console.error('❌ Error fetching user data:', error)
@@ -261,31 +252,22 @@ function BoardsContent() {
         ])
     }
 
-    const fetchTeamGroups = async (orgId: string) => {
+    const fetchTeamGroups = useCallback(async (orgId: string) => {
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/organizations/${orgId}/team-groups`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (response.ok) {
-                const data = await response.json()
-                setTeamGroups(data.teams || [])
+            const response = await apiClient.get(`/organizations/${orgId}/team-groups`)
+            if (response.data) {
+                setTeamGroups(response.data.teams || [])
             }
         } catch (error) {
             console.error('Error fetching team groups:', error)
         }
-    }
+    }, [])
 
     const handleCreateTeam = async () => {
         if (!newTeam.name || !selectedOrg) return
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/organizations/${selectedOrg.id}/team-groups`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify(newTeam)
-            })
-            if (response.ok) {
+            const response = await apiClient.post(`/organizations/${selectedOrg.id}/team-groups`, newTeam)
+            if (response.data) {
                 setShowCreateTeam(false)
                 setNewTeam({ team_number: teamGroups.length + 2, name: '', description: '', adviser_name: '' })
                 fetchTeamGroups(selectedOrg.id)
@@ -298,30 +280,22 @@ function BoardsContent() {
     const handleDeleteTeam = async (teamId: string) => {
         if (!confirm('Delete this team and all its data?')) return
         try {
-            const token = localStorage.getItem('token')
-            await fetch(`${API_URL}/api/team-groups/${teamId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
+            await apiClient.delete(`/team-groups/${teamId}`)
             if (selectedOrg) fetchTeamGroups(selectedOrg.id)
         } catch (error) {
             console.error('Error deleting team:', error)
         }
     }
 
-    const fetchTasks = async (orgId: string) => {
+    const fetchTasks = useCallback(async (orgId: string) => {
         try {
-            const token = localStorage.getItem('token')
             const url = selectedTeam 
-                ? `${API_URL}/api/organizations/${orgId}/tasks?team_id=${selectedTeam}`
-                : `${API_URL}/api/organizations/${orgId}/tasks`
+                ? `/organizations/${orgId}/tasks?team_id=${selectedTeam}`
+                : `/organizations/${orgId}/tasks`
             
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (response.ok) {
-                const data = await response.json()
-                const normalizedTasks = (data.tasks || []).map((task: Task) => ({
+            const response = await apiClient.get(url)
+            if (response.data) {
+                const normalizedTasks = (response.data.tasks || []).map((task: Task) => ({
                     ...task,
                     status: normalizeStatus(task.status)
                 }))
@@ -330,37 +304,30 @@ function BoardsContent() {
         } catch (error) {
             console.error('Error fetching tasks:', error)
         }
-    }
+    }, [selectedTeam])
 
-    const fetchSyncedSheets = async (orgId: string) => {
+    const fetchSyncedSheets = useCallback(async (orgId: string) => {
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/organizations/${orgId}/synced-sheets`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (response.ok) {
-                const data = await response.json()
-                setSyncedSheets(data.syncedSheets || [])
+            const response = await apiClient.get(`/organizations/${orgId}/synced-sheets`)
+            if (response.data) {
+                setSyncedSheets(response.data.syncedSheets || [])
             }
         } catch (error) {
             console.error('Error fetching synced sheets:', error)
         }
-    }
+    }, [])
 
-    const fetchMembers = async (orgId: string) => {
+    const fetchMembers = useCallback(async (orgId: string) => {
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/organizations/${orgId}/members`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (response.ok) {
-                const data = await response.json()
+            const response = await apiClient.get(`/organizations/${orgId}/members`)
+            if (response.data) {
+                const data = response.data;
                 setMembers(Array.isArray(data) ? data : (data.members || []))
             }
         } catch (error) {
             console.error('Error fetching members:', error)
         }
-    }
+    }, [])
 
     const normalizeStatus = (status: string): Task['status'] => {
         const statusMap: Record<string, Task['status']> = {
@@ -379,25 +346,20 @@ function BoardsContent() {
     const handleCreateTask = async () => {
         if (!newTask.title || !selectedOrg) return
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/organizations/${selectedOrg.id}/tasks`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({
-                    title: newTask.title,
-                    description: newTask.description,
-                    status: 'todo',
-                    priority: newTask.priority,
-                    due_date: newTask.due_date || null,
-                    assigned_to: newTask.assigned_to || null,
-                    start_date: newTask.start_date || null,
-                    is_absolute: newTask.is_absolute,
-                    complexity_weight: newTask.complexity_weight,
-                    parent_task_id: newTask.parent_task_id || null
-                })
+            const response = await apiClient.post(`/organizations/${selectedOrg.id}/tasks`, {
+                title: newTask.title,
+                description: newTask.description,
+                status: 'todo',
+                priority: newTask.priority,
+                due_date: newTask.due_date || null,
+                assigned_to: newTask.assigned_to || null,
+                start_date: newTask.start_date || null,
+                is_absolute: newTask.is_absolute,
+                complexity_weight: newTask.complexity_weight,
+                parent_task_id: newTask.parent_task_id || null
             })
 
-            if (response.ok) {
+            if (response.data) {
                 fetchData(selectedOrg.id)
                 setIsCreateModalOpen(false)
                 setNewTask({ 
@@ -417,8 +379,7 @@ function BoardsContent() {
         }
     }
 
-    const handleStatusChange = async (taskId: string, newStatus: string) => {
-        // Optimistic update
+    const handleStatusChange = useCallback(async (taskId: string, newStatus: string) => {
         const taskToUpdate = tasks.find(t => t.id === taskId)
         if (!taskToUpdate) return
 
@@ -429,91 +390,51 @@ function BoardsContent() {
         setTasks(updatedTasks)
 
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/tasks/${taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ status: newStatus })
-            })
-
-            if (!response.ok) {
-                // Revert if error
+            const response = await apiClient.patch(`/tasks/${taskId}/status`, { status: newStatus })
+            if (response.status !== 200 && response.status !== 204) {
                 setTasks(previousTasks)
-                const errorData = await response.json()
-                const errorMsg = errorData.error || 'Failed to update task status'
-                const errorDetails = errorData.details || errorData.debug ? JSON.stringify(errorData.debug || errorData.details) : ''
-                alert(`${errorMsg}\n\nDetails: ${errorDetails}`)
-            } else {
-                // Just to be sure, refresh tasks after update
-                if (selectedOrg) fetchTasks(selectedOrg.id)
+            } else if (selectedOrg) {
+                fetchTasks(selectedOrg.id)
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error updating status:', error)
             setTasks(previousTasks)
         }
-    }
+    }, [tasks, selectedOrg, fetchTasks]);
 
-    const handleProgressChange = async (taskId: string, newProgress: number) => {
-        // Optimistic update
+    const handleProgressChange = useCallback(async (taskId: string, newProgress: number) => {
         const previousTasks = [...tasks]
-        const updatedTasks = tasks.map(t => 
-            t.id === taskId ? { ...t, progress_percent: newProgress } : t
-        )
+        const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, progress_percent: newProgress } : t)
         setTasks(updatedTasks)
 
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ progress_percent: newProgress })
-            })
-
-            if (!response.ok) {
-                setTasks(previousTasks)
-                const errorData = await response.json()
-                alert(errorData.error || 'Failed to update progress')
-            }
-        } catch (error) {
+            await apiClient.patch(`/tasks/${taskId}`, { progress_percent: newProgress })
+        } catch (error: any) {
             console.error('Error updating progress:', error)
             setTasks(previousTasks)
         }
-    }
+    }, [tasks]);
 
-    const handleDeleteTask = async (taskId: string) => {
+    const handleDeleteTask = useCallback(async (taskId: string) => {
         if (!confirm('Are you sure you want to delete this task?')) return
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/tasks/${taskId}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            
-            if (response.ok) {
-                // Optimistic UI update for deletion
+            const response = await apiClient.delete(`/tasks/${taskId}`)
+            if (response.status === 200 || response.status === 204) {
                 setTasks(prev => prev.filter(t => t.id !== taskId))
-            } else {
-                const errorData = await response.json()
-                alert(errorData.error || 'Failed to delete task')
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error deleting task:', error)
         }
-    }
+    }, []);
 
-    const handleArchiveTask = async (taskId: string) => {
+    const handleArchiveTask = useCallback(async (taskId: string) => {
         try {
-            const token = localStorage.getItem('token')
-            await fetch(`${API_URL}/api/tasks/${taskId}/status`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ status: 'archived' })
-            })
-            if (selectedOrg) fetchTasks(selectedOrg.id)
+            await apiClient.post(`/tasks/${taskId}/archive`)
+            setTasks(prev => prev.filter(t => t.id !== taskId))
         } catch (error) {
             console.error('Error archiving task:', error)
         }
-    }
+    }, []);
 
     const handleAddWidget = (type: string, title: string) => {
         const newWidget = { id: Date.now().toString(), type, title }
@@ -539,20 +460,13 @@ function BoardsContent() {
         if (!selectedOrg) return
         setIsResyncing(true)
         try {
-            const token = localStorage.getItem('token')
             // Get workspaces for this org
-            const wsRes = await fetch(`${API_URL}/api/workspaces?organizationId=${selectedOrg.id}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (wsRes.ok) {
-                const wsData = await wsRes.json()
-                const workspaces = wsData.workspaces || []
+            const wsRes = await apiClient.get(`/workspaces?organizationId=${selectedOrg.id}`)
+            if (wsRes.data) {
+                const workspaces = wsRes.data.workspaces || []
                 // Trigger sync on each workspace
                 for (const ws of workspaces) {
-                    await fetch(`${API_URL}/api/workspaces/${ws.id}/sync`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    })
+                    await apiClient.post(`/workspaces/${ws.id}/sync`)
                 }
             }
             // Refresh tasks after sync
@@ -571,13 +485,9 @@ function BoardsContent() {
         setTaskComments([]) // Clear old comments immediately
         // Fetch comments for this task
         try {
-            const token = localStorage.getItem('token')
-            const res = await fetch(`${API_URL}/api/tasks/${task.id}/comments`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (res.ok) {
-                const data = await res.json()
-                setTaskComments(data.comments || [])
+            const res = await apiClient.get(`/tasks/${task.id}/comments`)
+            if (res.data) {
+                setTaskComments(res.data.comments || [])
             }
         } catch (error) {
             console.error('Error fetching comments:', error)
@@ -588,18 +498,9 @@ function BoardsContent() {
     const handleAddComment = async () => {
         if (!newComment.trim() || !selectedTask) return
         try {
-            const token = localStorage.getItem('token')
-            const res = await fetch(`${API_URL}/api/tasks/${selectedTask.id}/comments`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ comment: newComment })
-            })
-            if (res.ok) {
-                const data = await res.json()
-                setTaskComments([...taskComments, data.comment])
+            const res = await apiClient.post(`/tasks/${selectedTask.id}/comments`, { comment: newComment })
+            if (res.data) {
+                setTaskComments([...taskComments, res.data.comment])
                 setNewComment('')
             }
         } catch (error) {
@@ -610,15 +511,7 @@ function BoardsContent() {
     const handleUpdateTask = async () => {
         if (!selectedTask) return
         try {
-            const token = localStorage.getItem('token')
-            await fetch(`${API_URL}/api/tasks/${selectedTask.id}`, {
-                method: 'PATCH',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(editedTask)
-            })
+            await apiClient.patch(`/tasks/${selectedTask.id}`, editedTask)
             setSelectedTask({ ...selectedTask, ...editedTask } as Task)
             setIsEditingTask(false)
             if (selectedOrg) fetchTasks(selectedOrg.id)
@@ -640,17 +533,21 @@ function BoardsContent() {
     const canEdit = () => ['admin', 'manager'].includes(getUserRole())
     const canDelete = () => getUserRole() === 'admin'
 
-    // Filter tasks based on active tab
-    const filteredTasks = tasks.filter(task => {
-        if (task.status === 'archived') return false
-        if (activeTab === 'all') return true
-        if (activeTab === 'general') return !task.synced && !task.sheet_name
-        // For sheet tabs, filter by sheet name
-        if (task.sheet_name && activeTab === task.sheet_name) return true
-        return false
-    })
+    // Filter tasks based on active tab - Memoized for performance
+    const filteredTasks = useMemo(() => {
+        return tasks.filter(task => {
+            if (task.status === 'archived') return false
+            if (activeTab === 'all') return true
+            if (activeTab === 'general') return !task.synced && !task.sheet_name
+            // For sheet tabs, filter by sheet name
+            if (task.sheet_name && activeTab === task.sheet_name) return true
+            return false
+        })
+    }, [tasks, activeTab]);
 
-    const generalTaskCount = tasks.filter(t => !t.synced && !t.sheet_name && t.status !== 'archived').length
+    const generalTaskCount = useMemo(() => {
+        return tasks.filter(t => !t.synced && !t.sheet_name && t.status !== 'archived').length
+    }, [tasks]);
 
     if (!mounted || !user) {
         return (
@@ -827,7 +724,7 @@ function BoardsContent() {
 
                 {/* Conditional View: Teams or Kanban */}
                 {boardView === 'teams' ? (
-                    <TeamCardGrid
+                    <TeamsView
                         teams={teamGroups}
                         userRole={getUserRole()}
                         onTeamClick={(team) => setSelectedTeamGroup(team as any)}
@@ -837,82 +734,74 @@ function BoardsContent() {
                         isResyncing={isResyncing}
                     />
                 ) : (
-                    <>
-                        {/* Kanban View Content */}
-                        <div className="space-y-6">
-                            {/* View Selection: Explorer vs Kanban Boards */}
-                            {boardSubView === 'explorer' && (getUserRole() === 'admin' || getUserRole() === 'manager') ? (
-                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 h-[calc(100vh-320px)]">
-                                    <AdvisorWBSExplorer 
-                                        sheetId={selectedSheetId} 
-                                        organizationId={selectedOrg?.id || ''} 
-                                    />
-                                </div>
-                            ) : boardSubView === 'advisor' ? (
-                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700/50 rounded-full">
-                                                <ShieldCheck className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
-                                                <span className="text-sm font-bold text-indigo-700 dark:text-indigo-400">Advisor Board</span>
-                                                <span className="text-xs bg-indigo-500 text-white rounded-full px-2 py-0.5">
-                                                    {filteredTasks.filter(t => t.is_absolute).length}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">High-integrity tasks synced from Google Sheets (Locked for students)</p>
+                    <div className="space-y-6">
+                        {boardSubView === 'explorer' && (getUserRole() === 'admin' || getUserRole() === 'manager') ? (
+                            <AdvisorView 
+                                selectedSheetId={selectedSheetId} 
+                                organizationId={selectedOrg?.id || ''} 
+                            />
+                        ) : boardSubView === 'advisor' ? (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700/50 rounded-full">
+                                            <ShieldCheck className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
+                                            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-400">Advisor Board</span>
+                                            <span className="text-xs bg-indigo-500 text-white rounded-full px-2 py-0.5">
+                                                {filteredTasks.filter(t => t.is_absolute).length}
+                                            </span>
                                         </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">High-integrity tasks synced from Google Sheets (Locked for students)</p>
                                     </div>
-                                    <ProfessionalKanban
-                                        tasks={filteredTasks.filter(t => t.is_absolute).map(t => ({
-                                            ...t,
-                                            id: t.id.toString(),
-                                            status: normalizeStatus(t.status)
-                                        } as any))}
-                                        onTaskClick={(t: any) => handleTaskClick(t)}
-                                        onAddTask={() => setIsGoogleSyncModalOpen(true)}
-                                        onDeleteTask={handleDeleteTask}
-                                        onArchiveTask={handleArchiveTask}
-                                        onStatusChange={handleStatusChange}
-                                        onProgressChange={handleProgressChange}
-                                        role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
-                                        theme="advisor"
-                                        canDrag={true}
-                                    />
                                 </div>
-                            ) : (
-                                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3">
-                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700/50 rounded-full">
-                                                <Users className="w-4 h-4 text-blue-700 dark:text-blue-400" />
-                                                <span className="text-sm font-bold text-blue-700 dark:text-blue-400">Team Board</span>
-                                                <span className="text-xs bg-blue-500 text-white rounded-full px-2 py-0.5">
-                                                    {filteredTasks.filter(t => !t.is_absolute).length}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-gray-400 dark:text-gray-500 dark:text-gray-400 font-medium">Internal tasks that team members can freely manage</p>
+                                <KanbanView
+                                    tasks={filteredTasks.filter(t => t.is_absolute).map(t => ({
+                                        ...t,
+                                        id: t.id.toString(),
+                                        status: normalizeStatus(t.status)
+                                    } as any))}
+                                    onTaskClick={(t: any) => handleTaskClick(t)}
+                                    onAddTask={() => setIsGoogleSyncModalOpen(true)}
+                                    onDeleteTask={handleDeleteTask}
+                                    onArchiveTask={handleArchiveTask}
+                                    onStatusChange={handleStatusChange}
+                                    onProgressChange={handleProgressChange}
+                                    role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
+                                    members={members}
+                                />
+                            </div>
+                        ) : (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700/50 rounded-full">
+                                            <Users className="w-4 h-4 text-blue-700 dark:text-blue-400" />
+                                            <span className="text-sm font-bold text-blue-700 dark:text-blue-400">Team Board</span>
+                                            <span className="text-xs bg-blue-500 text-white rounded-full px-2 py-0.5">
+                                                {filteredTasks.filter(t => !t.is_absolute).length}
+                                            </span>
                                         </div>
+                                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Internal tasks that team members can freely manage</p>
                                     </div>
-                                    <ProfessionalKanban
-                                        tasks={filteredTasks.filter(t => !t.is_absolute).map(t => ({
-                                            ...t,
-                                            id: t.id.toString(),
-                                            status: normalizeStatus(t.status)
-                                        } as any))}
-                                        onTaskClick={(t: any) => handleTaskClick(t)}
-                                        onAddTask={() => setIsCreateModalOpen(true)}
-                                        onDeleteTask={handleDeleteTask}
-                                        onArchiveTask={handleArchiveTask}
-                                        onStatusChange={handleStatusChange}
-                                        onProgressChange={handleProgressChange}
-                                        role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
-                                        theme="manager"
-                                        canDrag={true}
-                                    />
                                 </div>
-                            )}
-                        </div>
-                    </>
+                                <KanbanView
+                                    tasks={filteredTasks.filter(t => !t.is_absolute).map(t => ({
+                                        ...t,
+                                        id: t.id.toString(),
+                                        status: normalizeStatus(t.status)
+                                    } as any))}
+                                    onTaskClick={(t: any) => handleTaskClick(t)}
+                                    onAddTask={() => setIsCreateModalOpen(true)}
+                                    onDeleteTask={handleDeleteTask}
+                                    onArchiveTask={handleArchiveTask}
+                                    onStatusChange={handleStatusChange}
+                                    onProgressChange={handleProgressChange}
+                                    role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
+                                    members={members}
+                                />
+                            </div>
+                        )}
+                    </div>
                 )}
 
                 {/* Bottom Tab Bar — only show in kanban view */}

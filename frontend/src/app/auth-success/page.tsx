@@ -17,9 +17,8 @@ function AuthSuccessContent() {
       // 2. Fetch user data immediately to populate localStorage for both modules
       const fetchUserData = async () => {
         try {
-          // Use the unified port 5000 (NEXT_PUBLIC_API_URL should be available)
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-          const res = await fetch(`${API_URL}/api/auth/me`, {
+          const { API_URL } = await import('@/lib/api/client');
+          const res = await fetch(`${API_URL}/auth/me`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 

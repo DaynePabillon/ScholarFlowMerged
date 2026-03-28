@@ -1,0 +1,56 @@
+services:
+  # 1. Backend Service
+  - type: web
+    name: scholarflow-api
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        sync: false # Set this in Render dashboard (Supabase)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        fromService:
+          type: web
+          name: scholarflow-api
+          property: host
+        generateValue: "https://${value}/api/auth/google/callback"
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: scholarflow-web
+          property: host
+        generateValue: "https://${value}"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # 2. Frontend Service
+  - type: web
+    name: scholarflow-web
+    env: node
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: scholarflow-api
+          property: host
+        generateValue: "https://${value}"
+      - key: PORT
+        value: 3000

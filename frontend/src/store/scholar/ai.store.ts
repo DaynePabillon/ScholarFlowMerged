@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { API_URL } from '@/lib/api/client';
 
 interface AIStore {
   loading: boolean;
@@ -22,7 +23,7 @@ export const useAIStore = create<AIStore>((set) => ({
     };
 
     try {
-      const url = `http://localhost:5000${endpoints[requestType]}`;
+      const url = `${API_URL}${endpoints[requestType]}`;
       const token = localStorage.getItem('auth_token');
       
       const response = await fetch(url, {

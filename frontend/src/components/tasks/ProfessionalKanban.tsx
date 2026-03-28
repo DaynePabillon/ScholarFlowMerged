@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState, useEffect } from 'react'
+import React, { useRef, useState, useEffect, useMemo, useCallback, memo } from 'react'
 import { Plus, MoreHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
 import ProfessionalTaskCard from './ProfessionalTaskCard'
 
@@ -62,23 +62,27 @@ export default function ProfessionalKanban({
     const [dragOverColumn, setDragOverColumn] = useState<{col: string, module: string} | null>(null)
 
     // Helper: Extract numeric WBS code
-    const extractWbs = (code: string): string => {
+    const extractWbs = useCallback((code: string): string => {
         const m = code.match(/^(\d+(?:\.\d+)*)/);
         return m ? m[1] : code;
-    };
+    }, []);
 
     // Grouping Tasks by Module
-    const moduleGroups = tasks.reduce((acc: Record<string, Task[]>, task: Task) => {
-        const wbs = task.wbs_code ? extractWbs(task.wbs_code) : '';
-        const moduleCode = wbs.split('.')[0] || 'Uncategorized';
-        if (!acc[moduleCode]) acc[moduleCode] = [];
-        acc[moduleCode].push({ ...task, wbs_code: wbs });
-        return acc;
-    }, {});
+    const moduleGroups = useMemo(() => {
+        return tasks.reduce((acc: Record<string, Task[]>, task: Task) => {
+            const wbs = task.wbs_code ? extractWbs(task.wbs_code) : '';
+            const moduleCode = wbs.split('.')[0] || 'Uncategorized';
+            if (!acc[moduleCode]) acc[moduleCode] = [];
+            acc[moduleCode].push({ ...task, wbs_code: wbs });
+            return acc;
+        }, {});
+    }, [tasks, extractWbs]);
 
-    const sortedModuleCodes = Object.keys(moduleGroups).sort((a, b) => 
-        a.localeCompare(b, undefined, { numeric: true })
-    );
+    const sortedModuleCodes = useMemo(() => {
+        return Object.keys(moduleGroups).sort((a, b) => 
+            a.localeCompare(b, undefined, { numeric: true })
+        );
+    }, [moduleGroups]);
 
     const handleDragStart = (task: Task) => {
         if (!canDrag) return
@@ -104,7 +108,7 @@ export default function ProfessionalKanban({
         setCollapsedModules(newCollapsed);
     }
 
-    const buildTaskTree = (taskList: Task[]): any[] => {
+    const buildTaskTree = useCallback((taskList: Task[]): any[] => {
         const nodes = taskList.map(t => ({ ...t, children: [] as any[] }));
         const nodeMap: Record<string, any> = {};
         nodes.forEach(n => nodeMap[n.id] = n);
@@ -119,9 +123,9 @@ export default function ProfessionalKanban({
         });
         
         return roots.sort((a, b) => (a.wbs_code || '').localeCompare(b.wbs_code || '', undefined, { numeric: true }));
-    };
+    }, []);
 
-    const renderTask = (task: any, depth: number = 0) => (
+    const renderTask = useCallback((task: any, depth: number = 0) => (
         <div key={task.id} className="relative">
             <div
                 draggable={canDrag}
@@ -139,15 +143,87 @@ export default function ProfessionalKanban({
                 />
             </div>
             {task.children && task.children.length > 0 && (
-                <div className="mt-4 ml-4 space-y-4 border-l-2 border-gray-100 dark:border-slate-800/50 pl-6">
+                <div className="mt-4 ml-6 space-y-4 border-l-2 border-gray-100 dark:border-white/5 pl-6">
                     {task.children.map((child: any) => renderTask(child, depth + 1))}
                 </div>
             )}
         </div>
-    );
+    ), [canDrag, draggedTask, onTaskClick, onStatusChange, onDeleteTask, onArchiveTask, onProgressChange, role]);
+
+    const boardData = useMemo(() => {
+        return sortedModuleCodes.map(code => {
+            const moduleTasks = moduleGroups[code] || [];
+            const columnData = columns.map(col => {
+                const colTasks = moduleTasks.filter((t: Task) => {
+                    const nStatus = (t.status || '').toLowerCase().replace(/[- ]/g, '_');
+                    if (col.id === 'done') return nStatus === 'done' || nStatus === 'completed';
+                    return nStatus === col.id;
+                });
+                return {
+                    ...col,
+                    tree: buildTaskTree(colTasks),
+                    taskCount: colTasks.length,
+                    tasks: colTasks
+                };
+            });
+            return { code, columns: columnData };
+        });
+    }, [sortedModuleCodes, moduleGroups, columns, buildTaskTree]);
+
+    // Refactored KanbanColumn for atomic re-renders
+    const KanbanColumn = memo(({ 
+        col, 
+        moduleCode, 
+        isOver, 
+        onDragOver, 
+        onDragLeave, 
+        onDrop, 
+        onAddTask, 
+        renderTask 
+    }: any) => (
+        <div 
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={`min-h-[200px] p-5 rounded-[2rem] transition-all duration-500 border-2 border-transparent relative overflow-hidden ${
+                isOver ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500/40 scale-[1.02] shadow-2xl shadow-emerald-500/10 z-10' : 'bg-gray-50/50 dark:bg-slate-800/20 hover:bg-gray-100/50 dark:hover:bg-slate-800/30'
+            }`}
+        >
+            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/[0.01] dark:from-white/[0.02] to-transparent pointer-events-none" />
+            
+            <div className="space-y-6 relative z-10">
+                {col.tree.map((task: any) => renderTask(task))}
+                {col.taskCount === 0 && (
+                    <div className="h-32 flex flex-col items-center justify-center opacity-20 dark:opacity-10 transition-all duration-700">
+                        <div className="w-12 h-12 rounded-2xl border-2 border-dashed border-gray-300 dark:border-slate-400 mb-3 rotate-45 transition-transform duration-1000" />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-400">Idle</span>
+                    </div>
+                )}
+            </div>
+            
+            <button
+                onClick={() => onAddTask?.(col.id)}
+                className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all duration-300"
+            >
+                <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
+                    <Plus className="w-3 h-3" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
+            </button>
+        </div>
+    ));
+
+    const [lastDragOverUpdate, setLastDragOverUpdate] = useState(0);
+    const throttledSetDragOverColumn = useCallback((data: any) => {
+        const now = Date.now();
+        if (now - lastDragOverUpdate > 50 || data === null) {
+            setDragOverColumn(data);
+            setLastDragOverUpdate(now);
+        }
+    }, [lastDragOverUpdate]);
 
     return (
-        <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/80 backdrop-blur-2xl rounded-[2.5rem] border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-2xl shadow-black/5 dark:shadow-black/40">
+        <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/80 backdrop-blur-md rounded-[2.5rem] border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-2xl shadow-black/5 dark:shadow-black/40">
             {/* Sticky Header Row */}
             <div className="grid grid-cols-4 gap-6 p-8 bg-gray-50/80 dark:bg-slate-950/60 border-b border-gray-200 dark:border-slate-700/50 z-30 sticky top-0 backdrop-blur-md">
                 {columns.map(col => (
@@ -162,22 +238,22 @@ export default function ProfessionalKanban({
 
             {/* Scrollable Swimlane Content */}
             <div className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar">
-                {sortedModuleCodes.map(code => {
-                    const isCollapsed = collapsedModules.has(code);
-                    const moduleTasks = moduleGroups[code];
-                    const moduleTitleTask = moduleTasks.find(t => t.wbs_code === code) || moduleTasks[0];
+                {boardData.map((moduleData) => {
+                    const isCollapsed = collapsedModules.has(moduleData.code);
+                    const moduleTasks = moduleGroups[moduleData.code] || [];
+                    const moduleTitleTask = moduleTasks.find(t => t.wbs_code === moduleData.code) || moduleTasks[0];
                     
                     return (
-                        <div key={code} className="group/swimlane animate-in slide-in-from-bottom-4 duration-500">
+                        <div key={moduleData.code} className="group/swimlane animate-in slide-in-from-bottom-4 duration-500">
                             {/* Swimlane Header */}
                             <div 
-                                onClick={() => toggleModule(code)}
-                                className="flex items-center gap-6 mb-6 cursor-pointer group-hover/swimlane:translate-x-2 transition-all duration-300"
+                                onClick={() => toggleModule(moduleData.code)}
+                                className="flex items-center justify-between mb-8 cursor-pointer group/header"
                             >
                                 <div className="flex items-center gap-4 bg-gradient-to-r from-emerald-500/10 dark:from-emerald-500/20 via-emerald-500/5 to-transparent pl-4 pr-10 py-2.5 rounded-2xl border border-emerald-200 dark:border-emerald-500/20 backdrop-blur-xl shadow-lg shadow-emerald-500/5">
                                     <div className="flex flex-col">
                                         <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 tracking-[0.1em] uppercase opacity-70">
-                                            Phase {code}
+                                            Phase {moduleData.code}
                                         </span>
                                         <h4 className="text-sm font-black text-gray-900 dark:text-white truncate max-w-md uppercase tracking-tight">
                                             {moduleTitleTask.title}
@@ -192,53 +268,22 @@ export default function ProfessionalKanban({
 
                             {!isCollapsed && (
                                 <div className="grid grid-cols-4 gap-6 items-start">
-                                    {columns.map(col => {
-                                        const colTasks = moduleTasks.filter((t: Task) => {
-                                            const nStatus = (t.status || '').toLowerCase().replace(/[- ]/g, '_');
-                                            if (col.id === 'done') return nStatus === 'done' || nStatus === 'completed';
-                                            return nStatus === col.id;
-                                        });
-                                        const tree = buildTaskTree(colTasks);
-                                        const isOver = dragOverColumn?.col === col.id && dragOverColumn?.module === code;
-
-                                        return (
-                                            <div 
-                                                key={col.id}
-                                                onDragOver={(e) => {
-                                                    e.preventDefault();
-                                                    setDragOverColumn({ col: col.id, module: code });
-                                                }}
-                                                onDragLeave={() => setDragOverColumn(null)}
-                                                onDrop={(e) => handleDrop(e, col.id)}
-                                                className={`min-h-[200px] p-5 rounded-[2rem] transition-all duration-500 border-2 border-transparent relative overflow-hidden ${
-                                                    isOver ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500/40 scale-[1.02] shadow-2xl shadow-emerald-500/10 z-10' : 'bg-gray-50/50 dark:bg-slate-800/20 hover:bg-gray-100/50 dark:hover:bg-slate-800/30'
-                                                }`}
-                                            >
-                                                {/* Background glass effect for column */}
-                                                <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/[0.01] dark:from-white/[0.02] to-transparent pointer-events-none" />
-                                                
-                                                <div className="space-y-6 relative z-10">
-                                                    {tree.map(task => renderTask(task))}
-                                                    {colTasks.length === 0 && (
-                                                        <div className="h-32 flex flex-col items-center justify-center opacity-20 dark:opacity-10 group-hover/swimlane:opacity-40 dark:group-hover/swimlane:opacity-30 transition-all duration-700">
-                                                            <div className="w-12 h-12 rounded-2xl border-2 border-dashed border-gray-300 dark:border-slate-400 mb-3 rotate-45 group-hover/swimlane:rotate-0 transition-transform duration-1000" />
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-400">Idle</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                
-                                                <button
-                                                    onClick={() => onAddTask?.(col.id)}
-                                                    className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all duration-300"
-                                                >
-                                                    <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
-                                                        <Plus className="w-3 h-3" />
-                                                    </div>
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
+                                    {moduleData.columns.map(col => (
+                                        <KanbanColumn
+                                            key={col.id}
+                                            col={col}
+                                            moduleCode={moduleData.code}
+                                            isOver={dragOverColumn?.col === col.id && dragOverColumn?.module === moduleData.code}
+                                            onDragOver={(e: any) => {
+                                                e.preventDefault();
+                                                throttledSetDragOverColumn({ col: col.id, module: moduleData.code });
+                                            }}
+                                            onDragLeave={() => throttledSetDragOverColumn(null)}
+                                            onDrop={(e: any) => handleDrop(e, col.id)}
+                                            onAddTask={onAddTask}
+                                            renderTask={renderTask}
+                                        />
+                                    ))}
                                 </div>
                             )}
                         </div>

@@ -7,10 +7,10 @@ dotenv.config();
 let poolConfig: PoolConfig;
 
 if (process.env.DATABASE_URL) {
-  // Use connection string from Render
+  // Use connection string (Supabase / Render)
   poolConfig = {
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    ssl: { rejectUnauthorized: false }, // Critical for Supabase/Heroku/Render
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,

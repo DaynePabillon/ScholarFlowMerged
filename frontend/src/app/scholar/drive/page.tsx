@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
-import { API_URL } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
     FolderOpen,
@@ -40,25 +40,17 @@ export default function DrivePage() {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         try { setUser(jwtDecode(token)); } catch { router.push('/login'); return; }
-        fetchFiles(token);
+        fetchFiles();
     }, [router]);
 
-    const fetchFiles = async (token?: string) => {
+    const fetchFiles = async () => {
         setLoading(true);
         setError('');
-        const t = token || localStorage.getItem('auth_token');
         try {
-            const res = await fetch(`${API_URL}/api/scholar/drive/files`, {
-                headers: { Authorization: `Bearer ${t}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setFiles(data.files || []);
-            } else {
-                setError(data.error || 'Failed to load Drive files');
-            }
-        } catch {
-            setError('Could not connect to Google Drive');
+            const res = await apiClient.get('/scholar/drive/files');
+            setFiles(res.data.files || []);
+        } catch (err: any) {
+            setError(err.response?.data?.error || 'Could not connect to Google Drive');
         } finally {
             setLoading(false);
         }

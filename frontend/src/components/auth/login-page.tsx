@@ -1,6 +1,6 @@
 "use client"
 
-import { API_URL } from '@/lib/api/client'
+import { apiClient, API_URL } from '@/lib/api/client'
 import { Cloud, Mail, Users, FolderKanban, CheckSquare, ArrowRight } from "lucide-react"
 
 // Cloud SVG component for the animated background

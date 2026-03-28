@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Users, ChevronDown } from 'lucide-react'
+import apiClient from '@/lib/api/client'
 
 interface Team {
     id: string
@@ -34,20 +35,12 @@ export default function TeamSelector({
         fetchTeams()
     }, [organizationId])
 
-    const fetchTeams = async () => {
+    const fetchTeams = useCallback(async () => {
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/organizations/${organizationId}/teams`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                }
-            )
+            const response = await apiClient.get(`/organizations/${organizationId}/teams`)
 
-            if (response.ok) {
-                const data = await response.json()
+            if (response.data) {
+                const data = response.data
                 setTeams(data.teams || [])
                 
                 // For students (members), auto-select their team if they only have one
@@ -60,9 +53,9 @@ export default function TeamSelector({
         } finally {
             setLoading(false)
         }
-    }
+    }, [organizationId, userRole, onTeamChange])
 
-    const selectedTeam = teams.find(t => t.id === selectedTeamId)
+    const selectedTeam = useMemo(() => teams.find(t => t.id === selectedTeamId), [teams, selectedTeamId])
 
     // For students, if they only have one team, don't show the selector
     if (userRole === 'member' && teams.length <= 1) {

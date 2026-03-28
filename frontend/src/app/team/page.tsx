@@ -1,6 +1,6 @@
 "use client"
 
-import { API_URL } from '@/lib/api/client'
+import { apiClient, API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
@@ -52,13 +52,9 @@ export default function TeamPage() {
     }
 
     if (!user) {
-      fetch(`${API_URL}/api/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-        .then(res => res.ok ? res.json() : Promise.reject('Auth failed'))
-        .then(data => {
+      apiClient.get('/auth/me')
+        .then(response => {
+          const data = response.data
           const { organizations: orgs, ...userData } = data
           setUser(userData)
           setOrganizations(orgs || [])

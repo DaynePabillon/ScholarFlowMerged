@@ -31,6 +31,7 @@ import wbsRoutes from './routes/wbs.routes';
 import scholarRoutes from './routes/scholar.routes';
 import { runAutoMigrations } from './services/migration.service';
 import passport from 'passport';
+import { apiLimiter, authLimiter, aiLimiter } from './middleware/rateLimit.middleware';
 
 dotenv.config();
 
@@ -83,6 +84,11 @@ app.get('/health', (_req: Request, res: Response) => {
     database: dbConnected ? 'connected' : 'connecting'
   });
 });
+
+// Apply Rate Limiters
+app.use('/api', apiLimiter);
+app.use('/api/auth', authLimiter);
+app.use('/api/scholar/ai', aiLimiter);
 
 // API Routes
 app.use('/api/auth', authRoutes);

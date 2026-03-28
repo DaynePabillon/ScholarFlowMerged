@@ -1,8 +1,20 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import { X, FileText, AlertCircle, CheckCircle2, ChevronRight, Search, Loader2, RefreshCw, FilePlus2, ExternalLink, Clock } from 'lucide-react'
-import { API_URL } from '@/lib/api/client'
+import { useState, useEffect, useCallback } from 'react'
+import {
+    X,
+    FileText, // Changed from FileType to FileText to match original icon
+    AlertCircle,
+    CheckCircle2,
+    ChevronRight,
+    Search,
+    Loader2,
+    RefreshCw,
+    FilePlus2, // Changed from Download to FilePlus2 to match original icon
+    ExternalLink,
+    Clock
+} from 'lucide-react'
+import apiClient from '@/lib/api/client'
 
 interface Spreadsheet {
     id: string
@@ -37,7 +49,7 @@ export default function GoogleSheetImportModal({
 }: GoogleSheetImportModalProps) {
     const [step, setStep] = useState<'select' | 'preview' | 'syncing' | 'done'>('select')
     const [syncMode, setSyncMode] = useState<'browse' | 'url'>('url')
-    const [spreadsheets, setSpreadsheets] = useState<Spreadsheet[]>([])
+    const [sheets, setSheets] = useState<Spreadsheet[]>([]) // Renamed spreadsheets to sheets
     const [loading, setLoading] = useState(false)
     const [searchQuery, setSearchQuery] = useState('')
     const [pastedUrl, setPastedUrl] = useState('')
@@ -50,34 +62,52 @@ export default function GoogleSheetImportModal({
 
     useEffect(() => {
         if (isOpen && step === 'select') {
-            fetchSpreadsheets()
+            fetchSheets()
         }
     }, [isOpen, step])
 
-    const fetchSpreadsheets = async () => {
+    const fetchSheets = useCallback(async () => {
         setLoading(true)
         setError(null)
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/sheets/list`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (response.ok) {
-                const data = await response.json()
-                setSpreadsheets(data.files || [])
-            } else {
-                setError('Failed to load Google Sheets. Please ensure you are logged in.')
+            const response = await apiClient.get('/sheets/list')
+            if (response.data) {
+                setSheets(response.data.files || [])
             }
-        } catch (err) {
-            setError('Connection error. Please try again.')
+        } catch (err: any) {
+            console.error('Error fetching sheets:', err)
+            setError(err.response?.data?.error || 'Failed to load Google Sheets')
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
     const extractSheetId = (url: string) => {
         const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
         return match ? match[1] : null
+    }
+
+    const ensureWorkspace = async () => {
+        try {
+            const response = await apiClient.get(`/workspaces?organizationId=${organizationId}`)
+            if (response.data) {
+                const workspaces = response.data.workspaces || []
+                if (workspaces.length > 0) {
+                    return workspaces[0]
+                } else {
+                    const createWsRes = await apiClient.post('/workspaces', {
+                        organizationId,
+                        folderId: 'root',
+                        folderName: 'Default Workspace'
+                    })
+                    return { id: createWsRes.data.workspaceId }
+                }
+            }
+            return null
+        } catch (err) {
+            console.error('Error ensuring workspace:', err)
+            return null
+        }
     }
 
     const handlePreview = async (sheetFromUrl?: Spreadsheet) => {
@@ -86,70 +116,20 @@ export default function GoogleSheetImportModal({
         
         setLoading(true)
         setError(null)
-
         try {
-            const token = localStorage.getItem('token')
-            
-            // First, get or create workspace
-            const wsResponse = await fetch(`${API_URL}/api/workspaces?organizationId=${organizationId}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            
-            let workspace
-            if (wsResponse.ok) {
-                const wsData = await wsResponse.json()
-                if (wsData.workspaces && wsData.workspaces.length > 0) {
-                    workspace = wsData.workspaces[0]
-                } else {
-                    // Create default workspace if none exists
-                    const createWs = await fetch(`${API_URL}/api/workspaces`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            organizationId,
-                            folderId: 'root',
-                            folderName: 'Default Workspace'
-                        })
-                    })
-                    const createData = await createWs.json()
-                    workspace = { id: createData.workspaceId }
-                }
-            }
-
-            if (!workspace) {
-                setError('Failed to get workspace')
-                setLoading(false)
-                return
-            }
-
+            const workspace = await ensureWorkspace()
+            if (!workspace) throw new Error('Could not resolve workspace')
             setWorkspaceId(workspace.id)
 
-            // Fetch preview
-            const response = await fetch(`${API_URL}/api/workspaces/${workspace.id}/preview-sheet`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ sheetId: sheetToPreview.id })
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                setPreview(data.preview)
-                if (sheetFromUrl) {
-                    setSelectedSheet(sheetFromUrl)
-                }
+            const response = await apiClient.post(`/workspaces/${workspace.id}/preview-sheet`, { sheetId: sheetToPreview.id })
+            if (response.data) {
+                setPreview(response.data.preview)
+                if (sheetFromUrl) setSelectedSheet(sheetFromUrl)
                 setStep('preview')
-            } else {
-                const data = await response.json()
-                setError(data.error || 'Failed to preview sheet. Ensure the sheet is shared with the service account.')
             }
-        } catch (err) {
-            setError('Network error during preview')
+        } catch (err: any) {
+            console.error('Error previewing sheet:', err)
+            setError(err.response?.data?.error || 'Failed to preview sheet')
         } finally {
             setLoading(false)
         }
@@ -158,7 +138,7 @@ export default function GoogleSheetImportModal({
     const handleUrlSync = () => {
         const id = extractSheetId(pastedUrl)
         if (!id) {
-            setError('Invalid Google Sheet URL. Please copy the full URL from your browser.')
+            setError('Invalid Google Sheet URL')
             return
         }
         handlePreview({ id, name: 'Imported via URL', modifiedTime: new Date().toISOString() })
@@ -168,31 +148,16 @@ export default function GoogleSheetImportModal({
         if (!selectedSheet || !workspaceId) return
         setStep('syncing')
         setError(null)
-
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/workspaces/${workspaceId}/connect-sheet`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sheetId: selectedSheet.id,
-                    sheetName: selectedSheet.name,
-                    teamId: teamId || undefined
-                })
+            await apiClient.post(`/workspaces/${workspaceId}/connect-sheet`, {
+                sheetId: selectedSheet.id,
+                sheetName: selectedSheet.name,
+                teamId: teamId || undefined
             })
-
-            if (response.ok) {
-                setStep('done')
-            } else {
-                const data = await response.json()
-                setError(data.error || 'Failed to sync sheet')
-                setStep('preview')
-            }
-        } catch (err) {
-            setError('Network error during sync')
+            setStep('done')
+        } catch (err: any) {
+            console.error('Error syncing:', err)
+            setError(err.response?.data?.error || 'Failed to sync')
             setStep('preview')
         }
     }
@@ -201,21 +166,14 @@ export default function GoogleSheetImportModal({
         setCreatingTemplate(true)
         setError(null)
         try {
-            const token = localStorage.getItem('token')
-            const response = await fetch(`${API_URL}/api/organizations/${organizationId}/tasks/create-wbs-template`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-            if (response.ok) {
-                const data = await response.json()
-                setNewSheetUrl(data.url)
-                // Refresh list and notify
-                fetchSpreadsheets()
-            } else {
-                setError('Failed to create template. Please try again.')
+            const response = await apiClient.post(`/organizations/${organizationId}/tasks/create-wbs-template`)
+            if (response.data) {
+                setNewSheetUrl(response.data.url)
+                fetchSheets()
             }
-        } catch (err) {
-            setError('Connection error. Please try again.')
+        } catch (err: any) {
+            console.error('Error creating template:', err)
+            setError('Failed to create template')
         } finally {
             setCreatingTemplate(false)
         }
@@ -231,7 +189,7 @@ export default function GoogleSheetImportModal({
 
     if (!isOpen) return null
 
-    const filteredSheets = spreadsheets.filter(s => 
+    const filteredSheets = sheets.filter(s => 
         s.name.toLowerCase().includes(searchQuery.toLowerCase())
     )
 

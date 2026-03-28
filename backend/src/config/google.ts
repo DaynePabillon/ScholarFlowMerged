@@ -8,8 +8,8 @@ const getRedirectUri = () => {
   if (process.env.GOOGLE_REDIRECT_URI) {
     return process.env.GOOGLE_REDIRECT_URI;
   }
-  // Fallback: construct from backend URL or use Render URL pattern
-  const backendUrl = process.env.BACKEND_URL || 'https://skyflow-backend-v40g.onrender.com';
+  // Construct from backend URL (local dev fallback)
+  const backendUrl = process.env.BACKEND_URL || 'http://localhost:5000';
   return `${backendUrl}/api/auth/google/callback`;
 };
 
@@ -42,7 +42,8 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.readonly',
-  'https://www.googleapis.com/auth/spreadsheets.readonly',
+  'https://www.googleapis.com/auth/spreadsheets',
+  // Removed spreadsheets.readonly as 'spreadsheets' covers both read and write
 ];
 
 // Generate Google OAuth URL

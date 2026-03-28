@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
-import { API_URL } from '@/lib/api/client';
+import apiClient from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
     BookOpen,
@@ -64,16 +64,14 @@ export default function CoursesPage() {
             const decoded: any = jwtDecode(token);
             setUser(decoded);
             if (decoded.role === 'Admin') setCanCreate(true);
-            fetchCourses(token);
+            fetchCourses();
         } catch (err) { router.push('/login'); }
     }, [router]);
 
-    const fetchCourses = async (token: string) => {
+    const fetchCourses = async () => {
         try {
-            const res = await fetch(`${API_URL}/api/courses`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            if (res.ok) setCourses(await res.json());
+            const res = await apiClient.get('/courses');
+            setCourses(res.data);
         } catch (err) { console.error('Failed to load courses'); }
         finally { setLoading(false); }
     };
@@ -82,21 +80,14 @@ export default function CoursesPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`${API_URL}/api/courses`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseName, courseCode, courseSection, courseTerm })
+            const res = await apiClient.post('/courses', { 
+                courseName, courseCode, courseSection, courseTerm 
             });
-            if (res.ok) {
-                const data = await res.json();
-                setCourses([data, ...courses]);
-                setSuccessKey(data.courseKey);
-            } else {
-                const err = await res.json();
-                showToast(err.error || 'Failed to create course', 'error');
-            }
-        } catch (err) { showToast('Failed to create course', 'error'); }
+            setCourses([res.data, ...courses]);
+            setSuccessKey(res.data.courseKey);
+        } catch (err: any) { 
+            showToast(err.response?.data?.error || 'Failed to create course', 'error'); 
+        }
         finally { setSubmitting(false); }
     };
 
@@ -110,21 +101,13 @@ export default function CoursesPage() {
         if (!enrollKey) return;
         setEnrolling(true);
         try {
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`${API_URL}/api/enroll`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ courseKey: enrollKey })
-            });
-            if (res.ok) {
-                showToast('Successfully enrolled!');
-                setEnrollKey('');
-                fetchCourses(token!);
-            } else {
-                const err = await res.json();
-                showToast(err.error || 'Failed to enroll', 'error');
-            }
-        } catch (err) { showToast('Failed to enroll. Check your key.', 'error'); }
+            await apiClient.post('/enroll', { courseKey: enrollKey });
+            showToast('Successfully enrolled!');
+            setEnrollKey('');
+            fetchCourses();
+        } catch (err: any) { 
+            showToast(err.response?.data?.error || 'Failed to enroll. Check your key.', 'error'); 
+        }
         finally { setEnrolling(false); }
     };
 

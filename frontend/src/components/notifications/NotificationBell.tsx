@@ -1,8 +1,22 @@
 "use client"
 
-import { API_URL } from '@/lib/api/client'
-import { useState, useEffect, useRef } from 'react'
-import { Bell, Check, CheckCheck, X, Clock, MessageSquare, User, AlertCircle } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { 
+    Bell, 
+    Check, 
+    Trash2, 
+    ExternalLink, 
+    Mail, 
+    Info, 
+    AlertTriangle, 
+    CheckCircle, 
+    Clock, 
+    CheckCheck, 
+    MessageSquare, 
+    AlertCircle, 
+    User 
+} from 'lucide-react'
+import apiClient from '@/lib/api/client'
 
 interface Notification {
     id: string
@@ -39,36 +53,22 @@ export default function NotificationBell() {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         try {
-            const token = localStorage.getItem('token')
-            if (!token) return
-
-            const response = await fetch(`${API_URL}/api/notifications`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-
-            if (response.ok) {
-                const data = await response.json()
-                setNotifications(data.notifications || [])
-                setUnreadCount(data.unreadCount || 0)
+            const response = await apiClient.get('/notifications')
+            if (response.data) {
+                setNotifications(response.data.notifications || [])
+                setUnreadCount(response.data.unreadCount || 0)
             }
         } catch (error) {
             console.error('Error fetching notifications:', error)
         }
-    }
+    }, [])
 
     const markAsRead = async (id: string) => {
         try {
-            const token = localStorage.getItem('token')
-            await fetch(`${API_URL}/api/notifications/${id}/read`, {
-                method: 'PATCH',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-
-            setNotifications(prev =>
-                prev.map(n => n.id === id ? { ...n, is_read: true } : n)
-            )
+            await apiClient.post(`/notifications/${id}/read`)
+            setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
             setUnreadCount(prev => Math.max(0, prev - 1))
         } catch (error) {
             console.error('Error marking notification as read:', error)
@@ -77,12 +77,7 @@ export default function NotificationBell() {
 
     const markAllAsRead = async () => {
         try {
-            const token = localStorage.getItem('token')
-            await fetch(`${API_URL}/api/notifications/read-all`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            })
-
+            await apiClient.post('/notifications/read-all')
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
             setUnreadCount(0)
         } catch (error) {

@@ -3,6 +3,7 @@
 import { Cloud, ArrowLeft } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { API_URL } from "@/lib/api/client"
 
 // Cloud SVG component for animated background
 const CloudShape = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
@@ -17,7 +18,7 @@ export default function LoginPage() {
 
   const handleGoogleLogin = () => {
     // Redirect to the unified backend's Google OAuth flow
-    window.location.href = `http://localhost:5000/api/auth/google`;
+    window.location.href = `${API_URL}/auth/google`;
   }
 
   return (
