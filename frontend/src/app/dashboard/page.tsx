@@ -344,7 +344,11 @@ export default function Home() {
               ) : (
                 <div className="text-center py-8" style={{ color: 'var(--text-secondary)' }}>
                   <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No teams yet. Import from ScholarSync to get started.</p>
+                  <p className="text-sm">
+                    {user?.scholarsyncRole === 'Student' 
+                      ? "No teams assigned. Once your instructor adds you to a team, it will appear here." 
+                      : "No teams yet. Import from ScholarSync to get started."}
+                  </p>
                 </div>
               )}
             </div>

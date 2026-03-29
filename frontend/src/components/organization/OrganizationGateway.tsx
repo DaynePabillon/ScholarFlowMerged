@@ -184,17 +184,21 @@ export default function OrganizationGateway({
 
                 {/* Empty State / Create New */}
                 <div className="space-y-3">
-                    <button
-                        onClick={handleCreateOrg}
-                        className="w-full p-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl flex items-center justify-center gap-2 hover:from-blue-600 hover:to-cyan-600 transition-all shadow-lg hover:shadow-xl font-medium"
-                    >
-                        <Plus className="w-5 h-5" />
-                        Create New Organization
-                    </button>
+                    {user?.scholarsyncRole !== 'Student' && (
+                        <button
+                            onClick={handleCreateOrg}
+                            className="w-full p-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl flex items-center justify-center gap-2 hover:from-blue-600 hover:to-cyan-600 transition-all shadow-lg hover:shadow-xl font-medium"
+                        >
+                            <Plus className="w-5 h-5" />
+                            Create New Organization
+                        </button>
+                    )}
 
                     {organizations.length === 0 && (
-                        <p className="text-center text-gray-400 text-sm">
-                            or ask someone to invite you to their organization
+                        <p className="text-center text-gray-500 text-sm bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                            {user?.scholarsyncRole === 'Student'
+                                ? "Welcome to ScholarFlow! Your instructor will invite you to your workspace shortly."
+                                : "or ask someone to invite you to their organization"}
                         </p>
                     )}
                 </div>
