@@ -222,6 +222,17 @@ router.get('/courses', async (req: Request, res: Response) => {
 
     const userAcademicRole = account?.accountRole || (user.role === 'admin' ? 'Admin' : 'Student');
 
+    // Admin from ss_account gets all courses (same as JWT Admin path above)
+    if (userAcademicRole === 'Admin') {
+      const { rows: allCourses } = await pool.query(
+        `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
+         FROM ss_courses c
+         LEFT JOIN (SELECT course_id, COUNT(*)::int AS enrolled_count FROM ss_enrollments GROUP BY course_id) ec ON ec.course_id = c.id
+         ORDER BY c.id DESC`
+      );
+      return res.json(allCourses);
+    }
+
     if (userAcademicRole === 'Adviser' || userAcademicRole === 'Advisers') {
       const adviserEmail = String(user.email || '').toLowerCase().trim();
       const adviserName = String(user.name || '').toLowerCase().trim();

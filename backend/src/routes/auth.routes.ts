@@ -160,9 +160,9 @@ router.get('/google/callback', async (req: Request, res: Response) => {
             [orgId, user.id, skyflowRole]
           );
 
-          // Mark onboarding as completed with role context
+          // Mark onboarding as completed with role context, and store ScholarSync role in users.role
           await dbQuery(
-            `UPDATE users SET onboarding_completed = true, onboarding_data = $2, updated_at = NOW() WHERE id = $1`,
+            `UPDATE users SET role = $3, onboarding_completed = true, onboarding_data = $2, updated_at = NOW() WHERE id = $1`,
             [user.id, JSON.stringify({
               purpose: 'School',
               role: ssRole === 'Student' ? 'Undergraduate student' : 'Faculty member',
@@ -170,7 +170,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
               focusAreas: ['Group assignments', 'Project management'],
               source: 'scholarsync_auto',
               workspaceName: 'ScholarSync',
-            })]
+            }), skyflowRole]
           );
 
           inviteToken = 'scholarsync-auto'; // triggers the "invited=true" path which skips onboarding
@@ -241,6 +241,13 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
       );
       if (ssResult.rows.length > 0) {
         scholarsyncRole = ssResult.rows[0].accountRole;
+
+        // Back-fill users.role for existing users who were onboarded before the role fix
+        if (!user.role && scholarsyncRole) {
+          const backfillRole = (scholarsyncRole === 'Admin' || scholarsyncRole === 'Advisers') ? 'admin' : 'member';
+          await dbQuery('UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2', [backfillRole, user.id]);
+          user.role = backfillRole;
+        }
       }
     } catch { /* ss_account may not exist */ }
 

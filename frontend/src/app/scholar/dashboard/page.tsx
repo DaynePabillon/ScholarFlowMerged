@@ -63,8 +63,9 @@ export default function DashboardPage() {
     );
   }
 
-  const isAdmin = user.role === 'Admin';
-  const isInstructor = user.role === 'Admin' || user.role === 'Advisers';
+  const effectiveRole = user.scholarsyncRole || user.role || '';
+  const isAdmin = effectiveRole === 'Admin';
+  const isInstructor = effectiveRole === 'Admin' || effectiveRole === 'Advisers';
 
   return (
     <SidebarLayout>
@@ -76,12 +77,12 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-3 text-2xl" style={{ color: 'var(--color-text)' }}>
             Welcome back, <span className="font-semibold">{user.email?.split('@')[0]}</span>
-            <span style={{ color: 'var(--color-textSecondary)' }}> · {user.role}</span>
+            <span style={{ color: 'var(--color-textSecondary)' }}> · {effectiveRole}</span>
           </p>
         </div>
 
         {/* Stats Grid */}
-        {user.role !== 'Student' && (
+        {effectiveRole !== 'Student' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
           <div className="glass-card p-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
             <div className="flex items-center gap-4 mb-4">

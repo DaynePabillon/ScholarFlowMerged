@@ -56,7 +56,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 }
 
                 // Refresh profile from backend so role updates are reflected without re-login
-                apiClient.get('/api/auth/me')
+                apiClient.get('/auth/me')
                     .then((res) => {
                         const profile = res.data;
                         if (!profile) return;
