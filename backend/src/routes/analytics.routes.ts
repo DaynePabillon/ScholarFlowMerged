@@ -37,11 +37,19 @@ async function computeDataHash(orgId: string): Promise<string> {
         `SELECT
        (SELECT COUNT(*) FROM team_groups WHERE organization_id = $1) as teams,
        (SELECT COUNT(*) FROM team_group_members tgm JOIN team_groups tg ON tgm.team_group_id = tg.id WHERE tg.organization_id = $1) as members,
-       (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1) as checkpoints,
-       (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 AND tc.status = 'completed') as completed,
+       (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1)
+         + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1)
+         + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1) as checkpoints,
+       (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 AND tc.status = 'completed')
+         + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 AND t.status IN ('completed', 'done', 'Done'))
+         + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 AND st.status IN ('completed', 'done', 'Done')) as completed,
        (SELECT COUNT(*) FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1) as comments,
        (SELECT MAX(tc.created_at) FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1) as last_comment,
-       (SELECT MAX(tc.updated_at) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1) as last_checkpoint`,
+       GREATEST(
+         (SELECT MAX(tc.updated_at) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1),
+         (SELECT MAX(t.updated_at) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1),
+         (SELECT MAX(st.updated_at) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1)
+       ) as last_checkpoint`,
         [orgId]
     );
     const raw = JSON.stringify(result.rows[0]);
@@ -96,13 +104,19 @@ router.get('/analytics/overview', authenticateToken, async (req: AuthRequest, re
         )).rows[0].count);
 
         const checkpointsResult = await pool.query(
-            `SELECT COUNT(*) as total,
-         COUNT(*) FILTER (WHERE tc.status = 'completed') as completed,
-         COUNT(*) FILTER (WHERE tc.status = 'in_progress') as in_progress,
-         COUNT(*) FILTER (WHERE tc.status = 'pending') as pending
-       FROM team_checkpoints tc 
-       JOIN team_groups tg ON tc.team_group_id = tg.id 
-       WHERE tg.organization_id = $1 ${teamFilter}`,
+            `SELECT 
+             (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 ${teamFilter})
+              + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter})
+              + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter}) as total,
+             (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND tc.status = 'completed')
+              + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND t.status IN ('completed', 'done', 'Done'))
+              + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND st.status IN ('completed', 'done', 'Done')) as completed,
+             (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND tc.status = 'in_progress')
+              + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND t.status IN ('in_progress', 'in-progress'))
+              + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND st.status IN ('in_progress', 'in-progress')) as in_progress,
+             (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND tc.status = 'pending')
+              + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND t.status NOT IN ('completed', 'done', 'Done', 'in_progress', 'in-progress'))
+              + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 ${teamFilter} AND st.status NOT IN ('completed', 'done', 'Done', 'in_progress', 'in-progress')) as pending`,
             [orgId]
         );
         const checkpoints = {
@@ -122,8 +136,12 @@ router.get('/analytics/overview', authenticateToken, async (req: AuthRequest, re
         const teamsBreakdown = await pool.query(
             `SELECT tg.id, tg.name, tg.team_number, tg.adviser_name, tg.proposed_project, tg.status, tg.grade,
          (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
-         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) as total_checkpoints,
-         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') as completed_checkpoints,
+         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id)
+           + (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id)
+           + (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id) as total_checkpoints,
+         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed')
+           + (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done'))
+           + (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) as completed_checkpoints,
          (SELECT COUNT(*) FROM team_comments WHERE team_group_id = tg.id) as comment_count
        FROM team_groups tg WHERE tg.organization_id = $1 ${teamFilter} ORDER BY tg.team_number`,
             [orgId]
@@ -183,9 +201,15 @@ router.get('/analytics/ai-insights', authenticateToken, requireAdviserRole, asyn
         const teamsData = await pool.query(
             `SELECT tg.name, tg.team_number, tg.adviser_name, tg.proposed_project, tg.status, tg.grade,
          (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
-         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) as total_checkpoints,
-         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') as completed_checkpoints,
-         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'pending') as pending_checkpoints,
+         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id)
+           + (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id)
+           + (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id) as total_checkpoints,
+         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed')
+           + (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done'))
+           + (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) as completed_checkpoints,
+         (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'pending')
+           + (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id AND status NOT IN ('completed', 'done', 'Done', 'in_progress', 'in-progress'))
+           + (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id AND status NOT IN ('completed', 'done', 'Done', 'in_progress', 'in-progress')) as pending_checkpoints,
          (SELECT COUNT(*) FROM team_comments WHERE team_group_id = tg.id) as comment_count,
          (SELECT MAX(created_at) FROM team_comments WHERE team_group_id = tg.id) as last_comment_date
        FROM team_groups tg WHERE tg.organization_id = $1 ORDER BY tg.team_number`, [orgId]
