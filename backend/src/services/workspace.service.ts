@@ -349,6 +349,7 @@ export class WorkspaceSyncService {
 
         const result = await query(
           `INSERT INTO sheet_tasks (
+            synced_sheet_id, project_id, team_id, sheet_row_index, title, description,
             status, priority, assignee_email, due_date, start_date,
             wbs_code, parent_task_id, complexity_weight, is_absolute,
             progress_percent, luxury_weight, synced_at, updated_at
