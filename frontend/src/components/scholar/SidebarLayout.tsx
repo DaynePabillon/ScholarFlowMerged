@@ -60,7 +60,22 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                     .then((res) => {
                         const profile = res.data;
                         if (!profile) return;
-                        const refreshedRole = String(profile.role || decoded.role || '');
+                        
+                        // Bridge SkyFlow Admin status to ScholarSync
+                        const isOrgAdmin = profile.organizations?.some((org: any) => 
+                            org.role === 'admin' || org.role === 'manager'
+                        );
+                        const orgRole = isOrgAdmin ? 'Admin' : '';
+                        
+                        // Priority: scholarsyncRole > orgRole > profile.role > decoded.role
+                        const refreshedRole = String(
+                            profile.scholarsyncRole || 
+                            orgRole || 
+                            profile.role || 
+                            decoded.role || 
+                            ''
+                        );
+                        
                         setUserRole(refreshedRole);
                         setIsAdmin(refreshedRole === 'Admin');
                         setUserEmail(String(profile.email || decoded.email || ''));
