@@ -598,7 +598,7 @@ export default function CourseDetailsPage() {
                 <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-gray-400">
                     <BookOpen className="w-14 h-14 opacity-30" />
                     <p className="text-lg font-medium">{error || 'Course not found'}</p>
-                    <button onClick={() => router.push('/courses')} className="px-5 py-2 bg-blue-500 text-white rounded-xl text-sm hover:bg-blue-600 transition">
+                    <button onClick={() => router.push('/scholar/courses')} className="px-5 py-2 bg-blue-500 text-white rounded-xl text-sm hover:bg-blue-600 transition">
                         ← Back to Courses
                     </button>
                 </div>
@@ -610,7 +610,7 @@ export default function CourseDetailsPage() {
         <SidebarLayout>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex items-center gap-3 mb-6">
-                    <button onClick={() => router.push('/courses')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
+                    <button onClick={() => router.push('/scholar/courses')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="flex-1">

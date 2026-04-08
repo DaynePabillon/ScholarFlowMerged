@@ -74,8 +74,22 @@ const verifyInstructor = (req: Request, res: Response, next: NextFunction) => {
 const getAccessToken = async (token: string): Promise<string | null> => {
   try {
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
-    const { rows } = await pool.query('SELECT "googleAccessToken" FROM ss_account WHERE account_id = $1', [decoded.id]);
-    return rows[0]?.googleAccessToken || null;
+    
+    // Try ss_account first (ScholarSync-native users) — match by email since decoded.id is SkyFlow UUID
+    const ssResult = await pool.query(
+      'SELECT "googleAccessToken" FROM ss_account WHERE "accountEmail" = $1',
+      [decoded.email]
+    );
+    if (ssResult.rows[0]?.googleAccessToken) {
+      return ssResult.rows[0].googleAccessToken;
+    }
+    
+    // Fall back to SkyFlow users table (unified auth stores Google token here)
+    const skyResult = await pool.query(
+      'SELECT access_token FROM users WHERE id = $1',
+      [decoded.id]
+    );
+    return skyResult.rows[0]?.access_token || null;
   } catch {
     return null;
   }
@@ -371,7 +385,7 @@ router.get('/courses/:id/group-members', async (req: Request, res: Response) => 
 
   try {
     const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
-    const accRes = await pool.query('SELECT "accountRole", "accountGroup" FROM ss_account WHERE account_id = $1', [user.id]);
+    const accRes = await pool.query('SELECT "accountRole", "accountGroup" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
     const account = accRes.rows[0];
 
     let groups;
@@ -418,7 +432,7 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
     const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const courseId = req.params.id;
 
-    const accRes = await pool.query('SELECT "accountRole", "accountEmail", "accountGroup", "accountName" FROM ss_account WHERE account_id = $1', [user.id]);
+    const accRes = await pool.query('SELECT "accountRole", "accountEmail", "accountGroup", "accountName" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
     const account = accRes.rows[0];
     if (!account) return res.status(404).json({ error: 'Account not found' });
 
