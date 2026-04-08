@@ -1392,6 +1392,88 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
   }
 });
 
-logger.info('ðŸ“š ScholarSync academic routes registered');
+// GET consultation history logs for a group (used by group modal)
+router.get('/consultation/group/:groupId/logs', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  try {
+    const rawGroupId = String(req.params.groupId || '').trim();
+    if (!rawGroupId) return res.status(400).json({ error: 'Missing group id.' });
+
+    let groupName = '';
+
+    const teamGroupRes = await pool.query(
+      `SELECT name
+       FROM team_groups
+       WHERE CAST(id AS text) = $1
+       LIMIT 1`,
+      [rawGroupId]
+    );
+
+    if (teamGroupRes.rows.length > 0) {
+      groupName = String(teamGroupRes.rows[0].name || '').trim();
+    } else if (/^\d+$/.test(rawGroupId)) {
+      const legacyGroupRes = await pool.query(
+        `SELECT "groupName"
+         FROM ss_group
+         WHERE "smallgroupID" = $1
+         LIMIT 1`,
+        [Number(rawGroupId)]
+      );
+      groupName = String(legacyGroupRes.rows[0]?.groupName || '').trim();
+    }
+
+    if (!groupName) {
+      return res.json({ logs: [] });
+    }
+
+    const { rows } = await pool.query(
+      `SELECT
+         c.*,
+         s.slot_date::text as slot_date,
+         s.start_time,
+         s.end_time,
+         a."accountName" as adviser_name
+       FROM ss_consultation c
+       LEFT JOIN ss_consultation_slots s ON s.slot_id = c.slot_id
+       LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
+       WHERE LOWER(TRIM(COALESCE(c."groupName", ''))) = LOWER($1)
+       ORDER BY COALESCE(c.submitted_at, c.updated_at, c.created_at) DESC, c."conID" DESC`,
+      [groupName]
+    );
+
+    return res.json({ logs: rows });
+  } catch (error: any) {
+    logger.error('Error fetching consultation logs:', error);
+    return res.status(500).json({ error: 'Failed to fetch consultation logs' });
+  }
+});
+
+// GET member journals for a specific group in a course
+router.get('/member-journals/course/:courseId/group/:groupId', async (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  try {
+    const { courseId, groupId } = req.params;
+
+    const { rows } = await pool.query(
+      `SELECT * FROM member_journals
+       WHERE course_id = $1 AND group_id = $2
+       ORDER BY created_at DESC`,
+      [courseId, groupId]
+    );
+
+    return res.json({ journals: rows });
+  } catch (err: any) {
+    logger.error('Error fetching member journals:', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+logger.info('📚 ScholarSync academic routes registered');
 
 export default router;
