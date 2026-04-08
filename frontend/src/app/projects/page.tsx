@@ -92,7 +92,7 @@ export default function ProjectsPage() {
         user={user}
         organizations={organizations}
         onSelectOrg={handleOrgChange}
-        onCreateOrg={() => router.push('/onboarding')}
+        
       />
     )
   }

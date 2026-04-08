@@ -79,8 +79,6 @@ export default function OrganizationGateway({
     const handleCreateOrg = () => {
         if (onCreateOrg) {
             onCreateOrg()
-        } else {
-            router.push('/onboarding')
         }
     }
 
@@ -195,11 +193,16 @@ export default function OrganizationGateway({
                     )}
 
                     {organizations.length === 0 && (
-                        <p className="text-center text-gray-500 text-sm bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                            {user?.scholarsyncRole === 'Student'
-                                ? "Welcome to ScholarFlow! Your instructor will invite you to your workspace shortly."
-                                : "or ask someone to invite you to their organization"}
-                        </p>
+                        <div className="text-center text-gray-500 text-sm bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-3">
+                            <p>
+                                {user?.scholarsyncRole === 'Student'
+                                    ? "Your workspace will appear here once your instructor imports your team from ScholarSync. This is synced automatically — no setup needed."
+                                    : "or ask someone to invite you to their organization"}
+                            </p>
+                            <a href="/scholar/dashboard" className="inline-block text-blue-600 font-medium hover:underline text-sm">
+                                ← Back to ScholarSync
+                            </a>
+                        </div>
                     )}
                 </div>
 

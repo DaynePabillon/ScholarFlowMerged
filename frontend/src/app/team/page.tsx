@@ -88,7 +88,7 @@ export default function TeamPage() {
         user={user}
         organizations={organizations}
         onSelectOrg={handleOrgChange}
-        onCreateOrg={() => router.push('/onboarding')}
+        
       />
     )
   }

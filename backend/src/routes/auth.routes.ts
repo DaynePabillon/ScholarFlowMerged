@@ -245,7 +245,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
 
     // Get user's organizations
     const { query: dbQuery } = await import('../config/database');
-    const orgsResult = await dbQuery(
+    let orgsResult = await dbQuery(
       `SELECT o.id, o.name, om.role, om.status
        FROM organizations o
        INNER JOIN organization_members om ON o.id = om.organization_id
@@ -253,6 +253,40 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
        ORDER BY om.joined_at DESC`,
       [user.id, 'active']
     );
+
+    // Auto-sync: if user has no orgs but is in team_groups (ScholarSync import), add them
+    if (orgsResult.rows.length === 0) {
+      try {
+        const teamOrgs = await dbQuery(
+          `SELECT DISTINCT tg.organization_id
+           FROM team_group_members tgm
+           JOIN team_groups tg ON tgm.team_group_id = tg.id
+           WHERE LOWER(tgm.email) = LOWER($1) AND tg.organization_id IS NOT NULL`,
+          [user.email]
+        );
+        for (const row of teamOrgs.rows) {
+          await dbQuery(
+            `INSERT INTO organization_members (organization_id, user_id, role, status, joined_at)
+             VALUES ($1, $2, 'member', 'active', NOW())
+             ON CONFLICT (organization_id, user_id) DO NOTHING`,
+            [row.organization_id, user.id]
+          );
+        }
+        if (teamOrgs.rows.length > 0) {
+          // Re-fetch after sync
+          orgsResult = await dbQuery(
+            `SELECT o.id, o.name, om.role, om.status
+             FROM organizations o
+             INNER JOIN organization_members om ON o.id = om.organization_id
+             WHERE om.user_id = $1 AND om.status = $2
+             ORDER BY om.joined_at DESC`,
+            [user.id, 'active']
+          );
+        }
+      } catch (syncErr) {
+        console.error('Auto-sync org membership failed:', syncErr);
+      }
+    }
 
     // Check ScholarSync role for the frontend
     let scholarsyncRole: string | null = null;

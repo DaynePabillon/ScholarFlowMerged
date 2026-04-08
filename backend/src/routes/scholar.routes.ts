@@ -1309,11 +1309,29 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
             memberNum++;
           }
 
-          // Update accountGroup for each member
-          for (const { email } of groupData.members) {
+          // Update accountGroup for each member AND sync to SkyFlow users + org_members
+          for (const member of groupData.members) {
             await client.query(
               'UPDATE ss_account SET "accountGroup" = $1 WHERE "accountEmail" = $2',
-              [groupName, email]
+              [groupName, member.email]
+            );
+
+            // Upsert member into SkyFlow users table
+            const memberSkyRes = await client.query(
+              `INSERT INTO users (google_id, email, name, role, created_at)
+               VALUES ($1, $2, $3, 'member', NOW())
+               ON CONFLICT (email) DO UPDATE SET name = COALESCE(NULLIF(EXCLUDED.name, ''), users.name)
+               RETURNING id`,
+              [member.email, member.email, member.fullName || member.email.split('@')[0]]
+            );
+            const memberSkyUserId = memberSkyRes.rows[0].id;
+
+            // Add member to the organization in SkyFlow
+            await client.query(
+              `INSERT INTO organization_members (organization_id, user_id, role, status, joined_at)
+               VALUES ($1, $2, 'member', 'active', NOW())
+               ON CONFLICT (organization_id, user_id) DO NOTHING`,
+              [orgId, memberSkyUserId]
             );
           }
 
