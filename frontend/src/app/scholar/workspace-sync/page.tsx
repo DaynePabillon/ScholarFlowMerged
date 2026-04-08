@@ -513,7 +513,7 @@ export default function WorkspaceSyncPage() {
                                     <div key={c.courseId} className="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-xl text-xs">
                                         <span className="font-semibold text-green-800">{c.courseCode}</span>
                                         <span className="text-green-600">{c.groupCount} groups · {c.memberCount} members</span>
-                                        <a href={`/courses`} className="text-blue-600 hover:underline font-medium">View →</a>
+                                        <a href={`/scholar/courses`} className="text-blue-600 hover:underline font-medium">View →</a>
                                     </div>
                                 ))}
                             </div>

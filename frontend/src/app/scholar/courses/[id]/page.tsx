@@ -194,6 +194,10 @@ export default function CourseDetailsPage() {
     };
 
     const openGroup = (group: Group) => {
+        if (!group || !group.id) {
+            console.error('Invalid group data:', group);
+            return;
+        }
         setSelectedGroup(group);
         setModalGrade(group.grade || '');
         setModalDates(Array.isArray(group.consultation_dates) ? group.consultation_dates : []);
@@ -203,7 +207,9 @@ export default function CourseDetailsPage() {
         setJournals([]);
         setConsultationLogs([]);
         fetchComments(group.id);
-        fetchGroupJournals(group.groupName);
+        if (group.groupName) {
+            fetchGroupJournals(group.groupName);
+        }
         fetchConsultationLogs(group.id);
         fetchMemberJournals(group.id);
         setAiResult(null);
@@ -653,17 +659,17 @@ export default function CourseDetailsPage() {
                                 className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
                             >
                                 <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
-                                    TEAM {String(group.team_number).padStart(2, '0')}
+                                    TEAM {String(group?.team_number || 0).padStart(2, '0')}
                                 </div>
-                                <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group.groupName}</div>
+                                <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group?.groupName || 'Unnamed Group'}</div>
                                 <div className="flex flex-col gap-2.5">
                                     <div className="flex items-center gap-2">
                                         <Award size={14} className="text-amber-500" />
-                                        <span className="text-sm text-slate-600 truncate">{group.adviser || 'No Adviser'}</span>
+                                        <span className="text-sm text-slate-600 truncate">{group?.adviser || 'No Adviser'}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <Users size={14} className="text-cyan-600" />
-                                        <span className="text-sm text-slate-600">{group.members?.length || group.groupMembers} Members</span>
+                                        <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
                                     </div>
                                 </div>
                             </div>
@@ -733,7 +739,7 @@ export default function CourseDetailsPage() {
                             <div className="flex flex-col gap-4">
                                 <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
                                     <Hash className="w-6 h-6 text-blue-600" />
-                                    {selectedGroup.groupName}
+                                    {selectedGroup?.groupName || 'Unnamed Group'}
                                 </h2>
                                 <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-2xl w-fit border border-gray-100">
                                     {['discussion', 'journals', 'consultations', 'ai'].map((tab) => {
