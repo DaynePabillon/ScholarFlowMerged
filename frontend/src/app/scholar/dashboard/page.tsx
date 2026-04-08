@@ -39,8 +39,8 @@ export default function DashboardPage() {
         const res = await apiClient.get('/courses');
         setCourses(res.data || []);
         
-        // Get user from auth/me for consistency, or decode token
-        const meRes = await apiClient.get('/auth/me');
+        // Get user from ScholarSync /me endpoint (returns ss_account role)
+        const meRes = await apiClient.get('/me');
         setUser(meRes.data);
       } catch (err) {
         console.error('Failed to fetch scholar dashboard data:', err);

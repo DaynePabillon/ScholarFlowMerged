@@ -90,7 +90,7 @@ export default function WorkspaceSyncPage() {
         try {
             const decoded: any = jwtDecode(token);
             if (decoded.role !== 'Admin') {
-                router.push('/dashboard');
+                router.push('/scholar/dashboard');
                 return;
             }
             setUser(decoded);

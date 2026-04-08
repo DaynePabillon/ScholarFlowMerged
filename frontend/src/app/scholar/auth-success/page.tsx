@@ -12,7 +12,7 @@ function AuthSuccessContent() {
     const token = searchParams.get('token');
     if (token) {
       localStorage.setItem('auth_token', token);
-      router.push('/dashboard');
+      router.push('/scholar/dashboard');
     } else {
       router.push('/login');
     }

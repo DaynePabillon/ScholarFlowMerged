@@ -41,7 +41,7 @@ export default function AdminAccountsPage() {
             const res = await fetch(`${API_URL}/api/accounts`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (res.status === 403) { router.push('/dashboard'); return; }
+            if (res.status === 403) { router.push('/scholar/dashboard'); return; }
             if (res.ok) setAccounts(await res.json());
             else setError('Failed to load accounts');
         } catch (err) {

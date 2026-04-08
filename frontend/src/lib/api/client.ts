@@ -46,26 +46,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Response interceptor
-apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.log('Session expired or unauthorized. Redirecting to login...');
-      
-      // Clear all possible tokens
-      localStorage.removeItem('token');
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('user');
-      
-      // Redirect to login (avoiding window.location if possible for Next.js, 
-      // but interceptors are often outside component context)
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
-  }
-);
-
 export default apiClient;

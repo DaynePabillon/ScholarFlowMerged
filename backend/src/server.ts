@@ -121,8 +121,9 @@ app.get('/auth/google/callback', (req: Request, res: Response) => {
 });
 
 // ScholarSync Academic Routes (Auth, Courses, Groups, Enrollment, etc.)
-// Moving under /api to avoid root conflicts and ensure consistent pathing
-app.use('/api/scholar', scholarRoutes);
+// Mounted at /api so routes like /me, /courses resolve to /api/me, /api/courses
+// Routes with /scholar/ prefix (e.g. /scholar/drive/files) avoid conflicts with SkyFlow routes
+app.use('/api', scholarRoutes);
 
 // 404 handler for API
 app.use('/api/*', (req: Request, res: Response) => {

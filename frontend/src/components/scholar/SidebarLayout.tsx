@@ -55,26 +55,14 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                     setRole('member');
                 }
 
-                // Refresh profile from backend so role updates are reflected without re-login
-                apiClient.get('/auth/me')
+                // Refresh profile from ScholarSync /me endpoint (returns ss_account role)
+                apiClient.get('/me')
                     .then((res) => {
                         const profile = res.data;
                         if (!profile) return;
                         
-                        // Bridge SkyFlow Admin status to ScholarSync
-                        const isOrgAdmin = profile.organizations?.some((org: any) => 
-                            org.role === 'admin' || org.role === 'manager'
-                        );
-                        const orgRole = isOrgAdmin ? 'Admin' : '';
-                        
-                        // Priority: scholarsyncRole > orgRole > profile.role > decoded.role
-                        const refreshedRole = String(
-                            profile.scholarsyncRole || 
-                            orgRole || 
-                            profile.role || 
-                            decoded.role || 
-                            ''
-                        );
+                        // /me returns { id, academicId, name, email, role } from ss_account
+                        const refreshedRole = String(profile.role || decoded.role || '');
                         
                         setUserRole(refreshedRole);
                         setIsAdmin(refreshedRole === 'Admin');
