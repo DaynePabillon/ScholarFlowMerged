@@ -34,11 +34,14 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      // Token expired or invalid
+    if (error.response?.status === 401) {
+      // 401 = token expired or invalid → clear session and redirect
+      // Note: 403 is NOT handled here — it means "forbidden for this resource"
+      // (e.g. no Google token for Drive/Sheets) and should be handled by components
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('scholar_profile');
         window.location.href = '/landing';
       }
     }

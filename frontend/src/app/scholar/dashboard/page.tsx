@@ -196,7 +196,7 @@ export default function DashboardPage() {
               {courses.slice(0, 6).map((course: any) => (
                 <Link
                   key={course.id}
-                  href={`/courses/${course.id}`}
+                  href={`/scholar/courses/${course.id}`}
                   className="p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:shadow-md hover:border-blue-200 dark:hover:border-blue-500 transition-all duration-300 group"
                 >
                   <div className="flex items-start justify-between mb-4">

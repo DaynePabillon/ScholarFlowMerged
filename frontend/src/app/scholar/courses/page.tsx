@@ -206,7 +206,7 @@ export default function CoursesPage() {
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                     {coursesInCode.map((course, idx) => (
-                                        <Link href={`/courses/${course.id}`} key={idx} className="glass-card p-5 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
+                                        <Link href={`/scholar/courses/${course.id}`} key={idx} className="glass-card p-5 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 group">
                                             <div className="flex items-start justify-between mb-4">
                                                 <div className="p-2.5 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl shadow-md">
                                                     <BookOpen className="w-5 h-5 text-white" />

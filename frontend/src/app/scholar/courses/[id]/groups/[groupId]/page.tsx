@@ -234,7 +234,7 @@ export default function GroupPage() {
             <SidebarLayout>
                 <div className="min-h-screen bg-white text-gray-900 font-sans p-8 flex flex-col items-center justify-center">
                     <div className="text-red-500 font-bold mb-4">{error || "Group not found"}</div>
-                    <button onClick={() => router.push(`/courses/${courseId}`)} className="text-blue-600 hover:underline">Return to Course</button>
+                    <button onClick={() => router.push(`/scholar/courses/${courseId}`)} className="text-blue-600 hover:underline">Return to Course</button>
                 </div>
             </SidebarLayout>
         );
@@ -263,7 +263,7 @@ export default function GroupPage() {
                     <div className="mb-8 flex items-center justify-between">
                         <div>
                             <button 
-                                onClick={() => router.push(`/courses/${courseId}`)}
+                                onClick={() => router.push(`/scholar/courses/${courseId}`)}
                                 className="text-gray-500 text-sm font-semibold hover:text-indigo-600 mb-2 flex items-center gap-1"
                             >
                                 ← Back to Course
