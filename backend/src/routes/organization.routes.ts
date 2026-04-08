@@ -247,7 +247,7 @@ router.post('/:id/invite', authenticateToken, async (req: AuthRequest, res: Resp
 
 /**
  * GET /api/organizations/:id/members
- * Get organization members
+ * Get organization members (includes ghost/invited members from sheet syncs)
  */
 router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -264,7 +264,8 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const result = await query(
+    // Get real members (users with accounts)
+    const realMembers = await query(
       `SELECT u.id, u.name, u.email, u.profile_picture, 
               om.role, om.status, om.joined_at
        FROM organization_members om
@@ -274,7 +275,27 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
       [id]
     );
 
-    res.json({ members: result.rows });
+    // Get ghost/invited members (discovered from sheets, no user account yet)
+    const ghostMembers = await query(
+      `SELECT 
+         om.id as id,
+         om.invited_email as name,
+         om.invited_email as email,
+         NULL as profile_picture,
+         om.role,
+         om.status,
+         om.invited_at as joined_at
+       FROM organization_members om
+       WHERE om.organization_id = $1 
+         AND om.status = 'invited'
+         AND om.user_id IS NULL
+       ORDER BY om.invited_at DESC`,
+      [id]
+    );
+
+    const allMembers = [...realMembers.rows, ...ghostMembers.rows];
+
+    res.json({ members: allMembers });
   } catch (error) {
     logger.error('Error fetching members:', error);
     res.status(500).json({ error: 'Failed to fetch members' });

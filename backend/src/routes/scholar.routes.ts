@@ -1242,7 +1242,7 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
           const skyUserRes = await client.query(
             `INSERT INTO users (google_id, email, name, created_at)
              VALUES ($1, $2, $3, NOW())
-             ON CONFLICT (google_id) DO UPDATE SET email = EXCLUDED.email, name = EXCLUDED.name
+             ON CONFLICT (email) DO UPDATE SET google_id = EXCLUDED.google_id, name = EXCLUDED.name
              RETURNING id`,
             [googleId, account.accountEmail, account.accountName]
           );

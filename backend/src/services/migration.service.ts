@@ -927,6 +927,34 @@ async function runMigrations(): Promise<void> {
         UPDATE tasks SET luxury_weight = 1 WHERE luxury_weight IS NULL;
         UPDATE sheet_tasks SET luxury_weight = 1 WHERE luxury_weight IS NULL;
       `
+    },
+    {
+      name: '030_equalizer_system',
+      sql: `
+        -- Index on sheet_tasks.assignee_email for fast Equalizer lookup during login
+        CREATE INDEX IF NOT EXISTS idx_sheet_tasks_assignee_email ON sheet_tasks(assignee_email);
+
+        -- Index on organization_invitations.email for fast pending-invite lookup
+        CREATE INDEX IF NOT EXISTS idx_org_invitations_email ON organization_invitations(email);
+
+        -- Add invited_email to organization_members for "ghost" pending members
+        -- discovered from Google Sheet syncs (no user account yet)
+        ALTER TABLE organization_members 
+        ADD COLUMN IF NOT EXISTS invited_email VARCHAR(255);
+
+        -- Index for fast email-based lookup during the Equalizer handshake
+        CREATE INDEX IF NOT EXISTS idx_org_members_invited_email ON organization_members(invited_email);
+
+        -- Ensure the 'invited' status is valid on organization_members
+        -- (existing constraint allows: pending, active, inactive)
+        DO $$ BEGIN
+          ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_status_check;
+          ALTER TABLE organization_members ADD CONSTRAINT organization_members_status_check
+            CHECK (status IN ('pending', 'active', 'inactive', 'invited'));
+        EXCEPTION
+          WHEN others THEN NULL;
+        END $$;
+      `
     }
   ];
 

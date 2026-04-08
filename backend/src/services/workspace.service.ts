@@ -2,6 +2,7 @@ import { google, sheets_v4, drive_v3 } from 'googleapis';
 import { query } from '../config/database';
 import logger from '../config/logger';
 import { SheetsProtectionService } from './sheets-protection.service';
+import { EqualizerService } from './equalizer.service';
 
 interface ColumnMapping {
   wbsCode?: number;
@@ -415,6 +416,24 @@ export class WorkspaceSyncService {
       });
 
       logger.info(`Synced sheet ${syncedSheetId}: ${tasksCreated} created, ${tasksUpdated} updated, ${tasksDeleted} deleted`);
+
+      // ── Equalizer: Register ghost members for unrecognized emails ──
+      try {
+        const uniqueEmails = [...new Set(
+          sheetTasks
+            .filter(t => t.assigneeEmail && t.assigneeEmail.includes('@'))
+            .map(t => t.assigneeEmail!.toLowerCase().trim())
+        )];
+
+        if (uniqueEmails.length > 0 && sheet.organization_id) {
+          for (const email of uniqueEmails) {
+            await EqualizerService.registerSheetMember(sheet.organization_id, email);
+          }
+          logger.info(`Equalizer: Processed ${uniqueEmails.length} assignee emails from sheet sync`);
+        }
+      } catch (eqError: any) {
+        logger.warn('Equalizer: Ghost member registration failed (non-fatal):', eqError.message);
+      }
 
       return { success: true, tasksCreated, tasksUpdated, tasksDeleted };
 

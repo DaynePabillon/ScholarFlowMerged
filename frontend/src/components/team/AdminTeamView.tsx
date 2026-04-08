@@ -2,7 +2,7 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check } from "lucide-react"
+import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock } from "lucide-react"
 import RoleManagement from "./RoleManagement"
 
 interface TeamMember {
@@ -10,6 +10,7 @@ interface TeamMember {
   name: string
   email: string
   role: 'admin' | 'manager' | 'member'
+  profile_picture?: string | null
   joined_at: string
   status: string
 }
@@ -173,7 +174,8 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesFilter = filterRole === 'all' || member.role === filterRole
+    const matchesFilter = filterRole === 'all' || member.role === filterRole ||
+      (filterRole === 'invited' && member.status === 'invited')
     return matchesSearch && matchesFilter
   })
 
@@ -221,12 +223,13 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
             <option value="member">Member</option>
+            <option value="invited">Invited</option>
           </select>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-red-100 rounded-lg">
@@ -257,7 +260,18 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
             <span className="text-sm font-medium text-gray-600">Members</span>
           </div>
           <p className="text-3xl font-bold text-gray-800">
-            {members.filter(m => m.role === 'member').length}
+            {members.filter(m => m.role === 'member' && m.status !== 'invited').length}
+          </p>
+        </div>
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-2 bg-amber-100 rounded-lg">
+              <Clock className="w-5 h-5 text-amber-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-600">Invited</span>
+          </div>
+          <p className="text-3xl font-bold text-gray-800">
+            {members.filter(m => m.status === 'invited').length}
           </p>
         </div>
       </div>
@@ -286,15 +300,37 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredMembers.map((member) => (
-                <tr key={member.id} className="hover:bg-blue-50/50 transition-colors">
+              {filteredMembers.map((member) => {
+                const isInvited = member.status === 'invited'
+                return (
+                <tr key={member.id} className={`transition-colors ${
+                  isInvited ? 'opacity-50 bg-gray-50/30' : 'hover:bg-blue-50/50'
+                }`}>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-semibold">
-                        {member.name.charAt(0).toUpperCase()}
-                      </div>
+                      {member.profile_picture ? (
+                        <img
+                          src={member.profile_picture}
+                          alt={member.name}
+                          className={`flex-shrink-0 h-10 w-10 rounded-full object-cover ${
+                            isInvited ? 'border-2 border-dashed border-gray-300 grayscale' : ''
+                          }`}
+                        />
+                      ) : (
+                        <div className={`flex-shrink-0 h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                          isInvited
+                            ? 'bg-gray-300 border-2 border-dashed border-gray-400'
+                            : 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                        }`}>
+                          {isInvited ? <Mail className="w-4 h-4 text-gray-500" /> : member.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-800">{member.name}</div>
+                        <div className={`text-sm font-medium ${
+                          isInvited ? 'text-gray-400 italic' : 'text-gray-800'
+                        }`}>
+                          {isInvited ? member.email : member.name}
+                        </div>
                         <div className="text-sm text-gray-500">{member.email}</div>
                       </div>
                     </div>
@@ -306,20 +342,30 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {new Date(member.joined_at).toLocaleDateString()}
+                    {member.joined_at ? new Date(member.joined_at).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                      {member.status}
-                    </span>
+                    {isInvited ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">
+                        <Clock className="w-3 h-3" />
+                        Pending Invite
+                      </span>
+                    ) : (
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                        {member.status}
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-                      <MoreVertical className="w-5 h-5 text-gray-500" />
-                    </button>
+                    {!isInvited && (
+                      <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
+                        <MoreVertical className="w-5 h-5 text-gray-500" />
+                      </button>
+                    )}
                   </td>
                 </tr>
-              ))}
+              )})
+              }
             </tbody>
           </table>
         </div>

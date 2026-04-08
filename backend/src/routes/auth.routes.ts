@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import GoogleAuthService from '../services/google/auth.service';
 import { AuthRequest, authenticateToken } from '../middleware/auth.middleware';
+import { EqualizerService } from '../services/equalizer.service';
 import logger from '../config/logger';
 
 const router = Router();
@@ -67,6 +68,27 @@ router.get('/google/callback', async (req: Request, res: Response) => {
       tokens.refresh_token || undefined
     );
     console.log('Step 7: User saved, ID:', user.id);
+
+    // ── Equalizer Handshake ──
+    // Automatically claim tasks, memberships, and invitations tied to this email
+    try {
+      const equalizerResult = await EqualizerService.runHandshake(user.id, user.email);
+      console.log('Step 7.5: Equalizer handshake:', equalizerResult);
+
+      // If the Equalizer accepted invitations, mark as invited for the redirect
+      if (equalizerResult.invitationsAccepted > 0 || equalizerResult.membershipsClaimed > 0) {
+        inviteToken = inviteToken || 'equalizer-auto';
+
+        // Skip onboarding for users who joined via Equalizer
+        const { query: eqQuery } = await import('../config/database');
+        await eqQuery(
+          `UPDATE users SET onboarding_completed = true, updated_at = NOW() WHERE id = $1 AND onboarding_completed = false`,
+          [user.id]
+        );
+      }
+    } catch (eqError: any) {
+      console.error('Equalizer handshake error (non-fatal):', eqError.message);
+    }
 
     // Check for pending invitations by email
     const { query: dbQuery } = await import('../config/database');
