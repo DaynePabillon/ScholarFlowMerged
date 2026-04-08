@@ -86,7 +86,7 @@ export default function WorkspaceSyncPage() {
 
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/login'); return; }
+        if (!token) { router.push('/scholar/login'); return; }
         
         // Check admin access using cached ScholarSync profile first, then verify via API
         const checkAccess = async () => {
@@ -119,7 +119,7 @@ export default function WorkspaceSyncPage() {
                 }
                 
                 setUser({ ...decoded, role });
-            } catch { router.push('/login'); return; }
+            } catch { router.push('/scholar/login'); return; }
             fetchCourses();
             fetchDriveSheets();
         };
@@ -282,7 +282,7 @@ export default function WorkspaceSyncPage() {
                                     <p>{sheetsError}</p>
                                     {sheetsError.includes('access token') && (
                                         <p className="text-amber-600 mt-1 text-xs">
-                                            Your Google session expired. <a href="/login" className="underline font-semibold">Sign out & sign back in</a> to refresh your permissions.
+                                            Your Google session expired. <a href="/scholar/login" className="underline font-semibold">Sign out & sign back in</a> to refresh your permissions.
                                         </p>
                                     )}
                                 </div>

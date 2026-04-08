@@ -38,8 +38,8 @@ export default function DrivePage() {
 
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/login'); return; }
-        try { setUser(jwtDecode(token)); } catch { router.push('/login'); return; }
+        if (!token) { router.push('/scholar/login'); return; }
+        try { setUser(jwtDecode(token)); } catch { router.push('/scholar/login'); return; }
         fetchFiles();
     }, [router]);
 
@@ -117,7 +117,7 @@ export default function DrivePage() {
                             <p className="font-medium">{error}</p>
                             {error.includes('re-login') && (
                                 <p className="mt-1 text-amber-700">
-                                    To access Google Drive, <a href="/login" className="underline font-medium">sign in again</a> so we can request Drive permissions.
+                                    To access Google Drive, <a href="/scholar/login" className="underline font-medium">sign in again</a> so we can request Drive permissions.
                                     Also ensure the Google Drive API and Sheets API are enabled in Google Cloud Console, and the required scopes are added.
                                 </p>
                             )}

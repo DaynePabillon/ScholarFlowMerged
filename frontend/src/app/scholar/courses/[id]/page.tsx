@@ -162,17 +162,17 @@ export default function CourseDetailsPage() {
     const [editingMemberJournalId, setEditingMemberJournalId] = useState<number | null>(null);
     const [openJournalActionMenuId, setOpenJournalActionMenuId] = useState<number | null>(null);
 
-    const skyflowUrl = 'http://localhost:3000/boards';
+    const skyflowUrl = '/boards';
 
     useEffect(() => {
         setTodayJournalDate(new Date().toISOString().slice(0, 10));
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/login'); return; }
+        if (!token) { router.push('/scholar/login'); return; }
         try { 
             const decoded = jwtDecode(token); 
             setUser(decoded);
         } catch { 
-            router.push('/login'); 
+            router.push('/scholar/login'); 
             return; 
         }
         fetchCourse();

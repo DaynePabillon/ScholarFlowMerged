@@ -125,7 +125,7 @@ export default function GroupPage() {
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) {
-            router.push('/login');
+            router.push('/scholar/login');
             return;
         }
 
@@ -133,7 +133,7 @@ export default function GroupPage() {
             const decoded = jwtDecode(token);
             setUser(decoded);
         } catch (err) {
-            router.push('/login');
+            router.push('/scholar/login');
             return;
         }
 

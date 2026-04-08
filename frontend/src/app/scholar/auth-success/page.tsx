@@ -14,7 +14,7 @@ function AuthSuccessContent() {
       localStorage.setItem('auth_token', token);
       router.push('/scholar/dashboard');
     } else {
-      router.push('/login');
+      router.push('/scholar/login');
     }
   }, [searchParams, router]);
 

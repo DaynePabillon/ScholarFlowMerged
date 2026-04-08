@@ -26,7 +26,7 @@ export default function DashboardPage() {
     const checkAuth = async () => {
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (!token) {
-        router.push('/login');
+        router.push('/scholar/login');
         return;
       }
 
@@ -161,7 +161,7 @@ export default function DashboardPage() {
             </Link>
 
             <Link
-              href="/drive"
+              href="/scholar/drive"
               className="flex items-center gap-4 p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
             >
               <FolderOpen className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors" />
@@ -173,7 +173,7 @@ export default function DashboardPage() {
             </Link>
 
             <Link
-              href="/sheets"
+              href="/scholar/sheets"
               className="flex items-center gap-4 p-6 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:border-transparent transition-all duration-300 group hover:shadow-md"
             >
               <FileSpreadsheet className="w-7 h-7 text-blue-600 group-hover:text-white transition-colors" />

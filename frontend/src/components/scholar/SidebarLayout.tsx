@@ -99,7 +99,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     const handleLogout = () => {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('scholar_profile');
-        router.push('/login');
+        router.push('/scholar/login');
     };
 
     const normalizedRole = String(userRole || '').toLowerCase();

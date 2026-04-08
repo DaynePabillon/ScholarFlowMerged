@@ -37,7 +37,7 @@ export default function AdminAccountsPage() {
     const fetchAccounts = async () => {
         try {
             const token = localStorage.getItem('auth_token');
-            if (!token) { router.push('/login'); return; }
+            if (!token) { router.push('/scholar/login'); return; }
             const res = await fetch(`${API_URL}/api/accounts`, {
                 headers: { Authorization: `Bearer ${token}` }
             });

@@ -59,13 +59,13 @@ export default function CoursesPage() {
 
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/login'); return; }
+        if (!token) { router.push('/scholar/login'); return; }
         try {
             const decoded: any = jwtDecode(token);
             setUser(decoded);
             if (decoded.role === 'Admin') setCanCreate(true);
             fetchCourses();
-        } catch (err) { router.push('/login'); }
+        } catch (err) { router.push('/scholar/login'); }
     }, [router]);
 
     const fetchCourses = async () => {
@@ -160,7 +160,7 @@ export default function CoursesPage() {
                         )}
                         {isAdviser && (
                             <button
-                                onClick={() => router.push('/schedule')}
+                                onClick={() => router.push('/scholar/schedule')}
                                 className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-blue-500 text-white rounded-xl hover:shadow-lg transition-all text-sm font-medium"
                             >
                                 <CalendarPlus className="w-4 h-4" /> Create Consultation
