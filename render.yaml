@@ -19,15 +19,17 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
-        sync: false # Set this after backend URL is generated (e.g. https://api.onrender.com/api/auth/google/callback)
+        value: https://api.wildcatinnovationlabs.com/api/auth/google/callback
       - key: FRONTEND_URL
-        sync: false # Set this to your frontend URL
+        value: https://scholarflow.wildcatinnovationlabs.com
       - key: JWT_SECRET
         generateValue: true # Generates a random secret automatically
       - key: RESEND_API_KEY
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: BACKEND_URL
+        value: https://api.wildcatinnovationlabs.com
 
   # 2. Frontend Service
   - type: web
@@ -39,6 +41,6 @@ services:
     startCommand: npm run start
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        sync: false # Set this to your backend URL
+        value: https://api.wildcatinnovationlabs.com
       - key: PORT
         value: 3000
