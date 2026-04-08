@@ -12,6 +12,7 @@ import { parse } from 'csv-parse/sync';
 import { google } from 'googleapis';
 import { pool } from '../config/database';
 import logger from '../config/logger';
+import GoogleAuthService from '../services/google/auth.service';
 
 const router = Router();
 
@@ -85,11 +86,13 @@ const getAccessToken = async (token: string): Promise<string | null> => {
     }
     
     // Fall back to SkyFlow users table (unified auth stores Google token here)
-    const skyResult = await pool.query(
-      'SELECT access_token FROM users WHERE id = $1',
-      [decoded.id]
-    );
-    return skyResult.rows[0]?.access_token || null;
+    // Use getUserWithTokens to auto-refresh expired tokens
+    try {
+      const user = await GoogleAuthService.getUserWithTokens(decoded.id);
+      return user.access_token || null;
+    } catch {
+      return null;
+    }
   } catch {
     return null;
   }
