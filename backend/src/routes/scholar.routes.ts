@@ -862,16 +862,41 @@ router.get('/scholar/sheets/content', async (req: Request, res: Response) => {
 router.get('/scholar/sheets/list', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
-  const accessToken = await getAccessToken(token);
-  if (!accessToken) return res.status(403).json({ error: 'No Google access token.' });
+
+  const DRIVE_URL = `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27&pageSize=50&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,owners)`;
+
+  const fetchSheets = async (accessTok: string) => {
+    const response = await axios.get(DRIVE_URL, { headers: { Authorization: `Bearer ${accessTok}` } });
+    return response.data.files || [];
+  };
 
   try {
-    const response = await axios.get(
-      `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27&pageSize=50&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,owners)`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    return res.json({ files: response.data.files || [] });
+    let accessToken = await getAccessToken(token);
+    if (!accessToken) return res.status(403).json({ error: 'No Google access token.' });
+
+    try {
+      const files = await fetchSheets(accessToken);
+      return res.json({ files });
+    } catch (firstErr: any) {
+      // If Google returns 401 (expired token), force-refresh and retry once
+      if (firstErr.response?.status === 401) {
+        logger.info('Google token expired, force-refreshing...');
+        try {
+          const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
+          const freshToken = await GoogleAuthService.refreshAccessToken(decoded.id);
+          if (freshToken) {
+            const files = await fetchSheets(freshToken);
+            return res.json({ files });
+          }
+        } catch (refreshErr: any) {
+          logger.error('Token refresh failed:', refreshErr.message);
+        }
+      }
+      logger.error('Google Sheets API error:', firstErr.response?.data || firstErr.message);
+      return res.status(500).json({ error: firstErr.response?.data?.error?.message || 'Failed to fetch Sheets.' });
+    }
   } catch (err: any) {
+    logger.error('Sheets list error:', err.message);
     return res.status(500).json({ error: 'Failed to fetch Sheets.' });
   }
 });
