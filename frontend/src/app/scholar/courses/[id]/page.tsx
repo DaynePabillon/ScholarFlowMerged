@@ -158,13 +158,14 @@ export default function CourseDetailsPage() {
     });
     const [submittingMemberJournal, setSubmittingMemberJournal] = useState(false);
     const [memberJournalError, setMemberJournalError] = useState<string | null>(null);
-    const todayJournalDate = new Date().toISOString().slice(0, 10);
+    const [todayJournalDate, setTodayJournalDate] = useState('');
     const [editingMemberJournalId, setEditingMemberJournalId] = useState<number | null>(null);
     const [openJournalActionMenuId, setOpenJournalActionMenuId] = useState<number | null>(null);
 
     const skyflowUrl = 'http://localhost:3000/boards';
 
     useEffect(() => {
+        setTodayJournalDate(new Date().toISOString().slice(0, 10));
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         try { 
@@ -188,7 +189,7 @@ export default function CourseDetailsPage() {
     const fetchGroups = async () => {
         try {
             const res = await apiClient.get(`/courses/${courseId}/group-members`);
-            setGroups(res.data);
+            setGroups(Array.isArray(res.data) ? res.data : []);
         } catch { /* empty */ }
         finally { setLoading(false); }
     };
@@ -277,7 +278,8 @@ export default function CourseDetailsPage() {
     const fetchGroupJournals = async (groupName: string) => {
         try {
             const res = await apiClient.get(`/courses/${courseId}/consultations`);
-            const groupJournals = (res.data || []).filter((c: any) => c.groupName === groupName && !c.isDraft);
+            const data = Array.isArray(res.data) ? res.data : [];
+            const groupJournals = data.filter((c: any) => c.groupName === groupName && !c.isDraft);
             setJournals(groupJournals);
         } catch (err) {
             console.error("Error fetching journals:", err);
@@ -525,7 +527,7 @@ export default function CourseDetailsPage() {
     const fetchComments = async (groupId: string) => {
         try {
             const res = await apiClient.get(`/team-groups/${groupId}/comments`);
-            setComments(res.data);
+            setComments(Array.isArray(res.data) ? res.data : []);
         } catch { /* ignore */ }
     };
 
