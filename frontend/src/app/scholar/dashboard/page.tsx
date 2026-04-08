@@ -42,6 +42,8 @@ export default function DashboardPage() {
         // Get user from ScholarSync /me endpoint (returns ss_account role)
         const meRes = await apiClient.get('/me');
         setUser(meRes.data);
+        // Cache profile to prevent role flicker on navigation
+        localStorage.setItem('scholar_profile', JSON.stringify(meRes.data));
       } catch (err) {
         console.error('Failed to fetch scholar dashboard data:', err);
         // If it's a 401, apiClient will handle redirect

@@ -41,27 +41,41 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         if (token) {
             try {
                 const decoded: any = jwtDecode(token);
-                setUserEmail(decoded.email || '');
-                setUserName(decoded.name || '');
-                setUserRole(decoded.role || '');
-                setIsAdmin(decoded.role === 'Admin');
-                
-                // Set theme role based on user's accountRole
-                if (decoded.role === 'Admin') {
-                    setRole('admin');
-                } else if (decoded.role === 'Adviser' || decoded.role === 'Advisers') {
-                    setRole('manager');
+
+                // Use cached ScholarSync profile FIRST to prevent role flicker
+                const cachedProfile = localStorage.getItem('scholar_profile');
+                if (cachedProfile) {
+                    try {
+                        const cached = JSON.parse(cachedProfile);
+                        const cachedRole = String(cached.role || '');
+                        setUserRole(cachedRole);
+                        setIsAdmin(cachedRole === 'Admin');
+                        setUserEmail(String(cached.email || decoded.email || ''));
+                        setUserName(String(cached.name || decoded.name || ''));
+                        if (cachedRole === 'Admin') setRole('admin');
+                        else if (cachedRole === 'Adviser' || cachedRole === 'Advisers') setRole('manager');
+                        else setRole('member');
+                    } catch { /* ignore parse errors, will refresh below */ }
                 } else {
-                    setRole('member');
+                    // No cache yet — use JWT as temporary fallback
+                    setUserEmail(decoded.email || '');
+                    setUserName(decoded.name || '');
+                    setUserRole(decoded.role || '');
+                    setIsAdmin(decoded.role === 'Admin');
+                    if (decoded.role === 'Admin') setRole('admin');
+                    else if (decoded.role === 'Adviser' || decoded.role === 'Advisers') setRole('manager');
+                    else setRole('member');
                 }
 
-                // Refresh profile from ScholarSync /me endpoint (returns ss_account role)
+                // Refresh profile from ScholarSync /me endpoint and cache it
                 apiClient.get('/me')
                     .then((res) => {
                         const profile = res.data;
                         if (!profile) return;
                         
-                        // /me returns { id, academicId, name, email, role } from ss_account
+                        // Cache the ScholarSync profile to prevent flicker on next navigation
+                        localStorage.setItem('scholar_profile', JSON.stringify(profile));
+                        
                         const refreshedRole = String(profile.role || decoded.role || '');
                         
                         setUserRole(refreshedRole);
@@ -69,16 +83,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         setUserEmail(String(profile.email || decoded.email || ''));
                         setUserName(String(profile.name || decoded.name || ''));
 
-                        if (refreshedRole === 'Admin') {
-                            setRole('admin');
-                        } else if (refreshedRole === 'Adviser' || refreshedRole === 'Advisers') {
-                            setRole('manager');
-                        } else {
-                            setRole('member');
-                        }
+                        if (refreshedRole === 'Admin') setRole('admin');
+                        else if (refreshedRole === 'Adviser' || refreshedRole === 'Advisers') setRole('manager');
+                        else setRole('member');
                     })
                     .catch(() => {
-                        // keep decoded token fallback
+                        // keep cached/decoded token fallback
                     });
             } catch (e) {
                 console.error('Failed to decode token:', e);
@@ -88,6 +98,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
     const handleLogout = () => {
         localStorage.removeItem('auth_token');
+        localStorage.removeItem('scholar_profile');
         router.push('/login');
     };
 

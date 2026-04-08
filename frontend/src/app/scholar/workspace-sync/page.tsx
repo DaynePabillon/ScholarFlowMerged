@@ -87,16 +87,44 @@ export default function WorkspaceSyncPage() {
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
-        try {
-            const decoded: any = jwtDecode(token);
-            if (decoded.role !== 'Admin') {
-                router.push('/scholar/dashboard');
-                return;
-            }
-            setUser(decoded);
-        } catch { router.push('/login'); return; }
-        fetchCourses();
-        fetchDriveSheets();
+        
+        // Check admin access using cached ScholarSync profile first, then verify via API
+        const checkAccess = async () => {
+            try {
+                const decoded: any = jwtDecode(token);
+                
+                // Check cached profile first (set by SidebarLayout)
+                const cachedProfile = localStorage.getItem('scholar_profile');
+                let role = decoded.role || '';
+                if (cachedProfile) {
+                    try {
+                        const cached = JSON.parse(cachedProfile);
+                        role = cached.role || role;
+                    } catch {}
+                }
+                
+                // If still not Admin from cache, verify with API before redirecting
+                if (role !== 'Admin') {
+                    try {
+                        const res = await apiClient.get('/me');
+                        const profile = res.data;
+                        localStorage.setItem('scholar_profile', JSON.stringify(profile));
+                        role = profile.role || role;
+                    } catch {}
+                }
+                
+                if (role !== 'Admin') {
+                    router.push('/scholar/dashboard');
+                    return;
+                }
+                
+                setUser({ ...decoded, role });
+            } catch { router.push('/login'); return; }
+            fetchCourses();
+            fetchDriveSheets();
+        };
+        
+        checkAccess();
     }, [router]);
 
     const fetchCourses = async () => {
