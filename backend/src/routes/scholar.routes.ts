@@ -13,6 +13,7 @@ import { google } from 'googleapis';
 import { pool } from '../config/database';
 import logger from '../config/logger';
 import GoogleAuthService from '../services/google/auth.service';
+import { sendTeamImportEmail } from '../services/email.service';
 
 const router = Router();
 
@@ -1110,6 +1111,8 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
     const client = await pool.connect();
     const results: any[] = [];
+    // Collect members for invitation emails (sent after successful commit)
+    const importedMembers: { email: string; name: string; courseCode: string; courseName: string; groupName: string; adviser: string }[] = [];
 
     try {
       await client.query('BEGIN');
@@ -1314,6 +1317,20 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
             );
           }
 
+          // Collect members for invitation emails
+          for (const member of groupData.members) {
+            if (member.email) {
+              importedMembers.push({
+                email: member.email,
+                name: member.fullName,
+                courseCode: parsed.courseCode,
+                courseName: parsed.courseName,
+                groupName,
+                adviser: groupData.adviser || '',
+              });
+            }
+          }
+
           teamNumber++;
         }
 
@@ -1376,11 +1393,59 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     const totalGroups = results.reduce((s, r) => s + r.groupCount, 0);
     const totalMembers = results.reduce((s, r) => s + r.memberCount, 0);
 
+    // ─── Send invitation emails (async, non-blocking) ───
+    // No-spam rule: check which emails already have an account (they already know the platform)
+    // Only send to truly new students who haven't logged in before
+    if (importedMembers.length > 0) {
+      setImmediate(async () => {
+        try {
+          // Get emails that already have an active ss_account (they've already signed up)
+          const allEmails = [...new Set(importedMembers.map(m => m.email.toLowerCase().trim()))];
+          const existingRes = await pool.query(
+            `SELECT LOWER("accountEmail") as email FROM ss_account WHERE LOWER("accountEmail") = ANY($1::text[])`,
+            [allEmails]
+          );
+          const existingEmails = new Set(existingRes.rows.map((r: any) => r.email));
+
+          let sentCount = 0;
+          let skippedCount = 0;
+
+          for (const member of importedMembers) {
+            const emailLower = member.email.toLowerCase().trim();
+            if (existingEmails.has(emailLower)) {
+              skippedCount++;
+              continue; // Already has an account — skip
+            }
+
+            const result = await sendTeamImportEmail({
+              to: member.email,
+              studentName: member.name || member.email.split('@')[0],
+              courseName: member.courseName,
+              courseCode: member.courseCode,
+              groupName: member.groupName,
+              adviserName: member.adviser,
+            });
+
+            if (result.success) sentCount++;
+            else logger.warn(`⚠️ Failed to send import email to ${member.email}: ${result.error}`);
+
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+
+          logger.info(`📨 Import invitations: ${sentCount} sent, ${skippedCount} skipped (existing accounts)`);
+        } catch (emailErr: any) {
+          logger.error('Error sending import invitation emails:', emailErr);
+        }
+      });
+    }
+
     return res.json({
       success: true,
       message: `Imported ${totalGroups} groups across ${results.length} course(s) from "${sheetTitle}" — ${totalMembers} members synced!`,
       courses: results,
       sheetTitle,
+      emailsQueued: importedMembers.length,
     });
 
   } catch (error: any) {
