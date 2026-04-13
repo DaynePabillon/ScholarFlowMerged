@@ -109,12 +109,12 @@ export default function ProjectBoardView({
                 return (
                     <div
                         key={project.id}
-                        className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden"
+                        className="bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-white/5 shadow-lg overflow-hidden"
                     >
                         {/* Project Header */}
                         <button
                             onClick={() => toggleProject(project.id)}
-                            className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 transition-colors"
+                            className="w-full flex items-center justify-between p-4 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
                         >
                             <div className="flex items-center gap-3">
                                 {isExpanded ? (
@@ -126,8 +126,8 @@ export default function ProjectBoardView({
                                     <FolderKanban className="w-4 h-4 text-white" />
                                 </div>
                                 <div className="text-left">
-                                    <h3 className="font-semibold text-gray-800">{project.name}</h3>
-                                    <p className="text-xs text-gray-500">{projectTasks.length} tasks</p>
+                                    <h3 className="font-semibold text-gray-800 dark:text-gray-100">{project.name}</h3>
+                                    <p className="text-xs text-gray-500 dark:text-slate-400">{projectTasks.length} tasks</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -143,9 +143,9 @@ export default function ProjectBoardView({
 
                         {/* Tasks List */}
                         {isExpanded && (
-                            <div className="border-t border-gray-100">
+                            <div className="border-t border-gray-100 dark:border-slate-800/50">
                                 {projectTasks.length === 0 ? (
-                                    <div className="p-6 text-center text-gray-500">
+                                    <div className="p-6 text-center text-gray-500 dark:text-slate-500">
                                         <p className="text-sm">No tasks in this project yet</p>
                                         {canAssign && (
                                             <button
@@ -158,11 +158,11 @@ export default function ProjectBoardView({
                                         )}
                                     </div>
                                 ) : (
-                                    <div className="divide-y divide-gray-100">
+                                    <div className="divide-y divide-gray-100 dark:divide-slate-800/50">
                                         {projectTasks.map((task) => (
                                             <div
                                                 key={task.id}
-                                                className="p-4 hover:bg-gray-50/50 transition-colors group"
+                                                className="p-4 hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors group"
                                             >
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div className="flex-1 min-w-0">
@@ -174,11 +174,11 @@ export default function ProjectBoardView({
                                                                 {task.status.replace('-', ' ')}
                                                             </span>
                                                         </div>
-                                                        <h4 className="font-medium text-gray-800 truncate">{task.title}</h4>
+                                                        <h4 className="font-medium text-gray-800 dark:text-gray-100 truncate">{task.title}</h4>
                                                         {task.description && (
-                                                            <p className="text-sm text-gray-500 truncate mt-0.5">{task.description}</p>
+                                                            <p className="text-sm text-gray-500 dark:text-slate-400 truncate mt-0.5">{task.description}</p>
                                                         )}
-                                                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-slate-400">
                                                             {task.due_date && (
                                                                 <span className="flex items-center gap-1">
                                                                     <Calendar className="w-3 h-3" />
@@ -199,7 +199,7 @@ export default function ProjectBoardView({
                                                                     setAssigningTask(null)
                                                                 }}
                                                                 onBlur={() => setAssigningTask(null)}
-                                                                className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                                                className="text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
                                                             >
                                                                 <option value="">Unassigned</option>
                                                                 {members.map((member) => (
@@ -210,9 +210,9 @@ export default function ProjectBoardView({
                                                             <button
                                                                 onClick={() => canAssign && setAssigningTask(task.id)}
                                                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${task.assigned_to_name
-                                                                        ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                                                        : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-blue-300'
-                                                                    } ${canAssign ? 'cursor-pointer hover:bg-blue-100' : 'cursor-default'}`}
+                                                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400'
+                                                                        : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-500/40'
+                                                                    } ${canAssign ? 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30' : 'cursor-default'}`}
                                                                 disabled={!canAssign}
                                                             >
                                                                 {task.assigned_to_name ? (
@@ -235,7 +235,7 @@ export default function ProjectBoardView({
                                                         {canAssign && (
                                                             <button
                                                                 onClick={() => onDeleteTask(task.id)}
-                                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                                className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
                                                             </button>
@@ -249,7 +249,7 @@ export default function ProjectBoardView({
                                         {canAssign && (
                                             <button
                                                 onClick={() => onAddTask(project.id)}
-                                                className="w-full p-3 text-sm text-gray-500 hover:text-blue-600 hover:bg-blue-50/50 transition-colors flex items-center justify-center gap-2"
+                                                className="w-full p-3 text-sm text-gray-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors flex items-center justify-center gap-2"
                                             >
                                                 <Plus className="w-4 h-4" />
                                                 Add task to {project.name}
@@ -265,21 +265,21 @@ export default function ProjectBoardView({
 
             {/* Unassigned tasks section */}
             {unassignedTasks.length > 0 && (
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
-                    <div className="p-4 border-b border-gray-100">
+                <div className="bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-white/5 shadow-lg overflow-hidden">>
+                    <div className="p-4 border-b border-gray-100 dark:border-slate-800/50">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-gray-500 rounded-lg">
                                 <FolderKanban className="w-4 h-4 text-white" />
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-800">General Tasks</h3>
-                                <p className="text-xs text-gray-500">{unassignedTasks.length} tasks without a project</p>
+                                <h3 className="font-semibold text-gray-800 dark:text-gray-100">General Tasks</h3>
+                                <p className="text-xs text-gray-500 dark:text-slate-400">{unassignedTasks.length} tasks without a project</p>
                             </div>
                         </div>
                     </div>
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-gray-100 dark:divide-slate-800/50">
                         {unassignedTasks.map((task) => (
-                            <div key={task.id} className="p-4 hover:bg-gray-50/50 transition-colors group">
+                            <div key={task.id} className="p-4 hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors group">>
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
@@ -290,7 +290,7 @@ export default function ProjectBoardView({
                                                 {task.status.replace('-', ' ')}
                                             </span>
                                         </div>
-                                        <h4 className="font-medium text-gray-800">{task.title}</h4>
+                                        <h4 className="font-medium text-gray-800 dark:text-gray-100">{task.title}</h4>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {assigningTask === task.id ? (
@@ -302,7 +302,7 @@ export default function ProjectBoardView({
                                                     setAssigningTask(null)
                                                 }}
                                                 onBlur={() => setAssigningTask(null)}
-                                                className="text-sm border border-gray-200 rounded-lg px-2 py-1"
+                                                className="text-sm border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 rounded-lg px-2 py-1"
                                             >
                                                 <option value="">Unassigned</option>
                                                 {members.map((member) => (
@@ -312,10 +312,10 @@ export default function ProjectBoardView({
                                         ) : (
                                             <button
                                                 onClick={() => canAssign && setAssigningTask(task.id)}
-                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${task.assigned_to_name
-                                                        ? 'bg-blue-50 border-blue-200 text-blue-700'
-                                                        : 'bg-gray-50 border-gray-200 text-gray-500'
-                                                    } ${canAssign ? 'cursor-pointer hover:bg-blue-100' : 'cursor-default'}`}
+                                                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${task.assigned_to_name
+                                                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400'
+                                                        : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-500/40'
+                                                    } ${canAssign ? 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30' : 'cursor-default'}`}
                                                 disabled={!canAssign}
                                             >
                                                 {task.assigned_to_name ? (
@@ -334,10 +334,7 @@ export default function ProjectBoardView({
                                             </button>
                                         )}
                                         {canAssign && (
-                                            <button
-                                                onClick={() => onDeleteTask(task.id)}
-                                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                            >
+                                                className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         )}
@@ -351,10 +348,10 @@ export default function ProjectBoardView({
 
             {/* Empty state */}
             {projects.length === 0 && tasks.length === 0 && (
-                <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-white/40 shadow-lg">
-                    <FolderKanban className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">No projects yet</h3>
-                    <p className="text-gray-600">Create a project first, then add tasks to it</p>
+                <div className="bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl p-12 text-center border border-white/40 dark:border-white/5 shadow-lg">
+                    <FolderKanban className="w-16 h-16 text-gray-400 dark:text-slate-600 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">No projects yet</h3>
+                    <p className="text-gray-600 dark:text-slate-400">Create a project first, then add tasks to it</p>
                 </div>
             )}
         </div>
