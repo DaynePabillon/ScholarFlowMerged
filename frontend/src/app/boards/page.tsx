@@ -530,8 +530,18 @@ function BoardsContent() {
         return selectedOrg?.role || 'member'
     }
 
-    const canEdit = () => ['admin', 'manager'].includes(getUserRole())
-    const canDelete = () => getUserRole() === 'admin'
+    const canEdit = () => {
+        if (['admin', 'manager'].includes(getUserRole())) return true
+        // Members can edit team board tasks (non-absolute) but not advisor tasks
+        if (getUserRole() === 'member' && selectedTask && !selectedTask.is_absolute) return true
+        return false
+    }
+    const canDelete = () => {
+        if (['admin', 'manager'].includes(getUserRole())) return true
+        // Members can delete team board tasks (non-absolute) but not advisor tasks
+        if (getUserRole() === 'member' && selectedTask && !selectedTask.is_absolute) return true
+        return false
+    }
 
     // Filter tasks based on active tab - Memoized for performance
     const filteredTasks = useMemo(() => {
@@ -709,13 +719,15 @@ function BoardsContent() {
                                             <RotateCcw className={`w-5 h-5 ${isResyncing ? 'animate-spin text-emerald-500' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => setIsCreateModalOpen(true)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
-                                    >
-                                        <Plus className="w-5 h-5" />
-                                        <span className="font-medium">New Task</span>
-                                    </button>
+                                    {(boardSubView !== 'advisor' || getUserRole() !== 'member') && (
+                                        <button
+                                            onClick={() => setIsCreateModalOpen(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                            <span className="font-medium">New Task</span>
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -761,9 +773,9 @@ function BoardsContent() {
                                         status: normalizeStatus(t.status)
                                     } as any))}
                                     onTaskClick={(t: any) => handleTaskClick(t)}
-                                    onAddTask={() => setIsGoogleSyncModalOpen(true)}
-                                    onDeleteTask={handleDeleteTask}
-                                    onArchiveTask={handleArchiveTask}
+                                    onAddTask={getUserRole() !== 'member' ? () => setIsGoogleSyncModalOpen(true) : () => {}}
+                                    onDeleteTask={getUserRole() !== 'member' ? handleDeleteTask : undefined as any}
+                                    onArchiveTask={getUserRole() !== 'member' ? handleArchiveTask : undefined as any}
                                     onStatusChange={handleStatusChange}
                                     onProgressChange={handleProgressChange}
                                     role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
@@ -796,7 +808,7 @@ function BoardsContent() {
                                     onArchiveTask={handleArchiveTask}
                                     onStatusChange={handleStatusChange}
                                     onProgressChange={handleProgressChange}
-                                    role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
+                                    role={getUserRole() === 'member' ? 'manager' : getUserRole() as any}
                                     members={members}
                                 />
                             </div>
