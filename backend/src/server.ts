@@ -29,6 +29,9 @@ import teamGroupRoutes from './routes/team-group.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import wbsRoutes from './routes/wbs.routes';
 import scholarRoutes from './routes/scholar.routes';
+import consultationRoutes from './routes/scholar/consultation.routes';
+import aiRoutes from './routes/scholar/ai.routes';
+import memberJournalsRoutes from './routes/scholar/member-journals.routes';
 import { runAutoMigrations } from './services/migration.service';
 import passport from 'passport';
 import { apiLimiter, authLimiter, aiLimiter } from './middleware/rateLimit.middleware';
@@ -124,6 +127,11 @@ app.get('/auth/google/callback', (req: Request, res: Response) => {
 // Mounted at /api so routes like /me, /courses resolve to /api/me, /api/courses
 // Routes with /scholar/ prefix (e.g. /scholar/drive/files) avoid conflicts with SkyFlow routes
 app.use('/api', scholarRoutes);
+
+// Modular ScholarSync Routes (Consultations, AI, Journals)
+app.use('/api/consultation', consultationRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/member-journals', memberJournalsRoutes);
 
 // 404 handler for API
 app.use('/api/*', (req: Request, res: Response) => {

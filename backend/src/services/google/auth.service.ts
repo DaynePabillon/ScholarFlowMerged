@@ -90,7 +90,19 @@ export class GoogleAuthService {
         [googleUser.id, googleUser.email, googleUser.name, googleUser.picture, accessToken, refreshToken, tokenExpiry]
       );
 
-      return result.rows[0];
+      const user = result.rows[0];
+
+      // Sync Google Access Token to ScholarSync account if it exists (ScholarSync Bridge)
+      try {
+        await query(
+          'UPDATE ss_account SET "googleAccessToken" = $1 WHERE "accountEmail" = $2',
+          [accessToken, googleUser.email]
+        );
+      } catch (ssErr: any) {
+        logger.warn('Failed to bridge token to ss_account:', ssErr.message);
+      }
+
+      return user;
     } catch (error) {
       logger.error('Error upserting user:', error);
       throw new Error('Failed to save user information');
@@ -182,6 +194,20 @@ export class GoogleAuthService {
         'UPDATE users SET access_token = $1, token_expiry = $2, updated_at = NOW() WHERE id = $3',
         [credentials.access_token, new Date(credentials.expiry_date!), userId]
       );
+
+      // ScholarSync Bridge: Also update ss_account if it exists
+      try {
+        const userRes = await query('SELECT email FROM users WHERE id = $1', [userId]);
+        const email = userRes.rows[0]?.email;
+        if (email) {
+          await query(
+            'UPDATE ss_account SET "googleAccessToken" = $1 WHERE "accountEmail" = $2',
+            [credentials.access_token, email]
+          );
+        }
+      } catch (ssErr: any) {
+        logger.warn('Failed to bridge refreshed token to ss_account:', ssErr.message);
+      }
 
       return credentials.access_token;
     } catch (error) {

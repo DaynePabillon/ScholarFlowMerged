@@ -42,27 +42,45 @@ const verifyToken = (req: Request, res: Response, next: NextFunction) => {
   });
 };
 
-const verifyAdmin = (req: Request, res: Response, next: NextFunction) => {
+const verifyAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    if (user.role !== 'Admin') return res.status(403).json({ error: "Admin access required" });
+    let role = String(user.role || '').toLowerCase();
+    
+    if (role !== 'admin' && user.email) {
+      try {
+        const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
+        if (rows.length > 0) role = String(rows[0].accountRole || '').toLowerCase();
+      } catch (e) {}
+    }
+
+    if (role !== 'admin') return res.status(403).json({ error: "Admin access required" });
     (req as any).user = user;
     next();
   });
 };
 
-const verifyInstructor = (req: Request, res: Response, next: NextFunction) => {
+const verifyInstructor = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    if (user.role !== 'Admin' && user.role !== 'Adviser' && user.role !== 'Advisers') {
+    let role = String(user.role || '').toLowerCase();
+    
+    if (role !== 'admin' && role !== 'adviser' && role !== 'advisers' && role !== 'manager' && user.email) {
+      try {
+        const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
+        if (rows.length > 0) role = String(rows[0].accountRole || '').toLowerCase();
+      } catch (e) {}
+    }
+
+    if (role !== 'admin' && role !== 'adviser' && role !== 'advisers' && role !== 'manager') {
       return res.status(403).json({ error: "Instructor access required" });
     }
     (req as any).user = user;
@@ -77,7 +95,20 @@ const getAccessToken = async (token: string): Promise<string | null> => {
   try {
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     
-    // Try ss_account first (ScholarSync-native users) — match by email since decoded.id is SkyFlow UUID
+    // Try SkyFlow users table first (unified auth stores Google token here)
+    // Use getUserWithTokens to auto-refresh expired tokens
+    try {
+      // Quick check to avoid "User not found" logs for pure ScholarSync users
+      const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [decoded.id]);
+      if (userCheck.rows.length > 0) {
+        const user = await GoogleAuthService.getUserWithTokens(decoded.id);
+        if (user?.access_token) return user.access_token;
+      }
+    } catch (e) {
+      // Fall through to ss_account on any failure
+    }
+
+    // Try ss_account next (ScholarSync-native users) — match by email since decoded.id is SkyFlow UUID
     const ssResult = await pool.query(
       'SELECT "googleAccessToken" FROM ss_account WHERE "accountEmail" = $1',
       [decoded.email]
@@ -86,14 +117,7 @@ const getAccessToken = async (token: string): Promise<string | null> => {
       return ssResult.rows[0].googleAccessToken;
     }
     
-    // Fall back to SkyFlow users table (unified auth stores Google token here)
-    // Use getUserWithTokens to auto-refresh expired tokens
-    try {
-      const user = await GoogleAuthService.getUserWithTokens(decoded.id);
-      return user.access_token || null;
-    } catch {
-      return null;
-    }
+    return null;
   } catch {
     return null;
   }
@@ -864,7 +888,8 @@ router.get('/scholar/sheets/list', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  const DRIVE_URL = `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27&pageSize=50&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,owners)`;
+  // Note: Include both Google Sheets and MS Excel formats
+  const DRIVE_URL = `https://www.googleapis.com/drive/v3/files?q=(mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27%20or%20mimeType%3D%27application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet%27%20or%20mimeType%3D%27application%2Fvnd.ms-excel%27)&pageSize=50&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,owners)`;
 
   const fetchSheets = async (accessTok: string) => {
     const response = await axios.get(DRIVE_URL, { headers: { Authorization: `Bearer ${accessTok}` } });
@@ -962,14 +987,18 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     let records: any[] = [];
     let sheetTitle = 'Imported Sheet';
 
-    // Helper: find the actual header row (scans until it finds a row with a cell === 'TEAM CODE')
-    const findHeaderRow = (rows: string[][]): { headers: string[]; dataRows: string[][] } | null => {
+    // Helper: find the actual header row (scans until it finds a row with a cell === 'TEAM CODE' or 'GROUP')
+    const findHeaderRow = (rows: any[][]): { headers: string[]; dataRows: any[][] } | null => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] ?? [];
-        const hasTeamCode = row.some(cell => cell.toString().trim().toUpperCase() === 'TEAM CODE');
+        const hasTeamCode = row.some((cell: any) => {
+          if (cell === null || cell === undefined) return false;
+          const v = cell.toString().trim().toUpperCase();
+          return ['TEAM CODE', 'TEAMCODE', 'GROUP', 'GROUP NAME'].includes(v);
+        });
         if (hasTeamCode) {
           return {
-            headers: row.map(h => h.toString().trim()),
+            headers: row.map((h: any) => (h || '').toString().trim()),
             dataRows: rows.slice(i + 1)
           };
         }
@@ -977,47 +1006,77 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
       return null;
     };
 
-    // Try Google Sheets API first (private sheets)
+    // Try Google Sheets API first (private sheets) or Google Drive directly for Excel
     if (accessToken) {
+      let mimeType = 'application/vnd.google-apps.spreadsheet';
       try {
-        const metaRes = await axios.get(
-          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        sheetTitle = metaRes.data?.properties?.title || sheetTitle;
-
-        const dataRes = await axios.get(
-          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1000`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const values: string[][] = dataRes.data.values || [];
-        const found = findHeaderRow(values);
-        if (found && found.dataRows.length > 0) {
-          records = found.dataRows
-            .filter(row => row.some(cell => cell.toString().trim() !== ''))
-            .map(row => {
-              const obj: any = {};
-              found.headers.forEach((h, i) => { obj[h] = (row[i] ?? '').toString().trim(); });
-              return obj;
-            });
-        }
+        const metaDriveRes = await axios.get(`https://www.googleapis.com/drive/v3/files/${sheetId}?fields=name,mimeType`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        sheetTitle = metaDriveRes.data?.name || sheetTitle;
+        mimeType = metaDriveRes.data?.mimeType || mimeType;
       } catch (e: any) {
-        logger.info('Sheets API failed, falling back to CSV:', e.message);
+         logger.info('Could not get Drive metadata, assuming Google Sheets');
+      }
+
+      if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || mimeType === 'application/vnd.ms-excel') {
+         try {
+            const fileRes = await axios.get(`https://www.googleapis.com/drive/v3/files/${sheetId}?alt=media`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                responseType: 'arraybuffer'
+            });
+            const xlsx = require('xlsx');
+            const workbook = xlsx.read(fileRes.data, { type: 'buffer' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const values: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+            const found = findHeaderRow(values);
+            if (found && found.dataRows.length > 0) {
+              records = found.dataRows
+                .filter((row: any[]) => row.some((cell: any) => cell && cell.toString().trim() !== ''))
+                .map((row: any[]) => {
+                  const obj: any = {};
+                  found.headers.forEach((h: string, i: number) => { obj[h] = (row[i] ?? '').toString().trim(); });
+                  return obj;
+                });
+            }
+         } catch(e: any) {
+             logger.error('Excel processing failed:', e.message);
+         }
+      } else {
+         // Google Sheets API as normal
+         try {
+           const dataRes = await axios.get(
+             `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1000`,
+             { headers: { Authorization: `Bearer ${accessToken}` } }
+           );
+           const values: any[][] = dataRes.data.values || [];
+           const found = findHeaderRow(values);
+           if (found && found.dataRows.length > 0) {
+             records = found.dataRows
+               .filter((row: any[]) => row.some((cell: any) => cell && cell.toString().trim() !== ''))
+               .map((row: any[]) => {
+                 const obj: any = {};
+                 found.headers.forEach((h: string, i: number) => { obj[h] = (row[i] ?? '').toString().trim(); });
+                 return obj;
+               });
+           }
+         } catch (e: any) {
+           logger.info('Sheets API failed, falling back to CSV:', e.message);
+         }
       }
     }
 
     // Fallback: public CSV
     if (records.length === 0) {
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
-      const response = await axios.get(csvUrl);
-      const rawRows: string[][] = parse(response.data, { columns: false, skip_empty_lines: false, relax_column_count: true });
+      const response = await axios.get(csvUrl, accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {});
+      const rawRows: any[][] = parse(response.data, { columns: false, skip_empty_lines: false, relax_column_count: true });
       const found = findHeaderRow(rawRows);
       if (found && found.dataRows.length > 0) {
         records = found.dataRows
-          .filter(row => row.some(cell => cell.toString().trim() !== ''))
+          .filter(row => row.some((cell: any) => cell && cell.toString().trim() !== ''))
           .map(row => {
             const obj: any = {};
-            found.headers.forEach((h, i) => { obj[h] = (row[i] ?? '').toString().trim(); });
+            found.headers.forEach((h: string, i: number) => { obj[h] = (row[i] ?? '').toString().trim(); });
             return obj;
           });
       } else {
@@ -1155,7 +1214,6 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
         if (existingConflicts.length > 0) {
           await client.query('ROLLBACK');
-          client.release();
           return res.status(409).json({
             conflict: true,
             message: `Teams for ${existingConflicts.map(c => c.courseCode).join(', ')} already exist.`,
@@ -1318,8 +1376,8 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
             // Upsert member into SkyFlow users table
             const memberSkyRes = await client.query(
-              `INSERT INTO users (google_id, email, name, role, created_at)
-               VALUES ($1, $2, $3, 'member', NOW())
+              `INSERT INTO users (google_id, email, name, created_at)
+               VALUES ($1, $2, $3, NOW())
                ON CONFLICT (email) DO UPDATE SET name = COALESCE(NULLIF(EXCLUDED.name, ''), users.name)
                RETURNING id`,
               [member.email, member.email, member.fullName || member.email.split('@')[0]]

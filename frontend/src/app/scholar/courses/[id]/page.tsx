@@ -169,8 +169,19 @@ export default function CourseDetailsPage() {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/scholar/login'); return; }
         try { 
-            const decoded = jwtDecode(token); 
-            setUser(decoded);
+            const decoded: any = jwtDecode(token); 
+            let finalUser = { ...decoded };
+            
+            const cachedProfileStr = localStorage.getItem('scholar_profile');
+            if (cachedProfileStr) {
+                try {
+                    const cached = JSON.parse(cachedProfileStr);
+                    if (cached.role) {
+                        finalUser.role = cached.role;
+                    }
+                } catch { }
+            }
+            setUser(finalUser);
         } catch { 
             router.push('/scholar/login'); 
             return; 
@@ -745,7 +756,7 @@ export default function CourseDetailsPage() {
                                 </h2>
                                 <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-2xl w-fit border border-gray-100">
                                     {['discussion', 'journals', 'consultations', 'ai'].map((tab) => {
-                                        if (tab === 'ai' && user?.role !== 'Admin') return null;
+                                        if (tab === 'ai' && String(user?.role || '').toLowerCase() !== 'admin') return null;
                                         return (
                                             <button
                                                 key={tab}

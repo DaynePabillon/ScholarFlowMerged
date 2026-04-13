@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { pool } from "../db.js";
+import { pool } from "../../config/database";
 import crypto from 'crypto';
 import 'dotenv/config';
 
@@ -127,7 +127,7 @@ export class AIService {
           
           if (attendance && attendance.length > 0) {
             const presentMembers: string[] = [];
-            attendance.forEach(att => {
+            attendance.forEach((att: any) => {
               [att.mem1, att.mem2, att.mem3, att.mem4, att.mem5].forEach(mem => {
                 if (mem) presentMembers.push(mem.toLowerCase().trim());
               });
@@ -240,7 +240,7 @@ export class AIService {
       const consultationOnlyGroupNames = consultations
         .map((c: any) => String(c.groupName || '').trim())
         .filter(Boolean)
-        .filter((name, idx, arr) => arr.indexOf(name) === idx);
+        .filter((name: string, idx: number, arr: string[]) => arr.indexOf(name) === idx);
 
       const allGroupNames = Array.from(new Set([...groupNamesFromCourse, ...consultationOnlyGroupNames]));
 
