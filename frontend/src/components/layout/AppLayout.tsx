@@ -236,10 +236,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                 <BarChart3 className="w-5 h-5" />
                 <span className="text-sm font-medium">Dashboard</span>
               </a>
-              <a href="/projects" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
-                <FolderKanban className="w-5 h-5" />
-                <span className="text-sm font-medium">Projects</span>
-              </a>
+
               <a href="/boards" className="flex items-center gap-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl transition-all">
                 <FolderKanban className="w-5 h-5" />
                 <span className="text-sm font-medium">Boards</span>
@@ -303,10 +300,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
             <div className="pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
               <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 px-2" style={{ color: 'var(--color-textSecondary)' }}>Workspace</h2>
               <nav className="space-y-2">
-                <a href="/projects" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                  <FolderKanban className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                  <span>Projects</span>
-                </a>
+
                 <a href="/boards" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                   <FolderKanban className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                   <span>Boards</span>
