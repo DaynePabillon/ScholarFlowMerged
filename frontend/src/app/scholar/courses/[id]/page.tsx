@@ -73,6 +73,18 @@ type Comment = {
 const sanitizeAIContent = (text: string) =>
     (text || '').replace(/[\*#]+/g, '').replace(/\n{3,}/g, '\n\n').trim();
 
+const normalizeScholarRole = (value: unknown): 'Admin' | 'Advisers' | 'Student' | '' => {
+    const role = String(value || '').trim().toLowerCase();
+    if (role === 'admin') return 'Admin';
+    if (role === 'adviser' || role === 'advisers') return 'Advisers';
+    if (role === 'student') return 'Student';
+    return '';
+};
+
+const getEffectiveScholarRole = (user: any): 'Admin' | 'Advisers' | 'Student' | '' => {
+    return normalizeScholarRole(user?.scholarsyncRole || user?.role || user?.accountRole);
+};
+
 type ConsultationLog = {
     conID?: number;
     conDate?: string;
@@ -134,7 +146,7 @@ export default function CourseDetailsPage() {
     
     // Inline AI Result State
     const [generatingAI, setGeneratingAI] = useState(false);
-    const [aiResult, setAiResult] = useState<{ type: 'summary' | 'insights', content: string, cached?: boolean } | null>(null);
+    const [aiResult, setAiResult] = useState<{ type: 'summary' | 'participation', content: string, cached?: boolean } | null>(null);
     const [aiError, setAiError] = useState<string | null>(null);
 
     // Course-level Admin AI analysis
@@ -167,7 +179,7 @@ export default function CourseDetailsPage() {
     useEffect(() => {
         setTodayJournalDate(new Date().toISOString().slice(0, 10));
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/scholar/login'); return; }
+        if (!token) { router.push('/login'); return; }
         try { 
             const decoded: any = jwtDecode(token); 
             let finalUser = { ...decoded };
@@ -176,14 +188,23 @@ export default function CourseDetailsPage() {
             if (cachedProfileStr) {
                 try {
                     const cached = JSON.parse(cachedProfileStr);
-                    if (cached.role) {
-                        finalUser.role = cached.role;
+                    const cachedRole = normalizeScholarRole(cached?.scholarsyncRole || cached?.role || cached?.accountRole);
+                    if (cachedRole) {
+                        finalUser.role = cachedRole;
+                        finalUser.scholarsyncRole = cachedRole;
                     }
                 } catch { }
             }
+
+            const effectiveRole = getEffectiveScholarRole(finalUser);
+            if (effectiveRole) {
+                finalUser.role = effectiveRole;
+                finalUser.scholarsyncRole = effectiveRole;
+            }
+
             setUser(finalUser);
         } catch { 
-            router.push('/scholar/login'); 
+            router.push('/login'); 
             return; 
         }
         fetchCourse();
@@ -364,12 +385,16 @@ export default function CourseDetailsPage() {
     };
 
     const canManageMemberJournal = (entry: MemberJournal) => {
-        const role = String(user?.role || '').toLowerCase();
-        if (role === 'admin') return true;
+        const role = getEffectiveScholarRole(user);
+        if (role === 'Admin') return true;
         const userEmail = String(user?.email || '').toLowerCase().trim();
         const ownerEmail = String(entry.member_email || '').toLowerCase().trim();
         return userEmail !== '' && userEmail === ownerEmail;
     };
+
+    const effectiveScholarRole = getEffectiveScholarRole(user);
+    const isAdmin = effectiveScholarRole === 'Admin';
+    const isStudent = effectiveScholarRole === 'Student';
 
     const handleEditMemberJournal = (entry: MemberJournal) => {
         if (!canManageMemberJournal(entry)) return;
@@ -419,11 +444,25 @@ export default function CourseDetailsPage() {
                 return;
             }
 
-            const sortedConsultationLogs = [...consultationLogs].sort((a, b) => {
+            let logsForAI: ConsultationLog[] = Array.isArray(consultationLogs) ? [...consultationLogs] : [];
+
+            // Prevent stale-state false negatives by re-fetching if local logs are empty.
+            if (logsForAI.length === 0 && selectedGroup?.id) {
+                const freshRes = await apiClient.get(`/consultation/group/${selectedGroup.id}/logs`);
+                const freshLogs = Array.isArray(freshRes?.data?.logs) ? freshRes.data.logs : [];
+                logsForAI = freshLogs;
+                setConsultationLogs(freshLogs);
+            }
+
+            const sortedConsultationLogs = logsForAI.sort((a, b) => {
                 const left = new Date(a.submitted_at || a.updated_at || a.created_at || a.conDate || 0).getTime();
                 const right = new Date(b.submitted_at || b.updated_at || b.created_at || b.conDate || 0).getTime();
                 return right - left;
             });
+
+            if (sortedConsultationLogs.length === 0) {
+                throw new Error('No consultation history available yet for this group. Save at least one consultation record first.');
+            }
 
             const consultationHistory = sortedConsultationLogs
                 .map((log, idx) => {
@@ -482,12 +521,16 @@ export default function CourseDetailsPage() {
                     forceRefresh 
                 });
                 responseData = res.data;
-                setAiResult({ type: 'summary', content: sanitizeAIContent(responseData.summary), cached: responseData.cached });
+                const summaryContent = sanitizeAIContent(responseData?.summary || responseData?.result || '');
+                if (!summaryContent) {
+                    throw new Error('AI returned an empty synthesis result.');
+                }
+                setAiResult({ type: 'summary', content: summaryContent, cached: responseData?.cached });
             } else {
-                const latestConsultation = sortedConsultationLogs.find(log => typeof log.conID === 'number');
-                const targetConID = latestConsultation?.conID;
+                const latestConsultation = sortedConsultationLogs.find(log => Number.isFinite(Number(log.conID)));
+                const targetConID = Number(latestConsultation?.conID);
 
-                if (!targetConID) {
+                if (!Number.isFinite(targetConID) || targetConID <= 0) {
                     throw new Error("No consultation history found for participation analysis.");
                 }
 
@@ -499,7 +542,11 @@ export default function CourseDetailsPage() {
                     forceRefresh 
                 });
                 responseData = res.data;
-                setAiResult({ type: 'insights', content: sanitizeAIContent(responseData.insight), cached: responseData.cached });
+                const participationContent = sanitizeAIContent(responseData?.insight || responseData?.summary || responseData?.result || '');
+                if (!participationContent) {
+                    throw new Error('AI returned an empty participation result.');
+                }
+                setAiResult({ type: 'participation', content: participationContent, cached: responseData?.cached });
             }
         } catch (err: any) {
             console.error("AI Generation Error:", err);
@@ -643,7 +690,7 @@ export default function CourseDetailsPage() {
                         </div>
                         <p className="text-gray-400 text-sm mt-1">{course.courseTerm}</p>
                     </div>
-                    {user?.role === 'Admin' && groups.length > 0 && (
+                    {isAdmin && groups.length > 0 && (
                         <button
                             onClick={() => {
                                 setIsCustomAnalysisOpen(true);
@@ -756,7 +803,7 @@ export default function CourseDetailsPage() {
                                 </h2>
                                 <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-2xl w-fit border border-gray-100">
                                     {['discussion', 'journals', 'consultations', 'ai'].map((tab) => {
-                                        if (tab === 'ai' && String(user?.role || '').toLowerCase() !== 'admin') return null;
+                                        if (tab === 'ai' && !isAdmin) return null;
                                         return (
                                             <button
                                                 key={tab}
@@ -1023,14 +1070,14 @@ export default function CourseDetailsPage() {
                                             <p className="text-gray-500 text-lg mb-12 font-medium">Synthesize progress and analyze group participation with state-of-the-art AI.</p>
                                             
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-                                                <button onClick={() => handleAIGenerate('summary')} disabled={generatingAI || consultationLogs.length === 0} className="group bg-white border-2 border-gray-100 p-8 rounded-[40px] hover:border-blue-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
+                                                <button onClick={() => handleAIGenerate('summary')} disabled={generatingAI} className="group bg-white border-2 border-gray-100 p-8 rounded-[40px] hover:border-blue-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
                                                     <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform"><BookOpen className="w-8 h-8" /></div>
                                                     <div className="text-center">
                                                         <span className="block font-black text-gray-900 uppercase tracking-tight text-xl mb-1">Synthesis</span>
                                                         <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full">{consultationLogs.length} Data Points</span>
                                                     </div>
                                                 </button>
-                                                <button onClick={() => handleAIGenerate('participation')} disabled={generatingAI || consultationLogs.length === 0} className="group bg-white border-2 border-gray-100 p-8 rounded-[40px] hover:border-purple-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
+                                                <button onClick={() => handleAIGenerate('participation')} disabled={generatingAI} className="group bg-white border-2 border-gray-100 p-8 rounded-[40px] hover:border-purple-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
                                                     <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform"><TrendingUp className="w-8 h-8" /></div>
                                                     <div className="text-center">
                                                         <span className="block font-black text-gray-900 uppercase tracking-tight text-xl mb-1">Participation</span>
@@ -1038,6 +1085,13 @@ export default function CourseDetailsPage() {
                                                     </div>
                                                 </button>
                                             </div>
+
+                                            {aiError && (
+                                                <div className="mt-8 p-4 bg-red-50 border border-red-200 rounded-2xl text-left">
+                                                    <p className="text-xs font-black uppercase tracking-[0.15em] text-red-700 mb-1">AI Request Failed</p>
+                                                    <p className="text-sm text-red-700 font-semibold">{aiError}</p>
+                                                </div>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="w-full max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-700">
@@ -1055,7 +1109,7 @@ export default function CourseDetailsPage() {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => handleAIGenerate(aiResult.type as any, true)} disabled={generatingAI} className="px-8 py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-3 shadow-2xl shadow-gray-200">
+                                                    <button onClick={() => handleAIGenerate(aiResult.type, true)} disabled={generatingAI} className="px-8 py-4 bg-gray-900 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-black transition-all flex items-center gap-3 shadow-2xl shadow-gray-200">
                                                         <Sparkles className={`w-4 h-4 text-cyan-400 ${generatingAI ? 'animate-spin' : ''}`} />
                                                         {generatingAI ? 'Re-analyzing...' : 'Refresh Insights'}
                                                     </button>
@@ -1100,7 +1154,7 @@ export default function CourseDetailsPage() {
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">{selectedMemberFolder.email}</p>
                             </div>
                             <div className="flex items-center gap-3">
-                                {user?.role === 'Student' && String(user?.email || '').toLowerCase() === String(selectedMemberFolder.email).toLowerCase() && (
+                                {isStudent && String(user?.email || '').toLowerCase() === String(selectedMemberFolder.email).toLowerCase() && (
                                     <button
                                         onClick={() => {
                                             const today = new Date().toISOString().slice(0, 10);

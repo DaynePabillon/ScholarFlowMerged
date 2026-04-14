@@ -17,7 +17,7 @@ export default function RootPortal() {
       
       if (!token) {
         console.warn("No token found in portal, redirecting to landing")
-        router.push("/landing")
+        router.push("/login")
         return
       }
 
@@ -44,7 +44,7 @@ export default function RootPortal() {
           setUser(JSON.parse(storedUser));
           setIsLoading(false);
         } else {
-          router.push("/landing");
+          router.push("/login");
         }
       }
     }

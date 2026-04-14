@@ -17,6 +17,15 @@ export default function LoginPage() {
   const router = useRouter()
 
   const handleGoogleLogin = () => {
+    // Clear any previous session so account switching always starts clean.
+    localStorage.removeItem('token');
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('organizations');
+    localStorage.removeItem('scholar_profile');
+    localStorage.removeItem('ss_user');
+    localStorage.removeItem('post_login_redirect');
+
     // Redirect to the unified backend's Google OAuth flow
     window.location.href = `${API_URL}/auth/google`;
   }

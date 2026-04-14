@@ -1269,8 +1269,22 @@ router.post('/feedback', authenticate, async (req, res) => {
   const client = await pool.connect();
   try {
     const user: any = req.user;
-    const role = String(user?.role || '').toLowerCase();
-    const canSubmit = role === 'adviser' || role === 'advisers' || role === 'admin';
+    const role = String(user?.role || '').trim().toLowerCase();
+    let effectiveRole = role;
+
+    // JWT role can be stale (e.g., user.role=member while ss_account says Admin/Advisers).
+    // For consultation feedback permissions, prefer ScholarSync role when available.
+    if (!(effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin') && user?.email) {
+      const { rows: accountRoleRows } = await client.query(
+        'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+        [String(user.email)]
+      );
+      if (accountRoleRows.length > 0) {
+        effectiveRole = String(accountRoleRows[0].accountRole || '').trim().toLowerCase();
+      }
+    }
+
+    const canSubmit = effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin';
     if (!canSubmit) {
       return res.status(403).json({ error: 'Only advisers/admins can submit consultation feedback.' });
     }
@@ -1312,6 +1326,17 @@ router.post('/feedback', authenticate, async (req, res) => {
     }
 
     const booking = bookingRes.rows[0];
+    const canonicalGroupNameRes = await client.query(
+      `SELECT name
+       FROM team_groups
+       WHERE course_id = $1
+         AND LOWER(TRIM(COALESCE(name, ''))) = LOWER($2)
+       LIMIT 1`,
+      [Number(booking.course_id), String(booking.group_name || group_name || '').trim()]
+    );
+    const canonicalGroupName = String(
+      canonicalGroupNameRes.rows[0]?.name || booking.group_name || group_name || ''
+    ).trim();
 
     const existingRes = await client.query(
       `SELECT "conID"
@@ -1320,7 +1345,7 @@ router.post('/feedback', authenticate, async (req, res) => {
          AND LOWER(TRIM(COALESCE("groupName", ''))) = LOWER($2)
        ORDER BY "conID" DESC
        LIMIT 1`,
-      [Number(slot_id), String(group_name || '').trim()]
+      [Number(slot_id), canonicalGroupName]
     );
 
     let consultation: any;
@@ -1346,7 +1371,7 @@ router.post('/feedback', authenticate, async (req, res) => {
          RETURNING *`,
         [
           Number(booking.course_id),
-          String(group_name || '').trim(),
+          canonicalGroupName,
           Number(slot_id),
           String(conDate || '').slice(0, 10),
           String(conMil || ''),
@@ -1369,7 +1394,7 @@ router.post('/feedback', authenticate, async (req, res) => {
          RETURNING *`,
         [
           Number(booking.course_id),
-          String(group_name || '').trim(),
+          canonicalGroupName,
           Number(slot_id),
           String(conDate || '').slice(0, 10),
           String(conMil || ''),

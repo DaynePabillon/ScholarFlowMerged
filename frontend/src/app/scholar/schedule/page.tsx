@@ -190,8 +190,9 @@ export default function SchedulePage() {
       if (cachedProfileStr) {
         try {
           const cached = JSON.parse(cachedProfileStr)
-          if (cached.role) {
-            role = String(cached.role).toLowerCase()
+          const cachedRole = cached.scholarsyncRole || cached.role
+          if (cachedRole) {
+            role = String(cachedRole).toLowerCase()
           }
         } catch { }
       }
@@ -644,8 +645,8 @@ export default function SchedulePage() {
     }
 
     const groupIdForMembers =
-      typeof normalizedBooking.group_id === 'string' && normalizedBooking.group_id.includes('-')
-        ? normalizedBooking.group_id
+      normalizedBooking.group_id !== undefined && normalizedBooking.group_id !== null && String(normalizedBooking.group_id).trim() !== ''
+        ? String(normalizedBooking.group_id)
         : null
 
     console.log('Setting current booking:', normalizedBooking)
@@ -663,8 +664,11 @@ export default function SchedulePage() {
       memberParticipation: {},
     })
     
-    // Fetch group members to initialize attendance and participation data
-    // If this fails, form still opens with empty member sections
+    // Fetch group members to initialize attendance and participation data.
+    // Primary path: /api/groups/:id (team group id)
+    // Fallback path: /api/courses/:id/group-members matched by group name.
+    let hydratedMembers: string[] = []
+
     if (groupIdForMembers) {
       try {
         const token = localStorage.getItem("auth_token")
@@ -675,45 +679,61 @@ export default function SchedulePage() {
         if (res.ok) {
           const groupData = await res.json()
           console.log('Group data fetched:', groupData)
-          const members = [
+          hydratedMembers = [
             groupData.nameOne || groupData.member1,
             groupData.nameTwo || groupData.member2,
             groupData.nameThree || groupData.member3,
             groupData.nameFour || groupData.member4,
             groupData.nameFive || groupData.member5,
-          ].filter((m) => m)
-
-          console.log('Members:', members)
-          const initialAttendance: Record<string, 'Present' | 'Absent'> = {}
-          const initialParticipation: Record<string, 'High' | 'Moderate' | 'Low'> = {}
-          members.forEach(member => {
-            initialAttendance[member] = 'Present'
-            initialParticipation[member] = 'Moderate'
-          })
-
-          setConsultationForm(prev => ({
-            ...prev,
-            memberAttendance: initialAttendance,
-            memberParticipation: initialParticipation,
-          }))
+          ]
+            .map((m: any) => String(m || '').trim())
+            .filter((m: string) => m.length > 0)
         } else {
           console.error('Failed to fetch group members:', res.status)
-          setConsultationForm(prev => ({
-            ...prev,
-            memberAttendance: {},
-            memberParticipation: {},
-          }))
         }
       } catch (err) {
         console.error("Error fetching group members:", err)
-        setConsultationForm(prev => ({
-          ...prev,
-          memberAttendance: {},
-          memberParticipation: {},
-        }))
       }
+    }
+
+    if (hydratedMembers.length === 0 && normalizedBooking.course_id) {
+      try {
+        const token = localStorage.getItem("auth_token")
+        const res = await fetch(`${API_URL}/api/courses/${normalizedBooking.course_id}/group-members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (res.ok) {
+          const groupsData = await res.json()
+          const normalizedGroupName = String(normalizedBooking.group_name || '').trim().toLowerCase()
+          const matchedGroup = (Array.isArray(groupsData) ? groupsData : []).find((g: any) =>
+            String(g.groupName || '').trim().toLowerCase() === normalizedGroupName
+          )
+
+          hydratedMembers = (matchedGroup?.members || [])
+            .map((m: any) => String(m?.name || m?.email || '').trim())
+            .filter((m: string) => m.length > 0)
+        }
+      } catch (err) {
+        console.error('Fallback group-members fetch failed:', err)
+      }
+    }
+
+    if (hydratedMembers.length > 0) {
+      const initialAttendance: Record<string, 'Present' | 'Absent'> = {}
+      const initialParticipation: Record<string, 'High' | 'Moderate' | 'Low'> = {}
+      hydratedMembers.forEach(member => {
+        initialAttendance[member] = 'Present'
+        initialParticipation[member] = 'Moderate'
+      })
+
+      setConsultationForm(prev => ({
+        ...prev,
+        memberAttendance: initialAttendance,
+        memberParticipation: initialParticipation,
+      }))
     } else {
-      console.warn('No group ID available, opening form with empty member sections')
+      console.warn('No group members resolved, opening form with empty member sections')
       setConsultationForm(prev => ({
         ...prev,
         memberAttendance: {},

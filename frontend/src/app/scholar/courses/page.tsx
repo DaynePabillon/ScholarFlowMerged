@@ -59,13 +59,13 @@ export default function CoursesPage() {
 
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/scholar/login'); return; }
+        if (!token) { router.push('/login'); return; }
         try {
             const decoded: any = jwtDecode(token);
             setUser(decoded);
             if (decoded.role === 'Admin') setCanCreate(true);
             fetchCourses();
-        } catch (err) { router.push('/scholar/login'); }
+        } catch (err) { router.push('/login'); }
     }, [router]);
 
     const fetchCourses = async () => {

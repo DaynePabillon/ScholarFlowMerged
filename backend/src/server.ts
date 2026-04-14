@@ -47,6 +47,7 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 const PORT = process.env.PORT || 5000;
+const isRateLimitDisabled = String(process.env.DISABLE_RATE_LIMIT || '').toLowerCase() === 'true';
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
@@ -88,10 +89,14 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-// Apply Rate Limiters
-app.use('/api', apiLimiter);
-app.use('/api/auth', authLimiter);
-app.use('/api/scholar/ai', aiLimiter);
+// Apply Rate Limiters (can be disabled temporarily for local development)
+if (!isRateLimitDisabled) {
+  app.use('/api', apiLimiter);
+  app.use('/api/auth', authLimiter);
+  app.use('/api/scholar/ai', aiLimiter);
+} else {
+  logger.warn('Rate limiting is DISABLED via DISABLE_RATE_LIMIT=true');
+}
 
 // API Routes
 app.use('/api/auth', authRoutes);

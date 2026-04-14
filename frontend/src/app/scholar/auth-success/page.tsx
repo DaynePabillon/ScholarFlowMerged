@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GraduationCap } from 'lucide-react';
+import apiClient from '@/lib/api/client';
 
 function AuthSuccessContent() {
   const router = useRouter();
@@ -11,10 +12,27 @@ function AuthSuccessContent() {
   useEffect(() => {
     const token = searchParams.get('token');
     if (token) {
+      // Ensure account switching starts from a clean local session state.
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('scholar_profile');
+      localStorage.removeItem('ss_user');
+
       localStorage.setItem('auth_token', token);
-      router.push('/scholar/dashboard');
+      localStorage.setItem('token', token);
+
+      apiClient.get('/auth/me')
+        .then((res) => {
+          localStorage.setItem('scholar_profile', JSON.stringify(res.data));
+        })
+        .catch(() => {
+          // Continue to the dashboard even if the profile cache cannot be seeded.
+        })
+        .finally(() => {
+          router.push('/scholar/dashboard');
+        });
     } else {
-      router.push('/scholar/login');
+      router.push('/login');
     }
   }, [searchParams, router]);
 

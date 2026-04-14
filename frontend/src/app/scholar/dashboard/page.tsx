@@ -26,7 +26,7 @@ export default function DashboardPage() {
     const checkAuth = async () => {
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (!token) {
-        router.push('/scholar/login');
+        router.push('/login');
         return;
       }
 
@@ -35,12 +35,13 @@ export default function DashboardPage() {
       localStorage.setItem('auth_token', token);
 
       try {
-        // Fetch dashboard data using unified apiClient
-        const res = await apiClient.get('/courses');
-        setCourses(res.data || []);
-        
-        // Get user from ScholarSync /me endpoint (returns ss_account role)
-        const meRes = await apiClient.get('/me');
+        // Fetch dashboard data in parallel for faster initial load.
+        const [coursesRes, meRes] = await Promise.all([
+          apiClient.get('/courses'),
+          apiClient.get('/auth/me')
+        ]);
+
+        setCourses(coursesRes.data || []);
         setUser(meRes.data);
         // Cache profile to prevent role flicker on navigation
         localStorage.setItem('scholar_profile', JSON.stringify(meRes.data));

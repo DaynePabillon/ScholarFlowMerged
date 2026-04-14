@@ -15,67 +15,69 @@ function AuthCallbackContent() {
     const token = searchParams.get("token")
 
     if (token) {
+      // Ensure we never keep stale identity data while switching accounts.
+      localStorage.removeItem('token')
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user')
+      localStorage.removeItem('organizations')
+      localStorage.removeItem('scholar_profile')
+      localStorage.removeItem('ss_user')
+
       // 1. Store token for both SkyFlow and ScholarSync
       localStorage.setItem("token", token);
       localStorage.setItem("auth_token", token);
+      setStatus('resolving')
+      setMessage('Finding your workspace...')
 
-      // Show authenticating status for 1 second
-      setTimeout(() => {
-        setStatus('resolving')
-        setMessage('Finding your workspace...')
+      fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+        .then(res => {
+          if (!res.ok) {
+            throw new Error('Failed to fetch user data')
+          }
+          return res.json()
+        })
+        .then(data => {
+          const { organizations, onboarding_data, ...userData } = data
 
-        // Fetch user data after showing resolving status
-        setTimeout(() => {
-          fetch(`${API_URL}/api/auth/me`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          })
-            .then(res => {
-              if (!res.ok) {
-                throw new Error('Failed to fetch user data')
-              }
-              return res.json()
-            })
-            .then(data => {
-              const { organizations, onboarding_data, ...userData } = data
+          // 2. Store user data in formats expected by both modules
+          const skyflowUser = { ...userData, onboarding_data };
+          localStorage.setItem('user', JSON.stringify(skyflowUser))
+          localStorage.setItem('organizations', JSON.stringify(organizations || []))
+          localStorage.setItem('scholar_profile', JSON.stringify(data))
+          localStorage.setItem('ss_user', JSON.stringify(data)); // For ScholarSync compatibility if needed
 
-              // 2. Store user data in formats expected by both modules
-              const skyflowUser = { ...userData, onboarding_data };
-              localStorage.setItem('user', JSON.stringify(skyflowUser))
-              localStorage.setItem('organizations', JSON.stringify(organizations || []))
-              localStorage.setItem('ss_user', JSON.stringify(data)); // For ScholarSync compatibility if needed
+          // Store onboarding preferences for easy access
+          if (onboarding_data) {
+            localStorage.setItem('onboardingPreferences', JSON.stringify(onboarding_data))
+          }
 
-              // Store onboarding preferences for easy access
-              if (onboarding_data) {
-                localStorage.setItem('onboardingPreferences', JSON.stringify(onboarding_data))
-              }
+          setStatus('success')
+          setMessage('Welcome to SkyFlow!')
 
-              setStatus('success')
-              setMessage('Welcome to SkyFlow!')
+          const postLoginRedirect = localStorage.getItem('post_login_redirect') || '/'
+          localStorage.removeItem('post_login_redirect')
 
-              // Redirect to dashboard after 1.5 seconds
-              setTimeout(() => {
-                router.push("/")
-              }, 1500)
-            })
-            .catch(err => {
-              console.error('Error fetching user data:', err)
-              setStatus('error')
-              setMessage('Authentication failed')
+          router.push(postLoginRedirect)
+        })
+        .catch(err => {
+          console.error('Error fetching user data:', err)
+          setStatus('error')
+          setMessage('Authentication failed')
 
-              // Clear invalid token
-              localStorage.removeItem('token')
-              localStorage.removeItem('user')
-              localStorage.removeItem('organizations')
+          // Clear invalid token
+          localStorage.removeItem('token')
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('user')
+          localStorage.removeItem('organizations')
+          localStorage.removeItem('scholar_profile')
+          localStorage.removeItem('ss_user')
 
-              // Redirect to login after showing error
-              setTimeout(() => {
-                router.push("/login")
-              }, 2000)
-            })
-        }, 1000)
-      }, 1000)
+          router.push("/login")
+        })
     } else {
       router.push("/login")
     }

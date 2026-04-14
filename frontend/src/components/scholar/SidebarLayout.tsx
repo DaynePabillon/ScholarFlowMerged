@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
@@ -24,6 +24,18 @@ import { useTheme } from '@/contexts/scholar/ThemeContext';
 import apiClient from '@/lib/api/client';
 import BugReportModal from '@/components/reports/BugReportModal';
 
+const normalizeScholarRole = (value: unknown): string => {
+    const role = String(value || '').trim()
+    const lowerRole = role.toLowerCase()
+
+    if (lowerRole === 'admin') return 'Admin'
+    if (lowerRole === 'adviser' || lowerRole === 'advisers' || lowerRole === 'manager') return 'Advisers'
+    if (lowerRole === 'student') return 'Student'
+    if (lowerRole === 'member') return 'member'
+
+    return role
+}
+
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -31,10 +43,15 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     const [userRole, setUserRole] = useState('');
     const [userEmail, setUserEmail] = useState('');
     const [userName, setUserName] = useState('');
+    const [hasHydrated, setHasHydrated] = useState(false);
     const pathname = usePathname();
     const router = useRouter();
     const { toggleMode, setRole } = useTheme();
     const [showBugReport, setShowBugReport] = useState(false);
+
+    useEffect(() => {
+        setHasHydrated(true);
+    }, []);
 
     useEffect(() => {
         const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
@@ -47,7 +64,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 if (cachedProfile) {
                     try {
                         const cached = JSON.parse(cachedProfile);
-                        const cachedRole = String(cached.role || '');
+                                const cachedRole = String(cached.scholarsyncRole || cached.role || '');
                         setUserRole(cachedRole);
                         setIsAdmin(cachedRole === 'Admin');
                         setUserEmail(String(cached.email || decoded.email || ''));
@@ -68,7 +85,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 }
 
                 // Refresh profile from ScholarSync /me endpoint and cache it
-                apiClient.get('/me')
+                        apiClient.get('/auth/me')
                     .then((res) => {
                         const profile = res.data;
                         if (!profile) return;
@@ -76,7 +93,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         // Cache the ScholarSync profile to prevent flicker on next navigation
                         localStorage.setItem('scholar_profile', JSON.stringify(profile));
                         
-                        const refreshedRole = String(profile.role || decoded.role || '');
+                                const refreshedRole = String(profile.scholarsyncRole || profile.role || decoded.role || '');
                         
                         setUserRole(refreshedRole);
                         setIsAdmin(refreshedRole === 'Admin');
@@ -99,8 +116,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     const handleLogout = () => {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('scholar_profile');
-        router.push('/scholar/login');
+        router.push('/login');
     };
+
+    const displayRole = useMemo(() => {
+        if (!hasHydrated) return '';
+        return userRole || (isAdmin ? 'Admin' : 'Student');
+    }, [hasHydrated, userRole, isAdmin]);
 
     const normalizedRole = String(userRole || '').toLowerCase();
 
@@ -183,7 +205,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         <div className="hidden md:flex items-center gap-6">
                             <div className="flex flex-col items-end">
                                 <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{userName || userEmail.split('@')[0] || 'User'}</p>
-                                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{userRole || (isAdmin ? 'Admin' : 'Student')}</p>
+                                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{displayRole}</p>
                             </div>
                             <ThemeToggle />
                             <button 

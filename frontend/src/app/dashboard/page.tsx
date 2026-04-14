@@ -120,7 +120,7 @@ export default function Home() {
       // If no token at all, redirect
       if (!storedToken) {
         console.warn("No token found, redirecting to landing")
-        router.push("/landing")
+        router.push("/login")
         return
       }
 
@@ -154,7 +154,7 @@ export default function Home() {
         // Only redirect if it's a 401/403 (handled by apiClient interceptor) 
         // or if we have no local user data to fall back on
         if (!storedUser || error.response?.status === 401) {
-          router.push("/landing")
+          router.push("/login")
         }
       } finally {
         setIsLoading(false)
@@ -235,7 +235,7 @@ export default function Home() {
   }
 
   if (!user) {
-    router.push('/landing')
+    router.push('/login')
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>

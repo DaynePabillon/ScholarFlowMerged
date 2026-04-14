@@ -73,24 +73,36 @@ export class GoogleAuthService {
     try {
       const tokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour from now
 
-      const result = await query(
-        `INSERT INTO users (google_id, email, name, profile_picture, access_token, refresh_token, token_expiry, last_login)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-         ON CONFLICT (google_id) 
-         DO UPDATE SET 
-           email = EXCLUDED.email,
-           name = EXCLUDED.name,
-           profile_picture = EXCLUDED.profile_picture,
-           access_token = EXCLUDED.access_token,
-           refresh_token = COALESCE(EXCLUDED.refresh_token, users.refresh_token),
-           token_expiry = EXCLUDED.token_expiry,
-           last_login = NOW(),
-           updated_at = NOW()
+      // First try to update an existing account matched by Google ID OR email.
+      // This avoids callback failures when a user was pre-seeded by email before first OAuth login.
+      const updateResult = await query(
+        `UPDATE users
+         SET google_id = $1,
+             email = $2,
+             name = $3,
+             profile_picture = $4,
+             access_token = $5,
+             refresh_token = COALESCE($6, refresh_token),
+             token_expiry = $7,
+             last_login = NOW(),
+             updated_at = NOW()
+         WHERE google_id = $1 OR LOWER(email) = LOWER($2)
          RETURNING *`,
         [googleUser.id, googleUser.email, googleUser.name, googleUser.picture, accessToken, refreshToken, tokenExpiry]
       );
 
-      const user = result.rows[0];
+      let user = updateResult.rows[0];
+
+      if (!user) {
+        const insertResult = await query(
+          `INSERT INTO users (google_id, email, name, profile_picture, access_token, refresh_token, token_expiry, last_login)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+           RETURNING *`,
+          [googleUser.id, googleUser.email, googleUser.name, googleUser.picture, accessToken, refreshToken, tokenExpiry]
+        );
+
+        user = insertResult.rows[0];
+      }
 
       // Sync Google Access Token to ScholarSync account if it exists (ScholarSync Bridge)
       try {
