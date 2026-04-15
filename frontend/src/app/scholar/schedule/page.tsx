@@ -1,7 +1,7 @@
 "use client"
 
 import { API_URL } from '@/lib/api/client'
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   Calendar,
   Plus,
@@ -13,7 +13,7 @@ import {
   MoreVertical,
   ChevronDown,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import SidebarLayout from "@/components/scholar/SidebarLayout"
 
@@ -110,6 +110,8 @@ interface DeleteConfirmState {
 
 export default function SchedulePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const autoRecordHandledRef = useRef(false)
   const [user, setUser] = useState<any>(null)
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [courses, setCourses] = useState<any[]>([])
@@ -176,6 +178,12 @@ export default function SchedulePage() {
   const [isSavingConsultation, setIsSavingConsultation] = useState(false)
   const [consultationError, setConsultationError] = useState('')
   const [loadingFormButton, setLoadingFormButton] = useState<number | null>(null)
+
+  const autoOpenRecord = searchParams.get('openRecord') === '1'
+  const autoSlotId = Number(searchParams.get('slotId') || 0)
+  const autoGroupId = String(searchParams.get('groupId') || '').trim()
+  const autoGroupName = String(searchParams.get('groupName') || '').trim()
+  const autoCourseId = Number(searchParams.get('courseId') || 0)
 
   // Auth
   useEffect(() => {
@@ -745,6 +753,62 @@ export default function SchedulePage() {
     setShowConsultationForm(true)
   }
 
+  useEffect(() => {
+    if (!user?.id || !autoOpenRecord || autoRecordHandledRef.current) return
+    if (!Number.isFinite(autoSlotId) || autoSlotId <= 0) return
+
+    const openFromQuery = async () => {
+      autoRecordHandledRef.current = true
+
+      try {
+        const token = localStorage.getItem("auth_token")
+        const res = await fetch(`${API_URL}/api/consultation/bookings/slot/${autoSlotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        let bookings: Booking[] = []
+        if (res.ok) {
+          const data = await res.json()
+          bookings = Array.isArray(data.bookings) ? data.bookings : []
+          setSlotBookings(prev => ({ ...prev, [autoSlotId]: bookings }))
+        }
+
+        const slot = slots.find(s => s.slot_id === autoSlotId)
+        const matchedBooking = bookings.find((b) => {
+          const byId = autoGroupId && String(b.group_id || '').trim() === autoGroupId
+          const byName = autoGroupName && String(b.group_name || '').trim().toLowerCase() === autoGroupName.toLowerCase()
+          return byId || byName
+        })
+
+        const bookingToOpen: Booking = matchedBooking || {
+          booking_id: undefined,
+          consultation_id: null,
+          group_name: autoGroupName || 'Scheduled Group',
+          slot_date: slot?.slot_date || '',
+          slot_date_only: slot?.slot_date_only || String(slot?.slot_date || '').slice(0, 10),
+          start_time: slot?.start_time || '',
+          status: 'CONFIRMED',
+          group_id: autoGroupId || 0,
+          slot_id: autoSlotId,
+          course_id: Number.isFinite(autoCourseId) && autoCourseId > 0 ? autoCourseId : slot?.course_id,
+        }
+
+        if (!bookingToOpen.group_name || !bookingToOpen.slot_id) {
+          setConsultationError('Could not resolve consultation booking details.')
+          return
+        }
+
+        await openConsultationForm(bookingToOpen)
+      } catch (err) {
+        console.error('Failed to auto-open consultation form from query:', err)
+      } finally {
+        router.replace('/scholar/schedule')
+      }
+    }
+
+    openFromQuery()
+  }, [user?.id, autoOpenRecord, autoSlotId, autoGroupId, autoGroupName, autoCourseId, slots])
+
   const handleSaveConsultation = async () => {
     if (isSavingConsultation || !currentBooking) return
 
@@ -1123,7 +1187,7 @@ export default function SchedulePage() {
 
         {/* Create Slot Form */}
         {showCreateForm && (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 p-6 mb-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Create Consultation Slot</h2>
 
             {formError && (
@@ -1366,7 +1430,7 @@ export default function SchedulePage() {
                   {previewSlots.map((slot, idx) => (
                     <div 
                       key={idx} 
-                      className="flex items-center gap-4 bg-gray-50/50 p-3 rounded-xl border border-gray-100 group hover:border-[#1a237e]/20 transition-all"
+                      className="flex items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100 group hover:border-[#1a237e]/20 transition-all"
                     >
                       <div className="w-24">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Date</span>
@@ -1882,32 +1946,20 @@ export default function SchedulePage() {
                                 <p className="text-xs text-gray-600">{isCompleted ? 'COMPLETED' : booking.status}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                setExpandedSlot(null)
-                                setLoadingFormButton(booking.booking_id || slot.slot_id)
-                                try {
-                                  await openConsultationForm({
-                                    ...booking,
-                                    slot_date: booking.slot_date || slot.slot_date,
-                                    slot_date_only: booking.slot_date_only || slot.slot_date_only || String(slot.slot_date || '').slice(0, 10),
-                                  })
-                                } finally {
-                                  setLoadingFormButton(null)
-                                }
-                              }}
-                              disabled={isCompleted || loadingFormButton === (booking.booking_id || slot.slot_id)}
-                              className={`w-full px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                                isCompleted ? 'bg-gray-300 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
-                            >
-                              {loadingFormButton === (booking.booking_id || slot.slot_id)
-                                ? 'Loading...'
-                                : isCompleted
-                                  ? 'Completed'
-                                  : 'Consultation Record'}
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/scholar/adviser/consultation-prep/${booking.slot_id || slot.slot_id}`)
+                                }}
+                                disabled={isCompleted}
+                                className={`w-full px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                                  isCompleted ? 'bg-gray-300 text-gray-700' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                }`}
+                              >
+                                {isCompleted ? 'Completed' : 'Prepare'}
+                              </button>
+                            </div>
                           </div>
                         )})
                       ) : slot.slot_type === 'SPECIFIC_GROUP' && slot.reserved_group_name ? (
@@ -1915,29 +1967,13 @@ export default function SchedulePage() {
                           <p className="text-sm font-medium text-blue-900 mb-2">Reserved: {slot.reserved_group_name}</p>
                           <p className="text-xs text-blue-700 mb-3">Ready for consultation record.</p>
                           <button
-                            onClick={async (e) => {
+                            onClick={(e) => {
                               e.stopPropagation()
-                              setExpandedSlot(null)
-                              setLoadingFormButton(slot.slot_id)
-                              try {
-                                await openConsultationForm({
-                                  booking_id: undefined,
-                                  group_name: slot.reserved_group_name || 'Reserved Group',
-                                  slot_date: slot.slot_date,
-                                  start_time: slot.start_time,
-                                  status: 'CONFIRMED',
-                                  group_id: slot.allowed_group_id || 0,
-                                  slot_id: slot.slot_id,
-                                  course_id: slot.course_id,
-                                })
-                              } finally {
-                                setLoadingFormButton(null)
-                              }
+                              router.push(`/scholar/adviser/consultation-prep/${slot.slot_id}`)
                             }}
-                            disabled={loadingFormButton === slot.slot_id}
-                            className="w-full px-3 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="w-full px-3 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold hover:bg-amber-200 transition-colors"
                           >
-                            {loadingFormButton === slot.slot_id ? 'Loading...' : 'Consultation Record'}
+                            Prepare
                           </button>
                         </div>
                       ) : (

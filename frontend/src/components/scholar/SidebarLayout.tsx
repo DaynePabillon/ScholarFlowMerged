@@ -16,7 +16,9 @@ import {
     Shield,
     LayoutDashboard,
     RefreshCw,
-    Bug
+    Bug,
+    ClipboardList,
+    AlertTriangle
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import ThemeToggle from './shared/ThemeToggle';
@@ -29,7 +31,7 @@ const normalizeScholarRole = (value: unknown): string => {
     const lowerRole = role.toLowerCase()
 
     if (lowerRole === 'admin') return 'Admin'
-    if (lowerRole === 'adviser' || lowerRole === 'advisers' || lowerRole === 'manager') return 'Advisers'
+    if (lowerRole === 'adviser' || lowerRole === 'advisers' || lowerRole === 'manager') return 'Adviser'
     if (lowerRole === 'student') return 'Student'
     if (lowerRole === 'member') return 'member'
 
@@ -125,15 +127,45 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     }, [hasHydrated, userRole, isAdmin]);
 
     const normalizedRole = String(userRole || '').toLowerCase();
+    const isAdviser = normalizedRole === 'adviser' || normalizedRole === 'advisers' || normalizedRole === 'manager';
+    const isStudent = normalizedRole === 'student' || normalizedRole === 'member';
 
-    const navItems = [
-        { href: '/', label: 'Portal', icon: LayoutDashboard },
+    const portalItem = { href: '/', label: 'Portal Home', icon: LayoutDashboard };
+
+    const dashboardItems = [
         { href: '/scholar/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    ];
+
+    const courseItems = [
         { href: '/scholar/courses', label: 'Courses', icon: FolderKanban },
+    ];
+
+    const scheduleItems = [
+        ...(normalizedRole === 'admin' || isAdviser ? [{ href: '/scholar/schedule', label: 'My Schedule', icon: Calendar }] : []),
+        ...(isStudent ? [{ href: '/scholar/booking', label: 'Consultation Schedule', icon: Calendar }] : []),
+    ];
+
+    const googleItems = [
         { href: '/scholar/calendar', label: 'Calendar', icon: Calendar },
         ...(userRole === 'Admin' ? [{ href: '/scholar/workspace-sync', label: 'Workspace Sync', icon: RefreshCw }] : []),
-        ...(normalizedRole === 'admin' || normalizedRole === 'adviser' || normalizedRole === 'advisers' || normalizedRole === 'manager' ? [{ href: '/scholar/schedule', label: 'My Schedule', icon: Calendar }] : []),
-        ...(userRole === 'Student' || userRole === 'member' ? [{ href: '/scholar/booking', label: 'Course Consultation', icon: Calendar }] : []),
+    ];
+
+    const academicItems = [
+        ...dashboardItems,
+        ...courseItems,
+        ...scheduleItems,
+    ];
+
+    const navSections = [
+        { title: 'Academic', items: academicItems },
+        { title: 'Google Tools', items: googleItems },
+    ].filter((section) => section.items.length > 0);
+
+    const adminPanelItems = [
+        { href: '/scholar/admin/accounts', label: 'Accounts', icon: Shield },
+        { href: '/scholar/admin/data-integrity', label: 'Data Integrity', icon: AlertTriangle },
+        { href: '/scholar/admin/adviser-availability', label: 'Adviser Availability', icon: Users },
+        { href: '/scholar/admin/semester-readiness', label: 'Semester Readiness', icon: ClipboardList },
     ];
 
     const isActive = (path: string) => pathname === path;
@@ -235,31 +267,77 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
                         {/* Nav Items */}
                         <nav className="space-y-3">
-                            {navItems.map((item) => (
-                                isSidebarOpen ? (
-                                    <NavLink key={item.href} {...item} />
-                                ) : (
-                                    <Link
-                                        key={item.href}
-                                        href={item.href}
-                                        className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
-                                        style={{
-                                            background: isActive(item.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-                                            color: isActive(item.href) ? '#ffffff' : 'var(--color-text)'
-                                        }}
-                                        title={item.label}
-                                    >
-                                        <item.icon className="w-5 h-5" />
-                                    </Link>
-                                )
+                            {isSidebarOpen ? (
+                                <NavLink {...portalItem} />
+                            ) : (
+                                <Link
+                                    href={portalItem.href}
+                                    className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
+                                    style={{
+                                        background: isActive(portalItem.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
+                                        color: isActive(portalItem.href) ? '#ffffff' : 'var(--color-text)'
+                                    }}
+                                    title={portalItem.label}
+                                >
+                                    <portalItem.icon className="w-5 h-5" />
+                                </Link>
+                            )}
+
+                            {navSections.map((section, sectionIndex) => (
+                                <div key={`desktop-section-${sectionIndex}`} className="pt-3 mt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                                    {isSidebarOpen && (
+                                        <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2 px-4" style={{ color: 'var(--color-textSecondary)' }}>
+                                            {section.title}
+                                        </h3>
+                                    )}
+                                    {section.items.map((item) => (
+                                        isSidebarOpen ? (
+                                            <NavLink key={item.href} {...item} />
+                                        ) : (
+                                            <Link
+                                                key={item.href}
+                                                href={item.href}
+                                                className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
+                                                style={{
+                                                    background: isActive(item.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
+                                                    color: isActive(item.href) ? '#ffffff' : 'var(--color-text)'
+                                                }}
+                                                title={item.label}
+                                            >
+                                                <item.icon className="w-5 h-5" />
+                                            </Link>
+                                        )
+                                    ))}
+                                </div>
                             ))}
                         </nav>
 
                         {/* Admin Section */}
-                        {isAdmin && isSidebarOpen && (
+                        {isAdmin && (
                             <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
-                                <h2 className="text-[10px] font-bold uppercase tracking-widest mb-4 px-4" style={{ color: 'var(--color-textSecondary)' }}>Admin Panel</h2>
-                                <NavLink href="/scholar/admin/accounts" label="Accounts" icon={Shield} />
+                                {isSidebarOpen && (
+                                    <h2 className="text-[10px] font-bold uppercase tracking-widest mb-4 px-4" style={{ color: 'var(--color-textSecondary)' }}>
+                                        Admin Panel
+                                    </h2>
+                                )}
+                                {adminPanelItems.map((item) => (
+                                    isSidebarOpen ? (
+                                        <NavLink key={item.href} {...item} />
+                                    ) : (
+                                        <Link
+                                            key={item.href}
+                                            href={item.href}
+                                            className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
+                                            style={{
+                                                background: isActive(item.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
+                                                color: isActive(item.href) ? '#ffffff' : 'var(--color-text)'
+                                            }}
+                                            title={item.label}
+                                        >
+                                            <item.icon className="w-5 h-5" />
+                                        </Link>
+                                    )
+                                ))}
                             </div>
                         )}
 
@@ -281,13 +359,29 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                             </div>
 
                             <nav className="space-y-3 flex-1">
-                                {navItems.map((item) => (
-                                    <NavLink key={item.href} {...item} />
+                                <div>
+                                    <NavLink {...portalItem} />
+                                </div>
+
+                                {navSections.map((section, sectionIndex) => (
+                                    <div key={`mobile-section-${sectionIndex}`} className="pt-3 mt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+                                        <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2 px-4" style={{ color: 'var(--color-textSecondary)' }}>
+                                            {section.title}
+                                        </h3>
+                                        {section.items.map((item) => (
+                                            <NavLink key={item.href} {...item} />
+                                        ))}
+                                    </div>
                                 ))}
                                 
                                 {isAdmin && (
                                     <div className="pt-6 mt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
-                                        <NavLink href="/scholar/admin/accounts" label="Accounts" icon={Shield} />
+                                        <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2 px-4" style={{ color: 'var(--color-textSecondary)' }}>
+                                            Admin Panel
+                                        </h3>
+                                        {adminPanelItems.map((item) => (
+                                            <NavLink key={item.href} {...item} />
+                                        ))}
                                     </div>
                                 )}
                             </nav>

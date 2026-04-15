@@ -98,6 +98,22 @@ const normalizeSlotDate = (raw: any): string => {
   return '';
 };
 
+const inferSavedFollowUpStatus = (concernsValue: unknown, actionValue: unknown): 'overdue' | 'open' | 'resolved' => {
+  const concern = String(concernsValue || '').trim().toLowerCase();
+  const action = String(actionValue || '').trim().toLowerCase();
+  const hasFollowUpContent = concern.length > 0 || action.length > 0;
+
+  if (!hasFollowUpContent) {
+    return 'resolved';
+  }
+
+  if (concern.includes('blocker') || concern.includes('risk')) {
+    return 'overdue';
+  }
+
+  return 'open';
+};
+
 const resolveStudentAssignedAdvisers = async (
   courseId: number,
   studentEmail: string,
@@ -687,7 +703,7 @@ router.delete('/slots/day/:date', authenticate, resolveAccountId, async (req, re
     const requesterRole = String(user?.role || '').toLowerCase();
     const canDeleteDay = requesterRole === 'admin' || requesterRole === 'adviser' || requesterRole === 'advisers';
     if (!canDeleteDay) {
-      return res.status(403).json({ error: 'Only advisers/admins can delete day consultation slots.' });
+      return res.status(403).json({ error: 'Only adviser/admins can delete day consultation slots.' });
     }
 
     const { rows: daySlots } = await pool.query(
@@ -1154,7 +1170,7 @@ router.post('/bookings', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Your group already booked this slot.' });
     }
 
-    const weeklyOrSameDayBooking = await client.query(
+    const sameDayBooking = await client.query(
       `SELECT b.booking_id,
               s_existing.slot_date::date as booked_date,
               s_target.slot_date::date as target_date
@@ -1169,24 +1185,17 @@ router.post('/bookings', authenticate, async (req, res) => {
          AND b.status = 'BOOKED'
          AND (
            s_existing.slot_date::date = s_target.slot_date::date
-           OR date_trunc('week', s_existing.slot_date)::date = date_trunc('week', s_target.slot_date)::date
          )
        LIMIT 1`,
       [numericGroupId, normalizedGroupName, bookerEmail, slotId]
     );
 
-    if (weeklyOrSameDayBooking.rows.length > 0) {
-      const existingBookedDate = String(weeklyOrSameDayBooking.rows[0].booked_date || '').slice(0, 10);
-      const targetBookedDate = String(weeklyOrSameDayBooking.rows[0].target_date || '').slice(0, 10);
-      if (existingBookedDate !== '' && targetBookedDate !== '' && existingBookedDate === targetBookedDate) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Your group already has a booked consultation on this day.' });
-      }
+    if (sameDayBooking.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Your group already has a booked consultation for this week.' });
+      return res.status(400).json({ error: 'Your group already has a booked consultation on this day.' });
     }
 
-    // Also block rebooking when a consultation record already exists this day/week,
+    // Also block rebooking when a consultation record already exists on this day,
     // even if its original slot/booking row was deleted later.
     const consultationHistoryCheck = await client.query(
       `SELECT
@@ -1211,12 +1220,6 @@ router.post('/bookings', authenticate, async (req, res) => {
                ELSE NULL
              END
            ) = $2::date
-           OR date_trunc('week', (
-             CASE
-               WHEN TRIM(COALESCE(c."conDate", '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(c."conDate")::date
-               ELSE NULL
-             END
-           ))::date = date_trunc('week', $2::date)::date
          )
        LIMIT 1`,
       [normalizedGroupName, slotDate]
@@ -1224,12 +1227,8 @@ router.post('/bookings', authenticate, async (req, res) => {
 
     if (consultationHistoryCheck.rows.length > 0) {
       const consultationDate = String(consultationHistoryCheck.rows[0].consultation_date || '').slice(0, 10);
-      if (consultationDate === slotDate) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Your group already completed a consultation record on this day.' });
-      }
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Your group already completed a consultation record for this week.' });
+      return res.status(400).json({ error: 'Your group already completed a consultation record on this day.' });
     }
 
     const currentCountRes = await client.query(
@@ -1286,7 +1285,7 @@ router.post('/feedback', authenticate, async (req, res) => {
 
     const canSubmit = effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin';
     if (!canSubmit) {
-      return res.status(403).json({ error: 'Only advisers/admins can submit consultation feedback.' });
+      return res.status(403).json({ error: 'Only adviser/admins can submit consultation feedback.' });
     }
 
     const {
@@ -1348,6 +1347,8 @@ router.post('/feedback', authenticate, async (req, res) => {
       [Number(slot_id), canonicalGroupName]
     );
 
+    const followUpStatus = inferSavedFollowUpStatus(conConcerns, conAction);
+
     let consultation: any;
     if (existingRes.rows.length > 0) {
       const conID = Number(existingRes.rows[0].conID);
@@ -1364,10 +1365,11 @@ router.post('/feedback', authenticate, async (req, res) => {
              adviser_notes = $9,
              attendance_data = COALESCE($10::jsonb, '{}'::jsonb),
              participation_data = COALESCE($11::jsonb, '{}'::jsonb),
+             follow_up_status = $12,
              status = 'SUBMITTED',
              submitted_at = NOW(),
              updated_at = NOW()
-         WHERE "conID" = $12
+           WHERE "conID" = $13
          RETURNING *`,
         [
           Number(booking.course_id),
@@ -1381,6 +1383,7 @@ router.post('/feedback', authenticate, async (req, res) => {
           String(adviser_notes || ''),
           attendance_data ?? {},
           participation_data ?? {},
+          followUpStatus,
           conID,
         ]
       );
@@ -1388,9 +1391,9 @@ router.post('/feedback', authenticate, async (req, res) => {
     } else {
       const insertRes = await client.query(
         `INSERT INTO ss_consultation
-          ("courseID", "groupName", slot_id, "conDate", "conMil", "conSum", "conAction", "conConcerns", adviser_notes, attendance_data, participation_data, status, submitted_at)
+          ("courseID", "groupName", slot_id, "conDate", "conMil", "conSum", "conAction", "conConcerns", adviser_notes, attendance_data, participation_data, follow_up_status, status, submitted_at)
          VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::jsonb, '{}'::jsonb), COALESCE($11::jsonb, '{}'::jsonb), 'SUBMITTED', NOW())
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::jsonb, '{}'::jsonb), COALESCE($11::jsonb, '{}'::jsonb), $12, 'SUBMITTED', NOW())
          RETURNING *`,
         [
           Number(booking.course_id),
@@ -1404,6 +1407,7 @@ router.post('/feedback', authenticate, async (req, res) => {
           String(adviser_notes || ''),
           attendance_data ?? {},
           participation_data ?? {},
+          followUpStatus,
         ]
       );
       consultation = insertRes.rows[0];
@@ -1487,6 +1491,62 @@ router.post('/feedback', authenticate, async (req, res) => {
     await client.query('ROLLBACK');
     console.error('Error saving consultation feedback:', error);
     return res.status(500).json({ error: error?.message || 'Failed to save consultation feedback.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.put('/followups/:conID/status', authenticate, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const user: any = req.user;
+    const role = String(user?.role || '').trim().toLowerCase();
+    let effectiveRole = role;
+
+    if (!(effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin') && user?.email) {
+      const { rows: accountRoleRows } = await client.query(
+        'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+        [String(user.email)]
+      );
+      if (accountRoleRows.length > 0) {
+        effectiveRole = String(accountRoleRows[0].accountRole || '').trim().toLowerCase();
+      }
+    }
+
+    const canUpdate = effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin';
+    if (!canUpdate) {
+      return res.status(403).json({ error: 'Only adviser/admins can update follow-up status.' });
+    }
+
+    const conID = Number(req.params.conID);
+    const status = String(req.body?.status || '').trim().toLowerCase();
+    const validStatuses = ['overdue', 'open', 'resolved'];
+
+    if (!Number.isFinite(conID) || conID <= 0) {
+      return res.status(400).json({ error: 'Invalid consultation id.' });
+    }
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid follow-up status.' });
+    }
+
+    const { rows } = await client.query(
+      `UPDATE ss_consultation
+       SET follow_up_status = $1,
+           updated_at = NOW()
+       WHERE "conID" = $2
+       RETURNING "conID", "groupName", follow_up_status`,
+      [status, conID]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Consultation not found.' });
+    }
+
+    return res.json({ success: true, consultation: rows[0] });
+  } catch (error: any) {
+    console.error('Error updating follow-up status:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to update follow-up status.' });
   } finally {
     client.release();
   }

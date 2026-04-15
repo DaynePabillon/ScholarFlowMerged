@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/components/scholar/SidebarLayout';
 import apiClient from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
@@ -73,15 +73,15 @@ type Comment = {
 const sanitizeAIContent = (text: string) =>
     (text || '').replace(/[\*#]+/g, '').replace(/\n{3,}/g, '\n\n').trim();
 
-const normalizeScholarRole = (value: unknown): 'Admin' | 'Advisers' | 'Student' | '' => {
+const normalizeScholarRole = (value: unknown): 'Admin' | 'Adviser' | 'Student' | '' => {
     const role = String(value || '').trim().toLowerCase();
     if (role === 'admin') return 'Admin';
-    if (role === 'adviser' || role === 'advisers') return 'Advisers';
+        if (role === 'adviser' || role === 'advisers') return 'Adviser';
     if (role === 'student') return 'Student';
     return '';
 };
 
-const getEffectiveScholarRole = (user: any): 'Admin' | 'Advisers' | 'Student' | '' => {
+const getEffectiveScholarRole = (user: any): 'Admin' | 'Adviser' | 'Student' | '' => {
     return normalizeScholarRole(user?.scholarsyncRole || user?.role || user?.accountRole);
 };
 
@@ -115,7 +115,11 @@ type MemberJournal = {
 export default function CourseDetailsPage() {
     const params = useParams();
     const router = useRouter();
+    const searchParams = useSearchParams();
     const courseId = params.id as string;
+    const requestedGroupId = searchParams.get('groupId') || searchParams.get('group');
+    const requestedTab = searchParams.get('tab');
+    const suppressAutoOpenRef = useRef(false);
 
     const [course, setCourse] = useState<Course | null>(null);
     const [groups, setGroups] = useState<Group[]>([]);
@@ -211,6 +215,18 @@ export default function CourseDetailsPage() {
         fetchGroups();
     }, [courseId, router]);
 
+    useEffect(() => {
+        if (!requestedGroupId) {
+            suppressAutoOpenRef.current = false;
+            return;
+        }
+        if (suppressAutoOpenRef.current || loading || groups.length === 0) return;
+        const targetGroup = groups.find((group) => String(group.id) === String(requestedGroupId));
+        if (!targetGroup) return;
+        if (selectedGroup?.id === targetGroup.id) return;
+        openGroup(targetGroup, requestedTab === 'consultations' ? 'consultations' : 'discussion');
+    }, [requestedGroupId, requestedTab, loading, groups, selectedGroup?.id]);
+
     const fetchCourse = async () => {
         try {
             const res = await apiClient.get(`/courses/${courseId}`);
@@ -226,17 +242,18 @@ export default function CourseDetailsPage() {
         finally { setLoading(false); }
     };
 
-    const openGroup = (group: Group) => {
+    const openGroup = (group: Group, initialTab: 'discussion' | 'journals' | 'consultations' | 'ai' = 'discussion') => {
         if (!group || !group.id) {
             console.error('Invalid group data:', group);
             return;
         }
+        suppressAutoOpenRef.current = false;
         setSelectedGroup(group);
         setModalGrade(group.grade || '');
         setModalDates(Array.isArray(group.consultation_dates) ? group.consultation_dates : []);
         setNewComment('');
         setModalNewDate('');
-        setActiveModalTab('discussion');
+        setActiveModalTab(initialTab);
         setJournals([]);
         setConsultationLogs([]);
         fetchComments(group.id);
@@ -247,9 +264,11 @@ export default function CourseDetailsPage() {
         fetchMemberJournals(group.id);
         setAiResult(null);
         setAiError(null);
+        router.replace(`/scholar/courses/${courseId}?groupId=${encodeURIComponent(group.id)}`);
     };
 
     const closeModal = () => {
+        suppressAutoOpenRef.current = true;
         setSelectedGroup(null);
         setComments([]);
         setJournals([]);
@@ -263,6 +282,7 @@ export default function CourseDetailsPage() {
         setAiResult(null);
         setAiError(null);
         resetJournalForm();
+        router.replace(`/scholar/courses/${courseId}`);
     };
 
     const resetJournalForm = () => {
@@ -846,7 +866,7 @@ export default function CourseDetailsPage() {
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="col-span-8 p-8 flex flex-col bg-gray-50/30">
+                                    <div className="col-span-8 p-8 flex flex-col bg-gray-50">
                                         <div className="flex items-center gap-2 mb-6">
                                             <MessageSquare className="w-4 h-4 text-green-500" />
                                             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Activity & Feedback</h3>

@@ -554,7 +554,7 @@ export default function CalendarPage() {
           <div className="lg:col-span-2 space-y-4">
 
             {/* Navigation Bar */}
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
               {/* View Switcher */}
               <div className="flex bg-gray-100/80 rounded-xl p-1 gap-1">
                 {(["month", "week", "day"] as ViewMode[]).map((v) => (
@@ -591,7 +591,7 @@ export default function CalendarPage() {
 
             {/* ── MONTH VIEW ── */}
             {viewMode === "month" && (
-              <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 {/* Day headers */}
                 <div className="grid grid-cols-7 border-b border-gray-100">
                   {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
@@ -604,7 +604,7 @@ export default function CalendarPage() {
                 {/* Day cells */}
                 <div className="grid grid-cols-7">
                   {Array.from({ length: firstDay }).map((_, i) => (
-                    <div key={`empty-${i}`} className="min-h-[90px] border-b border-r border-gray-100 bg-gray-50/50" />
+                    <div key={`empty-${i}`} className="min-h-[90px] border-b border-r border-gray-100 bg-gray-50" />
                   ))}
                   {Array.from({ length: daysInMonth }).map((_, i) => {
                     const day = i + 1
@@ -650,7 +650,7 @@ export default function CalendarPage() {
 
             {/* ── WEEK VIEW ── */}
             {viewMode === "week" && (
-              <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 {/* Week Day Headers */}
                 <div className="grid grid-cols-8 border-b border-gray-100">
                   <div className="py-3" />
@@ -722,7 +722,7 @@ export default function CalendarPage() {
 
             {/* ── DAY VIEW ── */}
             {viewMode === "day" && (
-              <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="border-b border-gray-100 px-5 py-3 flex items-center justify-between">
                   <div>
                     <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -830,7 +830,7 @@ export default function CalendarPage() {
 
             {/* Selected Event Detail */}
             {selectedEvent ? (
-              <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 {/* Color bar */}
                 <div className={`h-1.5 w-full ${getEventColors(selectedEvent).dot}`} />
                 <div className="p-5">
@@ -909,7 +909,7 @@ export default function CalendarPage() {
               </div>
             ) : (
               /* Upcoming Events List */
-              <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 p-5">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
                 <h2 className="text-sm font-bold text-gray-800 mb-4">Upcoming Events</h2>
                 {loading ? (
                   <div className="flex justify-center py-8">

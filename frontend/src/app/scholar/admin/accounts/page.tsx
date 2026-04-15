@@ -113,7 +113,7 @@ export default function AdminAccountsPage() {
                 <div className="glass-card overflow-hidden">
                     <table className="w-full text-left">
                         <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50/50">
+                            <tr className="border-b border-gray-200 bg-gray-50">
                                 <th className="p-4 font-semibold text-gray-700 text-sm">User</th>
                                 <th className="p-4 font-semibold text-gray-700 text-sm">Email</th>
                                 <th className="p-4 font-semibold text-gray-700 text-sm">Role</th>
@@ -122,7 +122,7 @@ export default function AdminAccountsPage() {
                         </thead>
                         <tbody>
                             {accounts.map((acc, idx) => (
-                                <tr key={acc.account_id} className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
+                                <tr key={acc.account_id} className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? '' : 'bg-gray-50'}`}>
                                     <td className="p-4">
                                         <div className="flex items-center gap-3">
                                             <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
@@ -139,7 +139,7 @@ export default function AdminAccountsPage() {
                                             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         >
                                             <option value="Student">Student</option>
-                                            <option value="Advisers">Advisers</option>
+                                            <option value="Adviser">Adviser</option>
                                             <option value="Admin">Admin</option>
                                         </select>
                                     </td>

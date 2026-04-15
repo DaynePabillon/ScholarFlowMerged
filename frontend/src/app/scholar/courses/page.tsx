@@ -128,7 +128,7 @@ export default function CoursesPage() {
 
     const isAdmin = user?.role === 'Admin';
     const isStudent = user?.role === 'Student';
-    const isAdviser = user?.role === 'Adviser' || user?.role === 'Advisers';
+    const isAdviser = String(user?.role || '').toLowerCase() === 'adviser';
 
     return (
         <SidebarLayout>
@@ -199,7 +199,7 @@ export default function CoursesPage() {
                                 return acc;
                             }, {} as Record<string, Course[]>)
                         ).map(([code, coursesInCode]) => (
-                            <div key={code} className="bg-white/50 border border-gray-100 rounded-[20px] p-6 shadow-sm">
+                            <div key={code} className="bg-white border border-gray-100 rounded-[20px] p-6 shadow-sm">
                                 <h2 className="text-xl font-bold text-gray-800 mb-5 flex items-center gap-2">
                                     <BookOpen className="w-5 h-5 text-blue-500" />
                                     {code} Teams

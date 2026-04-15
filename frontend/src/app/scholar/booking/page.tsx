@@ -401,7 +401,7 @@ export default function BookingPage() {
 
         {/* Group Info */}
         {userGroup && (
-          <div className="bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50 p-4 mb-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
             <div className="flex items-center gap-3">
               <Users className="w-5 h-5 text-blue-600" />
               <div>
@@ -435,14 +435,14 @@ export default function BookingPage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
           </div>
         ) : groupedSlots.length === 0 ? (
-          <div className="text-center py-12 bg-white/70 backdrop-blur-xl rounded-xl border border-white/50">
+          <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <p className="text-gray-500">No available consultation slots at this time</p>
           </div>
         ) : (
           <div className="space-y-3">
             {groupedSlots.map((dayGroup) => (
-              <div key={dayGroup.date} className="bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/50">
+              <div key={dayGroup.date} className="bg-white rounded-xl shadow-sm border border-gray-200">
                 <button
                   type="button"
                   onClick={() => setExpandedDate(expandedDate === dayGroup.date ? null : dayGroup.date)}

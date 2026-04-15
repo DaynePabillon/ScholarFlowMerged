@@ -222,7 +222,7 @@ export default function WorkspaceSyncPage() {
         return new Date(str).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     };
 
-    const canManage = (user as any)?.role === 'Admin' || (user as any)?.role === 'Advisers';
+    const canManage = (user as any)?.role === 'Admin' || (user as any)?.role === 'Adviser';
 
     const filteredSheets = driveSheets.filter(s =>
         s.name.toLowerCase().includes(searchQuery.toLowerCase())
