@@ -16,8 +16,9 @@ function RootPortalContent() {
     const checkAuth = async () => {
       // FIRST: check for backend error param — bail out before any redirect
       const err = searchParams.get('error')
+      const detail = searchParams.get('detail')
       if (err) {
-        setBackendError(err)
+        setBackendError(err + (detail ? ` — ${decodeURIComponent(detail)}` : ''))
         setIsLoading(false)
         return
       }
