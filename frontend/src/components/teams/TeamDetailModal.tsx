@@ -234,7 +234,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                         <div className="space-y-6">
                             <div className="flex items-center gap-4">
                                 <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200 dark:to-white/5" />
-                                <span className="text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-[0.2em]">Team Info</span>
+                                <span className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-[0.2em]">Team Info</span>
                                 <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200 dark:to-white/5" />
                             </div>
                             {team.adviser_name && (
@@ -259,7 +259,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                         <div className="space-y-6">
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-4 flex-1">
-                                    <span className="text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-[0.2em]">Members</span>
+                                    <span className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-[0.2em]">Members</span>
                                     <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-white/5 to-transparent" />
                                 </div>
                                 {canManage && (
@@ -338,7 +338,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                         {/* Discussion section */}
                         <div className="mt-auto space-y-6">
                             <div className="flex items-center gap-4">
-                                <span className="text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-[0.2em]">Discussion</span>
+                                <span className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-[0.2em]">Discussion</span>
                                 <div className="h-px flex-1 bg-gradient-to-r from-gray-200 dark:from-white/5 to-transparent" />
                             </div>
                             <div className="max-h-[240px] overflow-y-auto pr-2 flex flex-col gap-4 scrollbar-hide">
@@ -361,7 +361,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                                         value={newComment}
                                         onChange={(e) => setNewComment(e.target.value)}
                                         onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                                        className="flex-1 px-4 py-2 bg-transparent text-gray-900 dark:text-white text-xs font-bold outline-none placeholder:text-gray-400 dark:placeholder:text-slate-700"
+                                        className="flex-1 px-4 py-2 bg-transparent text-gray-900 dark:text-white text-xs font-bold outline-none placeholder:text-gray-400 dark:placeholder:text-slate-500"
                                     />
                                     <button onClick={handleAddComment} className="p-3 bg-blue-600 text-white rounded-xl shadow-lg hover:scale-110 active:scale-90 transition-all">
                                         <Send size={16} />
@@ -416,7 +416,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                                 />
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest ml-1">Deadline</label>
+                                        <label className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest ml-1">Deadline</label>
                                         <input
                                             type="date"
                                             value={newCheckpoint.due_date}
@@ -425,7 +425,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest ml-1">Assigned Member</label>
+                                        <label className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest ml-1">Assigned Member</label>
                                         <select
                                             value={newCheckpoint.member_id}
                                             onChange={(e) => setNewCheckpoint({ ...newCheckpoint, member_id: e.target.value })}

@@ -11,16 +11,10 @@ const CloudShape = ({ className }: { className?: string }) => (
 )
 
 export default function LoginPage() {
-  const handleGoogleLogin = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/auth/google`)
-      const data = await response.json()
-      // Smooth redirect to Google OAuth
-      window.location.href = data.authUrl
-    } catch (error) {
-      console.error('Failed to initiate Google login:', error)
-      alert('Failed to connect to authentication server. Please try again.')
-    }
+  const handleGoogleLogin = () => {
+    // The backend /api/auth/google endpoint issues a 302 redirect directly
+    // to Google OAuth — we must navigate the browser there, not fetch JSON.
+    window.location.href = `${API_URL}/api/auth/google`
   }
 
   const features = [

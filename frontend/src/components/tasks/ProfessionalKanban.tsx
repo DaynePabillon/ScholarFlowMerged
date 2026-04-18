@@ -179,7 +179,8 @@ export default function ProfessionalKanban({
         onDragLeave, 
         onDrop, 
         onAddTask, 
-        renderTask 
+        renderTask,
+        role: columnRole 
     }: any) => (
         <div 
             onDragOver={onDragOver}
@@ -201,15 +202,17 @@ export default function ProfessionalKanban({
                 )}
             </div>
             
-            <button
-                onClick={() => onAddTask?.(col.id)}
-                className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all duration-300"
-            >
-                <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
-                    <Plus className="w-3 h-3" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
-            </button>
+            {columnRole !== 'student' && (
+                <button
+                    onClick={() => onAddTask?.(col.id)}
+                    className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all duration-300"
+                >
+                    <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
+                        <Plus className="w-3 h-3" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
+                </button>
+            )}
         </div>
     ));
 
@@ -282,6 +285,7 @@ export default function ProfessionalKanban({
                                             onDrop={(e: any) => handleDrop(e, col.id)}
                                             onAddTask={onAddTask}
                                             renderTask={renderTask}
+                                            role={role}
                                         />
                                     ))}
                                 </div>

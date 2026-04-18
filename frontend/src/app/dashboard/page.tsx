@@ -30,11 +30,7 @@ interface Task {
   due_date?: string
 }
 
-interface Project {
-  id: string
-  name: string
-  status: string
-}
+
 
 interface Member {
   user_id: string
@@ -78,7 +74,7 @@ export default function Home() {
 
   // Dashboard data state
   const [tasks, setTasks] = useState<Task[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
+
   const [members, setMembers] = useState<Member[]>([])
 
   // Team data (from analytics overview)
@@ -170,14 +166,12 @@ export default function Home() {
       if (!selectedOrg) return
 
       try {
-        const [tasksRes, projectsRes, membersRes] = await Promise.all([
+        const [tasksRes, membersRes] = await Promise.all([
           apiClient.get(`/organizations/${selectedOrg.id}/tasks`),
-          apiClient.get(`/organizations/${selectedOrg.id}/projects`),
           apiClient.get(`/organizations/${selectedOrg.id}/members`)
         ])
         
         setTasks(tasksRes.data.tasks || [])
-        setProjects(projectsRes.data.projects || [])
         
         const d = membersRes.data
         setMembers(Array.isArray(d) ? d : (d.members || []))

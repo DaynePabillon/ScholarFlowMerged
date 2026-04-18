@@ -1422,7 +1422,7 @@ router.get('/scholar/team-groups/:id/comments', async (req: Request, res: Respon
       `SELECT id, user_name, content, created_at FROM team_comments WHERE team_group_id = $1 ORDER BY created_at ASC`,
       [req.params.id]
     );
-    return res.json(rows);
+    return res.json({ comments: rows });
   } catch (err) {
     return res.sendStatus(403);
   }
@@ -1449,7 +1449,7 @@ router.post('/scholar/team-groups/:id/comments', async (req: Request, res: Respo
        VALUES ($1, $2, $3, $4) RETURNING id, user_name, content, created_at`,
       [req.params.id, null, userName, content.trim()]
     );
-    return res.json(rows[0]);
+    return res.json({ comment: rows[0] });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }

@@ -465,6 +465,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
                 theme="admin"
+                role="manager"
               />
             </div>
           ) : (
@@ -488,6 +489,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
                 theme="manager"
+                role="manager"
               />
             </div>
           )}

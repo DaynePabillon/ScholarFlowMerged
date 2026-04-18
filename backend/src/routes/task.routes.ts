@@ -911,9 +911,19 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
 
     const taskTitle = taskCheck.rows[0].title;
 
-    const result = await query(
-      'INSERT INTO task_comments (task_id, user_id, comment) VALUES ($1, $2, $3) RETURNING *',
+    const insertResult = await query(
+      'INSERT INTO task_comments (task_id, user_id, comment) VALUES ($1, $2, $3) RETURNING id',
       [id, userId, comment]
+    );
+
+    // Re-fetch with user info so frontend gets user_name immediately
+    const result = await query(
+      `SELECT c.id, c.task_id, c.user_id, c.comment, c.created_at, c.updated_at,
+              u.name as user_name, u.email as user_email
+       FROM task_comments c
+       LEFT JOIN users u ON c.user_id = u.id
+       WHERE c.id = $1`,
+      [insertResult.rows[0].id]
     );
 
     // Auto-follow commenter (if not already following)
@@ -934,7 +944,7 @@ router.post('/:id/comments', authenticateToken, async (req: AuthRequest, res: Re
       await notificationService.notifyNewComment(id, taskTitle, follower.user_id, userName || 'Someone');
     }
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json({ comment: result.rows[0] });
   } catch (error) {
     logger.error('Error adding comment:', error);
     res.status(500).json({ error: 'Failed to add comment' });

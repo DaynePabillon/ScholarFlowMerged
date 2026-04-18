@@ -229,9 +229,20 @@ router.get('/google/callback', async (req: Request, res: Response) => {
     console.log('Error name:', error?.name);
     console.log('Error message:', error?.message);
     console.log('Error stack:', error?.stack);
+    // Also log Google's error response if present (e.g. invalid_grant, redirect_uri_mismatch)
+    if (error?.response?.data) {
+      console.log('Google error response:', JSON.stringify(error.response.data));
+    }
     logger.error('Error in OAuth callback:', error);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/?error=authentication_failed`);
+    // Pass the actual error detail so the frontend can display it without requiring log access
+    const errorDetail = encodeURIComponent(
+      error?.response?.data?.error_description ||
+      error?.response?.data?.error ||
+      error?.message ||
+      'unknown'
+    );
+    return res.redirect(`${frontendUrl}/?error=authentication_failed&detail=${errorDetail}`);
   }
 });
 

@@ -72,11 +72,21 @@ router.post('/tasks/:taskId/comments', authenticateToken, async (req: Request, r
         const task = taskResult.rows[0];
 
         // Insert comment
-        const result = await pool.query(
+        const insertResult = await pool.query(
             `INSERT INTO task_comments (task_id, user_id, comment)
        VALUES ($1, $2, $3)
-       RETURNING *`,
+       RETURNING id`,
             [taskId, user.id, commentText.trim()]
+        );
+
+        // Re-fetch with user info so frontend gets user_name immediately
+        const result = await pool.query(
+            `SELECT c.id, c.task_id, c.user_id, c.comment, c.created_at, c.updated_at,
+                    u.name as user_name, u.email as user_email
+             FROM task_comments c
+             LEFT JOIN users u ON c.user_id = u.id
+             WHERE c.id = $1`,
+            [insertResult.rows[0].id]
         );
 
         // Log activity

@@ -30,20 +30,16 @@ export const oauth2Client = new google.auth.OAuth2(
   redirectUri
 );
 
-// Google API Scopes
+// Google API Scopes — only request basic profile + working integrations
+// NOTE: Classroom scopes removed until Classroom API is enabled & approved in Google Cloud Console
 export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/userinfo.email',
-  'https://www.googleapis.com/auth/classroom.courses.readonly',
-  'https://www.googleapis.com/auth/classroom.coursework.students',
-  'https://www.googleapis.com/auth/classroom.rosters.readonly',
-  'https://www.googleapis.com/auth/classroom.student-submissions.students.readonly',
   'https://www.googleapis.com/auth/calendar',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/spreadsheets',
-  // Removed spreadsheets.readonly as 'spreadsheets' covers both read and write
 ];
 
 // Generate Google OAuth URL

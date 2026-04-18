@@ -1,17 +1,27 @@
 "use client"
 
-import { Cloud, GraduationCap, ArrowRight, Sparkles, BookOpen, LayoutDashboard } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { Cloud, GraduationCap, ArrowRight, Sparkles, BookOpen, LayoutDashboard, AlertTriangle } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
 import { apiClient, API_URL } from "@/lib/api/client"
 
-export default function RootPortal() {
+function RootPortalContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [backendError, setBackendError] = useState<string | null>(null)
 
   useEffect(() => {
     const checkAuth = async () => {
+      // FIRST: check for backend error param — bail out before any redirect
+      const err = searchParams.get('error')
+      const detail = searchParams.get('detail')
+      if (err) {
+        setBackendError(err + (detail ? ` — ${decodeURIComponent(detail)}` : ''))
+        setIsLoading(false)
+        return
+      }
       const token = localStorage.getItem("token") || localStorage.getItem("auth_token")
       let storedUser = localStorage.getItem("user")
       
@@ -50,7 +60,7 @@ export default function RootPortal() {
     }
     
     checkAuth()
-  }, [router])
+  }, [router, searchParams])
 
   const modules = [
     {
@@ -79,6 +89,26 @@ export default function RootPortal() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
+
+  // Backend OAuth callback error — show clean message then redirect to login
+  if (backendError) {
+    // Auto-redirect to login after showing the error briefly
+    setTimeout(() => { window.location.href = '/login' }, 3000)
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Sign In Failed</h2>
+          <p className="text-gray-500 text-sm mb-6">Something went wrong during authentication. Please try again.</p>
+          <a href="/login" className="inline-block px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
+            Back to Login
+          </a>
+        </div>
       </div>
     )
   }
@@ -164,3 +194,16 @@ export default function RootPortal() {
     </div>
   )
 }
+
+export default function RootPortal() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    }>
+      <RootPortalContent />
+    </Suspense>
+  )
+}
+

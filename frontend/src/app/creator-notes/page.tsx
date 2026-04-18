@@ -285,7 +285,7 @@ export default function CreatorNotesPage() {
                         <select
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
-                            className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                            className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
                         >
                             <option value="">All Statuses</option>
                             <option value="new">New</option>
@@ -297,7 +297,7 @@ export default function CreatorNotesPage() {
                     <select
                         value={filterCategory}
                         onChange={(e) => setFilterCategory(e.target.value)}
-                        className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                        className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 dark:text-gray-100 rounded-lg px-3 py-2 text-sm"
                     >
                         <option value="">All Categories</option>
                         <option value="bug">Bugs</option>

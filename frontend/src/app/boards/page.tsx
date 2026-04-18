@@ -530,8 +530,18 @@ function BoardsContent() {
         return selectedOrg?.role || 'member'
     }
 
-    const canEdit = () => ['admin', 'manager'].includes(getUserRole())
-    const canDelete = () => getUserRole() === 'admin'
+    const canEdit = () => {
+        if (['admin', 'manager'].includes(getUserRole())) return true
+        // Members can edit team board tasks (non-absolute) but not advisor tasks
+        if (getUserRole() === 'member' && selectedTask && !selectedTask.is_absolute) return true
+        return false
+    }
+    const canDelete = () => {
+        if (['admin', 'manager'].includes(getUserRole())) return true
+        // Members can delete team board tasks (non-absolute) but not advisor tasks
+        if (getUserRole() === 'member' && selectedTask && !selectedTask.is_absolute) return true
+        return false
+    }
 
     // Filter tasks based on active tab - Memoized for performance
     const filteredTasks = useMemo(() => {
@@ -709,13 +719,15 @@ function BoardsContent() {
                                             <RotateCcw className={`w-5 h-5 ${isResyncing ? 'animate-spin text-emerald-500' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => setIsCreateModalOpen(true)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
-                                    >
-                                        <Plus className="w-5 h-5" />
-                                        <span className="font-medium">New Task</span>
-                                    </button>
+                                    {(boardSubView !== 'advisor' || getUserRole() !== 'member') && (
+                                        <button
+                                            onClick={() => setIsCreateModalOpen(true)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                            <span className="font-medium">New Task</span>
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -761,9 +773,9 @@ function BoardsContent() {
                                         status: normalizeStatus(t.status)
                                     } as any))}
                                     onTaskClick={(t: any) => handleTaskClick(t)}
-                                    onAddTask={() => setIsGoogleSyncModalOpen(true)}
-                                    onDeleteTask={handleDeleteTask}
-                                    onArchiveTask={handleArchiveTask}
+                                    onAddTask={getUserRole() !== 'member' ? () => setIsGoogleSyncModalOpen(true) : () => {}}
+                                    onDeleteTask={getUserRole() !== 'member' ? handleDeleteTask : undefined as any}
+                                    onArchiveTask={getUserRole() !== 'member' ? handleArchiveTask : undefined as any}
                                     onStatusChange={handleStatusChange}
                                     onProgressChange={handleProgressChange}
                                     role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
@@ -796,7 +808,7 @@ function BoardsContent() {
                                     onArchiveTask={handleArchiveTask}
                                     onStatusChange={handleStatusChange}
                                     onProgressChange={handleProgressChange}
-                                    role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
+                                    role={getUserRole() === 'member' ? 'manager' : getUserRole() as any}
                                     members={members}
                                 />
                             </div>
@@ -887,7 +899,7 @@ function BoardsContent() {
                             ))}
                             <button
                                 onClick={() => router.push('/workspace-sync')}
-                                className="p-2 text-gray-400 dark:text-gray-500 dark:text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-all"
+                                className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-all"
                             >
                                 <Plus className="w-4 h-4" />
                             </button>
@@ -908,12 +920,12 @@ function BoardsContent() {
             {/* Create Task Modal */}
             {isCreateModalOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-lg shadow-xl border border-gray-200 dark:border-slate-700/50">
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Create New Task</h3>
                             <button
                                 onClick={() => setIsCreateModalOpen(false)}
-                                className="p-2 hover:bg-gray-100 rounded-lg"
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"
                             >
                                 <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                             </button>
@@ -921,34 +933,34 @@ function BoardsContent() {
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Task Title *</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Task Title *</label>
                                 <input
                                     type="text"
                                     value={newTask.title}
                                     onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
                                     placeholder="Enter task title"
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                                 <textarea
                                     value={newTask.description}
                                     onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
                                     rows={3}
                                     placeholder="Enter task description"
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 />
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Priority</label>
                                     <select
                                         value={newTask.priority}
                                         onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     >
                                         <option value="low">🟢 Low</option>
                                         <option value="medium">🟡 Medium</option>
@@ -956,45 +968,45 @@ function BoardsContent() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Complexity Weight</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Complexity Weight</label>
                                     <input
                                         type="number"
                                         min="1"
                                         max="10"
                                         value={newTask.complexity_weight}
                                         onChange={(e) => setNewTask({ ...newTask, complexity_weight: parseInt(e.target.value) || 1 })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     />
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date</label>
                                     <input
                                         type="date"
                                         value={newTask.start_date}
                                         onChange={(e) => setNewTask({ ...newTask, start_date: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due Date</label>
                                     <input
                                         type="date"
                                         value={newTask.due_date}
                                         onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
-                                        className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     />
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Parent Task (for WBS Hierarchy)</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Parent Task (for WBS Hierarchy)</label>
                                 <select
                                     value={newTask.parent_task_id || ''}
                                     onChange={(e) => setNewTask({ ...newTask, parent_task_id: e.target.value || null })}
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">None (Root Task)</option>
                                     {tasks.map((t) => (
@@ -1013,17 +1025,17 @@ function BoardsContent() {
                                     onChange={(e) => setNewTask({ ...newTask, is_absolute: e.target.checked })}
                                     className="w-4 h-4 text-blue-500 rounded focus:ring-blue-400"
                                 />
-                                <label htmlFor="is_absolute" className="text-sm font-medium text-gray-700">
+                                <label htmlFor="is_absolute" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                                     Mark as Absolute Task (Locked for members)
                                 </label>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Assign To</label>
                                 <select
                                     value={newTask.assigned_to}
                                     onChange={(e) => setNewTask({ ...newTask, assigned_to: e.target.value })}
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">Unassigned</option>
                                     {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -1034,7 +1046,7 @@ function BoardsContent() {
                         <div className="flex gap-3 mt-6">
                             <button
                                 onClick={() => setIsCreateModalOpen(false)}
-                                className="flex-1 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50"
+                                className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-600 dark:text-gray-300 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800"
                             >
                                 Cancel
                             </button>
@@ -1055,7 +1067,7 @@ function BoardsContent() {
                 <div className="fixed inset-0 bg-black/40 dark:bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
                     <div className="bg-white/95 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col border border-gray-200 dark:border-slate-700/50 transform animate-in zoom-in-95 duration-300">
                         {/* Modal Header */}
-                        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+                        <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700/50">
                             <div className="flex items-center gap-3">
                                 <div className={`w-3 h-3 rounded-full ${selectedTask.status === 'done' ? 'bg-green-500' :
                                     selectedTask.status === 'in_progress' || selectedTask.status === 'in-progress' ? 'bg-blue-500' :
@@ -1078,26 +1090,26 @@ function BoardsContent() {
                                             type="text"
                                             value={editedTask.title || ''}
                                             onChange={(e) => setEditedTask({ ...editedTask, title: e.target.value })}
-                                            className="w-full text-xl font-bold text-gray-800 dark:text-gray-100 border border-gray-200 rounded-lg px-3 py-2"
+                                            className="w-full text-xl font-bold text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 rounded-lg px-3 py-2"
                                         />
                                         <textarea
                                             value={editedTask.description || ''}
                                             onChange={(e) => setEditedTask({ ...editedTask, description: e.target.value })}
-                                            className="w-full h-24 border border-gray-200 rounded-lg px-3 py-2 resize-none"
+                                            className="w-full h-24 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 rounded-lg px-3 py-2 resize-none"
                                             placeholder="Task description..."
                                         />
                                     </div>
                                 ) : (
                                     <>
                                         <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-2">{selectedTask.title}</h3>
-                                        <p className="text-gray-600">{selectedTask.description || 'No description'}</p>
+                                        <p className="text-gray-600 dark:text-slate-400">{selectedTask.description || 'No description'}</p>
                                     </>
                                 )}
                             </div>
 
                             {/* Task Meta Info */}
                             <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                                     <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">Due Date</p>
@@ -1106,7 +1118,7 @@ function BoardsContent() {
                                                 type="date"
                                                 value={editedTask.due_date?.split('T')[0] || ''}
                                                 onChange={(e) => setEditedTask({ ...editedTask, due_date: e.target.value })}
-                                                className="text-sm font-medium text-gray-800 dark:text-gray-100 border rounded px-2 py-1"
+                                                className="text-sm font-medium text-gray-800 dark:text-gray-100 border dark:border-slate-600 dark:bg-slate-800 rounded px-2 py-1"
                                             />
                                         ) : (
                                             <p className="text-sm font-medium text-gray-800 dark:text-gray-100">
@@ -1115,14 +1127,14 @@ function BoardsContent() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                                     <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">Assigned to</p>
                                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{selectedTask.assigned_to_name || 'Unassigned'}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                                     <span className={`px-2 py-1 rounded text-xs font-medium ${selectedTask.priority === 'high' ? 'bg-red-100 text-red-700' :
                                         selectedTask.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
                                             'bg-green-100 text-green-700'
@@ -1131,32 +1143,32 @@ function BoardsContent() {
                                     </span>
                                 </div>
                                 {selectedTask.wbs_code && (
-                                    <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                                    <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                                         <Clock className="w-4 h-4 text-blue-500" />
                                         <div>
-                                            <p className="text-xs text-blue-500">WBS Code</p>
-                                            <p className="text-sm font-bold text-blue-700">{selectedTask.wbs_code}</p>
+                                            <p className="text-xs text-blue-500 dark:text-blue-400">WBS Code</p>
+                                            <p className="text-sm font-bold text-blue-700 dark:text-blue-300">{selectedTask.wbs_code}</p>
                                         </div>
                                     </div>
                                 )}
                                 {selectedTask.complexity_weight && selectedTask.complexity_weight > 1 && (
-                                    <div className="flex items-center gap-2 p-3 bg-purple-50 rounded-lg">
+                                    <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
                                         <BarChart3 className="w-4 h-4 text-purple-500" />
                                         <div>
-                                            <p className="text-xs text-purple-500">Complexity</p>
-                                            <p className="text-sm font-bold text-purple-700">{selectedTask.complexity_weight}/10</p>
+                                            <p className="text-xs text-purple-500 dark:text-purple-400">Complexity</p>
+                                            <p className="text-sm font-bold text-purple-700 dark:text-purple-300">{selectedTask.complexity_weight}/10</p>
                                         </div>
                                     </div>
                                 )}
                                 {selectedTask.is_absolute && (
-                                    <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-lg col-span-2">
-                                        <span className="text-xs font-semibold text-amber-700">🔒 Absolute Task — Members cannot modify this task</span>
+                                    <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg col-span-2">
+                                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">🔒 Absolute Task — Members cannot modify this task</span>
                                     </div>
                                 )}
                                 {selectedTask.sheet_name && (
-                                    <div className="flex items-center gap-2 p-3 bg-green-50 rounded-lg">
-                                        <FileSpreadsheet className="w-4 h-4 text-green-600" />
-                                        <span className="text-xs text-green-700">From: {selectedTask.sheet_name}</span>
+                                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                                        <FileSpreadsheet className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                        <span className="text-xs text-green-700 dark:text-green-400">From: {selectedTask.sheet_name}</span>
                                     </div>
                                 )}
                             </div>
@@ -1174,7 +1186,7 @@ function BoardsContent() {
                                         <p className="text-gray-400 text-sm text-center py-4">No comments yet</p>
                                     ) : (
                                         taskComments.map((comment) => (
-                                            <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 rounded-lg">
+                                            <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                                                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
                                                     <span className="text-white text-xs font-bold">
                                                         {comment.user_name?.charAt(0).toUpperCase() || '?'}
@@ -1187,7 +1199,7 @@ function BoardsContent() {
                                                             {new Date(comment.created_at).toLocaleDateString()}
                                                         </span>
                                                     </div>
-                                                    <p className="text-sm text-gray-600">{comment.comment}</p>
+                                                    <p className="text-sm text-gray-600 dark:text-slate-400">{comment.comment}</p>
                                                 </div>
                                             </div>
                                         ))
@@ -1202,7 +1214,7 @@ function BoardsContent() {
                                         onChange={(e) => setNewComment(e.target.value)}
                                         onKeyPress={(e) => e.key === 'Enter' && handleAddComment()}
                                         placeholder="Add a comment..."
-                                        className="flex-1 border border-gray-200 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
+                                        className="flex-1 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-blue-400"
                                     />
                                     <button
                                         onClick={handleAddComment}
@@ -1293,43 +1305,43 @@ function BoardsContent() {
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Team Number *</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Team Number *</label>
                                 <input
                                     type="number"
                                     value={newTeam.team_number}
                                     onChange={(e) => setNewTeam({ ...newTeam, team_number: parseInt(e.target.value) || 1 })}
                                     min={1}
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Team / Project Name *</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Team / Project Name *</label>
                                 <input
                                     type="text"
                                     value={newTeam.name}
                                     onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
                                     placeholder="Enter team or project name"
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                                 <textarea
                                     value={newTeam.description}
                                     onChange={(e) => setNewTeam({ ...newTeam, description: e.target.value })}
                                     placeholder="Brief description"
                                     rows={2}
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Adviser Name</label>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Adviser Name</label>
                                 <input
                                     type="text"
                                     value={newTeam.adviser_name}
                                     onChange={(e) => setNewTeam({ ...newTeam, adviser_name: e.target.value })}
                                     placeholder="Adviser's name"
-                                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 />
                             </div>
                         </div>

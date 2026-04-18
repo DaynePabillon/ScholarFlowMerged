@@ -488,6 +488,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
                 theme="admin"
+                role="admin"
               />
             </div>
           ) : (
@@ -511,6 +512,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
                 theme="manager"
+                role="admin"
               />
             </div>
           )}
