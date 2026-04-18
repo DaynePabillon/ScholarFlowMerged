@@ -338,7 +338,7 @@ export const sendAdvisorImportEmail = async (params: {
     const { data, error } = await resend!.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'ScholarFlow <invites@wildcatinnovationlabs.com>',
       to: [params.to],
-      subject: \`You've been assigned as an Advisor on ScholarFlow\`,
+      subject: `You've been assigned as an Advisor on ScholarFlow`,
       html: createAdvisorImportEmailHtml({
         advisorName: params.advisorName,
         loginLink,
@@ -350,7 +350,7 @@ export const sendAdvisorImportEmail = async (params: {
       return { success: false, error: error.message };
     }
 
-    logger.info(\`✉️ Advisor import email sent to \${params.to} (ID: \${data?.id})\`);
+    logger.info(`✉️ Advisor import email sent to ${params.to} (ID: ${data?.id})`);
     return { success: true };
   } catch (error: any) {
     logger.error('Failed to send advisor import email:', error);

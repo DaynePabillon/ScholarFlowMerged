@@ -47,6 +47,10 @@ const verifyAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
+    if (err) return res.sendStatus(403);
+    let role = normalizeAcademicRole(user.role);
+    
     if (role !== 'admin' && user.email) {
       try {
         const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
