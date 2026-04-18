@@ -12,17 +12,15 @@ function RootPortalContent() {
   const [isLoading, setIsLoading] = useState(true)
   const [backendError, setBackendError] = useState<string | null>(null)
 
-  // Detect ?error= param from backend OAuth callback failure
-  useEffect(() => {
-    const err = searchParams.get('error')
-    if (err) {
-      setBackendError(err)
-      setIsLoading(false)
-    }
-  }, [searchParams])
-
   useEffect(() => {
     const checkAuth = async () => {
+      // FIRST: check for backend error param — bail out before any redirect
+      const err = searchParams.get('error')
+      if (err) {
+        setBackendError(err)
+        setIsLoading(false)
+        return
+      }
       const token = localStorage.getItem("token") || localStorage.getItem("auth_token")
       let storedUser = localStorage.getItem("user")
       
@@ -61,7 +59,7 @@ function RootPortalContent() {
     }
     
     checkAuth()
-  }, [router])
+  }, [router, searchParams])
 
   const modules = [
     {
