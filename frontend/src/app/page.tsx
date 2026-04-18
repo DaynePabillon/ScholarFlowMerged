@@ -93,40 +93,21 @@ function RootPortalContent() {
     )
   }
 
-  // Backend OAuth callback error — show it instead of silently going to /landing
+  // Backend OAuth callback error — show clean message then redirect to login
   if (backendError) {
+    // Auto-redirect to login after showing the error briefly
+    setTimeout(() => { window.location.href = '/login' }, 3000)
     return (
-      <div className="min-h-screen bg-gray-950 text-gray-100 font-mono flex items-center justify-center p-6">
-        <div className="w-full max-w-lg">
-          <div className="flex items-center gap-3 mb-6">
-            <AlertTriangle className="w-8 h-8 text-yellow-400" />
-            <div>
-              <h1 className="text-xl font-bold text-white">Backend Auth Error</h1>
-              <p className="text-xs text-gray-400">The backend OAuth callback failed and redirected here</p>
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center p-6">
+        <div className="text-center max-w-sm">
+          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
-          <div className="rounded-lg border border-red-800 bg-red-950/30 p-4 mb-4">
-            <p className="text-xs text-gray-400">Error param:</p>
-            <p className="text-red-300 font-bold mt-1">{backendError}</p>
-          </div>
-          <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 text-xs text-gray-400 mb-4">
-            <p className="mb-2">This means the backend's <code className="text-yellow-300">/api/auth/google/callback</code> handler threw an exception.</p>
-            <p>Check the backend Render logs for the full error. Common causes:</p>
-            <ul className="mt-2 space-y-1 list-disc list-inside text-gray-500">
-              <li>Database connection failure</li>
-              <li>Google OAuth code already used (replay)</li>
-              <li>Missing env var (JWT_SECRET, DATABASE_URL)</li>
-              <li>GOOGLE_REDIRECT_URI mismatch</li>
-            </ul>
-          </div>
-          <div className="flex gap-3">
-            <a href="/debug" className="px-3 py-2 bg-blue-700 hover:bg-blue-600 rounded text-xs text-white transition-colors">
-              → Open Debug Panel
-            </a>
-            <a href="/login" className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white transition-colors">
-              Back to Login
-            </a>
-          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Sign In Failed</h2>
+          <p className="text-gray-500 text-sm mb-6">Something went wrong during authentication. Please try again.</p>
+          <a href="/login" className="inline-block px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors">
+            Back to Login
+          </a>
         </div>
       </div>
     )
