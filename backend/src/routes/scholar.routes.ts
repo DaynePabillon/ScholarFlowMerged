@@ -13,7 +13,7 @@ import { google } from 'googleapis';
 import { pool } from '../config/database';
 import logger from '../config/logger';
 import GoogleAuthService from '../services/google/auth.service';
-import { sendTeamImportEmail } from '../services/email.service';
+import { sendTeamImportEmail, sendAdvisorImportEmail } from '../services/email.service';
 
 const router = Router();
 
@@ -47,14 +47,10 @@ const verifyAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
-    if (err) return res.sendStatus(403);
-    let role = String(user.role || '').toLowerCase();
-    
     if (role !== 'admin' && user.email) {
       try {
         const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
-        if (rows.length > 0) role = String(rows[0].accountRole || '').toLowerCase();
+        if (rows.length > 0) role = normalizeAcademicRole(rows[0].accountRole);
       } catch (e) {}
     }
 
@@ -71,16 +67,16 @@ const verifyInstructor = async (req: Request, res: Response, next: NextFunction)
 
   jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    let role = String(user.role || '').toLowerCase();
+    let role = normalizeAcademicRole(user.role);
     
-    if (role !== 'admin' && role !== 'adviser' && role !== 'advisers' && role !== 'manager' && user.email) {
+    if (role !== 'admin' && role !== 'advisers' && user.email) {
       try {
         const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
-        if (rows.length > 0) role = String(rows[0].accountRole || '').toLowerCase();
+        if (rows.length > 0) role = normalizeAcademicRole(rows[0].accountRole);
       } catch (e) {}
     }
 
-    if (role !== 'admin' && role !== 'adviser' && role !== 'advisers' && role !== 'manager') {
+    if (role !== 'admin' && role !== 'advisers') {
       return res.status(403).json({ error: "Instructor access required" });
     }
     (req as any).user = user;
@@ -91,7 +87,7 @@ const verifyInstructor = async (req: Request, res: Response, next: NextFunction)
 const normalizeAcademicRole = (value: unknown): 'admin' | 'advisers' | 'student' => {
   const role = String(value || '').trim().toLowerCase();
   if (role === 'admin') return 'admin';
-  if (role === 'adviser' || role === 'advisers' || role === 'manager') return 'advisers';
+  if (role === 'adviser' || role === 'advisers' || role === 'advisor' || role === 'advisors' || role === 'manager') return 'advisers';
   return 'student';
 };
 
@@ -1846,11 +1842,12 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     const results: any[] = [];
     // Collect members for invitation emails (sent after successful commit)
     const importedMembers: { email: string; name: string; courseCode: string; courseName: string; groupName: string; adviser: string }[] = [];
+    const importedAdvisors: { email: string; name: string }[] = [];
 
     try {
       await client.query('BEGIN');
 
-      // Assign Adviser role
+      // Sync Adviser roles in ss_account
       for (const advEmail of adviserEmails) {
         await client.query(
           'UPDATE ss_account SET "accountRole" = \'Advisers\' WHERE LOWER("accountEmail") = LOWER($1)',
@@ -1989,6 +1986,39 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
              VALUES ($1, $2, \'admin\', \'active\', NOW())
              ON CONFLICT (organization_id, user_id) DO UPDATE SET role = \'admin\', status = \'active\'`,
             [orgId, skyUserId]
+          );
+        }
+
+        // --- Role Merge: Ensure all course advisers are synced to the organization as 'manager' ---
+        const courseAdvisers = new Map<string, string>();
+        for (const group of Object.values(groups)) {
+          if (group.adviser && group.adviser.includes('@')) {
+            // Extracted name format varies, but we can default to the split or capture from another source later.
+            // We use the email prefix if no formal name was captured separately for the advisor.
+            courseAdvisers.set(group.adviser.toLowerCase().trim(), group.adviser.split('@')[0]);
+          }
+        }
+
+        for (const [advEmail, advName] of courseAdvisers.entries()) {
+          // Track for emails later
+          importedAdvisors.push({ email: advEmail, name: advName });
+
+          // Upsert adviser into users table
+          const advUserRes = await client.query(
+            `INSERT INTO users (google_id, email, name, created_at)
+             VALUES ($1, $1, $2, NOW())
+             ON CONFLICT (email) DO UPDATE SET google_id = COALESCE(users.google_id, EXCLUDED.google_id)
+             RETURNING id`,
+            [advEmail, advName]
+          );
+          const advUserId = advUserRes.rows[0].id;
+
+          // Add to organization as 'manager' (Merging concept of Adviser and Workspace Manager)
+          await client.query(
+            `INSERT INTO organization_members (organization_id, user_id, role, status, joined_at)
+             VALUES ($1, $2, 'manager', 'active', NOW())
+             ON CONFLICT (organization_id, user_id) DO UPDATE SET role = 'manager', status = 'active'`,
+            [orgId, advUserId]
           );
         }
 
@@ -2186,6 +2216,44 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
           logger.info(`📨 Import invitations: ${sentCount} sent, ${skippedCount} skipped (existing accounts)`);
         } catch (emailErr: any) {
           logger.error('Error sending import invitation emails:', emailErr);
+        }
+      });
+    }
+
+    if (importedAdvisors.length > 0) {
+      setImmediate(async () => {
+        try {
+          const uniqueAdvisors = Array.from(new Map(importedAdvisors.map(a => [a.email, a])).values());
+          const allAdvEmails = uniqueAdvisors.map(a => a.email);
+          const existingRes = await pool.query(
+            `SELECT LOWER("accountEmail") as email FROM ss_account WHERE LOWER("accountEmail") = ANY($1::text[])`,
+            [allAdvEmails]
+          );
+          const existingEmails = new Set(existingRes.rows.map((r: any) => r.email));
+
+          let sentCount = 0;
+          let skippedCount = 0;
+
+          for (const advisor of uniqueAdvisors) {
+            const emailLower = advisor.email.toLowerCase().trim();
+            if (existingEmails.has(emailLower)) {
+              skippedCount++;
+              continue; // Existed before, do not spam
+            }
+
+            const result = await sendAdvisorImportEmail({
+              to: advisor.email,
+              advisorName: advisor.name || advisor.email.split('@')[0],
+            });
+
+            if (result.success) sentCount++;
+            else logger.warn(`⚠️ Failed to send advisor import email to ${advisor.email}: ${result.error}`);
+
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+          logger.info(`📨 Advisor Import Emails — Sent: ${sentCount}, Skipped (Existing Users): ${skippedCount}`);
+        } catch (emailErr: any) {
+          logger.error('Error in advisor async email loop:', emailErr);
         }
       });
     }

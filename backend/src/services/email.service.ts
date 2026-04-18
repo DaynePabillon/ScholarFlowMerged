@@ -256,3 +256,104 @@ export const sendTeamImportEmail = async (params: {
     return { success: false, error: error.message };
   }
 };
+
+// ─── ScholarFlow Advisor Import Invitation ───
+
+const createAdvisorImportEmailHtml = (params: {
+  advisorName: string;
+  loginLink: string;
+}) => {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>You've been assigned as an Advisor on ScholarFlow</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #ecfdf5;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+    <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 16px 16px 0 0; padding: 40px; text-align: center;">
+      <div style="display: inline-block; background: white; border-radius: 12px; padding: 12px; margin-bottom: 20px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h9"></path>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+        </svg>
+      </div>
+      <h1 style="color: white; margin: 0; font-size: 28px; font-weight: 700;">ScholarFlow</h1>
+      <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">Academic Collaboration Platform</p>
+    </div>
+    
+    <div style="background: white; border-radius: 0 0 16px 16px; padding: 40px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+      <h2 style="color: #064e3b; margin: 0 0 20px 0; font-size: 24px;">Welcome, Advisor!</h2>
+      
+      <p style="color: #64748b; font-size: 16px; line-height: 1.6; margin: 0 0 20px 0;">
+        Hi <strong style="color: #10b981;">${params.advisorName}</strong>, you have been assigned to new academic teams on ScholarFlow.
+      </p>
+      
+      <p style="color: #64748b; font-size: 15px; line-height: 1.6; margin: 0 0 30px 0;">
+        Please log in to your account to review the groups you are advising, track consultation journals, and monitor student project development.
+      </p>
+      
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${params.loginLink}" style="display: inline-block; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; text-decoration: none; padding: 14px 32px; border-radius: 50px; font-weight: 600; font-size: 16px;">
+          Open Dashboard
+        </a>
+      </div>
+      
+      <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
+      
+      <p style="color: #94a3b8; font-size: 12px; text-align: center; margin: 0;">
+        If the button doesn't work, copy and paste this link into your browser:<br>
+        <a href="${params.loginLink}" style="color: #10b981; word-break: break-all;">${params.loginLink}</a>
+      </p>
+    </div>
+    
+    <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 20px;">
+      © 2025 ScholarFlow. Built for academic excellence.
+    </p>
+  </div>
+</body>
+</html>
+  `;
+};
+
+// Send import notification email to an advisor
+export const sendAdvisorImportEmail = async (params: {
+  to: string;
+  advisorName: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  const frontendUrl = process.env.SCHOLAR_FRONTEND_URL || process.env.FRONTEND_URL || 'https://scholarflow.wildcatinnovationlabs.com';
+  const loginLink = `${frontendUrl}/scholar/login`;
+
+  if (!isEmailConfigured()) {
+    logger.info('📧 Email not configured. Advisor import notification (dev):');
+    logger.info(`   To: ${params.to}`);
+    logger.info(`   Advisor Name: ${params.advisorName}`);
+    logger.info(`   Login: ${loginLink}`);
+    return { success: true };
+  }
+
+  try {
+    const { data, error } = await resend!.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'ScholarFlow <invites@wildcatinnovationlabs.com>',
+      to: [params.to],
+      subject: \`You've been assigned as an Advisor on ScholarFlow\`,
+      html: createAdvisorImportEmailHtml({
+        advisorName: params.advisorName,
+        loginLink,
+      }),
+    });
+
+    if (error) {
+      logger.error('Error sending advisor import email:', error);
+      return { success: false, error: error.message };
+    }
+
+    logger.info(\`✉️ Advisor import email sent to \${params.to} (ID: \${data?.id})\`);
+    return { success: true };
+  } catch (error: any) {
+    logger.error('Failed to send advisor import email:', error);
+    return { success: false, error: error.message };
+  }
+};
