@@ -1,14 +1,25 @@
 "use client"
 
-import { Cloud, GraduationCap, ArrowRight, Sparkles, BookOpen, LayoutDashboard } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
+import { Cloud, GraduationCap, ArrowRight, Sparkles, BookOpen, LayoutDashboard, AlertTriangle } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
 import { apiClient, API_URL } from "@/lib/api/client"
 
-export default function RootPortal() {
+function RootPortalContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [backendError, setBackendError] = useState<string | null>(null)
+
+  // Detect ?error= param from backend OAuth callback failure
+  useEffect(() => {
+    const err = searchParams.get('error')
+    if (err) {
+      setBackendError(err)
+      setIsLoading(false)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -79,6 +90,45 @@ export default function RootPortal() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
+
+  // Backend OAuth callback error — show it instead of silently going to /landing
+  if (backendError) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 font-mono flex items-center justify-center p-6">
+        <div className="w-full max-w-lg">
+          <div className="flex items-center gap-3 mb-6">
+            <AlertTriangle className="w-8 h-8 text-yellow-400" />
+            <div>
+              <h1 className="text-xl font-bold text-white">Backend Auth Error</h1>
+              <p className="text-xs text-gray-400">The backend OAuth callback failed and redirected here</p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-red-800 bg-red-950/30 p-4 mb-4">
+            <p className="text-xs text-gray-400">Error param:</p>
+            <p className="text-red-300 font-bold mt-1">{backendError}</p>
+          </div>
+          <div className="rounded-lg border border-gray-800 bg-gray-900 p-4 text-xs text-gray-400 mb-4">
+            <p className="mb-2">This means the backend's <code className="text-yellow-300">/api/auth/google/callback</code> handler threw an exception.</p>
+            <p>Check the backend Render logs for the full error. Common causes:</p>
+            <ul className="mt-2 space-y-1 list-disc list-inside text-gray-500">
+              <li>Database connection failure</li>
+              <li>Google OAuth code already used (replay)</li>
+              <li>Missing env var (JWT_SECRET, DATABASE_URL)</li>
+              <li>GOOGLE_REDIRECT_URI mismatch</li>
+            </ul>
+          </div>
+          <div className="flex gap-3">
+            <a href="/debug" className="px-3 py-2 bg-blue-700 hover:bg-blue-600 rounded text-xs text-white transition-colors">
+              → Open Debug Panel
+            </a>
+            <a href="/login" className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-xs text-white transition-colors">
+              Back to Login
+            </a>
+          </div>
+        </div>
       </div>
     )
   }
@@ -164,3 +214,16 @@ export default function RootPortal() {
     </div>
   )
 }
+
+export default function RootPortal() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    }>
+      <RootPortalContent />
+    </Suspense>
+  )
+}
+
