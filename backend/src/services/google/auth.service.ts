@@ -76,9 +76,9 @@ export class GoogleAuthService {
       const result = await query(
         `INSERT INTO users (google_id, email, name, profile_picture, access_token, refresh_token, token_expiry, last_login)
          VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-         ON CONFLICT (google_id) 
-         DO UPDATE SET 
-           email = EXCLUDED.email,
+         ON CONFLICT (email)
+         DO UPDATE SET
+           google_id = EXCLUDED.google_id,
            name = EXCLUDED.name,
            profile_picture = EXCLUDED.profile_picture,
            access_token = EXCLUDED.access_token,
