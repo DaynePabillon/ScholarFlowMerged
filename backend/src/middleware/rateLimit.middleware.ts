@@ -5,8 +5,8 @@ import rateLimit from 'express-rate-limit';
  * Limits each IP to 100 requests per 15 minutes
  */
 export const apiLimiter = rateLimit({
-    windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 100,
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 99999, // Disabled for testing/stability
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     message: {
@@ -20,8 +20,8 @@ export const apiLimiter = rateLimit({
  * Prevents brute-force on login/token endpoints
  */
 export const authLimiter = rateLimit({
-    windowMs: 60 * 60 * 1000, // 1 hour
-    max: 100, // Relaxed from 10 to 100 for development/testing
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 99999, // Disabled for testing
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -35,8 +35,8 @@ export const authLimiter = rateLimit({
  * Protects expensive LLM resources
  */
 export const aiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20,
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 99999, // Disabled for testing
     standardHeaders: true,
     legacyHeaders: false,
     message: {
