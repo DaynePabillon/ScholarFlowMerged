@@ -1010,7 +1010,7 @@ function BoardsContent() {
                                     className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">None (Root Task)</option>
-                                    {tasks.map((t) => (
+                                    {tasks.filter(t => (t as any).source_type === 'sheet').map((t) => (
                                         <option key={t.id} value={t.id}>
                                             {t.wbs_code ? `${t.wbs_code} - ` : ''}{t.title}
                                         </option>
@@ -1039,7 +1039,16 @@ function BoardsContent() {
                                     className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">Unassigned</option>
-                                    {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    {members.filter(m => {
+                                        // If a specific team is selected, only show that team's members
+                                        if (selectedTeam && selectedTeam !== 'all') {
+                                            const teamGroup = teamGroups.find(tg => tg.id === selectedTeam);
+                                            // For now, show all members if we can't filter by team
+                                            // TODO: Add team_group_members email matching
+                                            return true;
+                                        }
+                                        return true;
+                                    }).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                             </div>
                         </div>

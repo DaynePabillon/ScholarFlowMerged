@@ -37,6 +37,7 @@ const KanbanView = memo(({
                 onAddTask={onAddTask}
                 onProgressChange={onProgressChange}
                 role={role}
+                canDrag={true}
             />
         </div>
     )
