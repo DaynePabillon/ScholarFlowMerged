@@ -2195,6 +2195,7 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
           let skippedCount = 0;
 
           for (const member of importedMembers) {
+            const emailLower = member.email.toLowerCase().trim();
             // If they have an account, do not spam them UNLESS this is a forced replace (override setup/testing)
             if (existingEmails.has(emailLower) && !forceReplace) {
               skippedCount++;
