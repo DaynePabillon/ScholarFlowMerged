@@ -91,9 +91,10 @@ export class GoogleAuthService {
       );
 
       return result.rows[0];
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Error upserting user:', error);
-      throw new Error('Failed to save user information');
+      // Re-throw original error so the exact DB message propagates to the caller
+      throw new Error(`DB upsertUser failed: ${error?.message || error}`);
     }
   }
 
