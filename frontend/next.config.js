@@ -7,6 +7,13 @@ const nextConfig = {
   images: {
     domains: ['lh3.googleusercontent.com'], // For Google profile pictures
   },
+  // Skip heavy lint/typecheck during production build (Render free tier has 512MB RAM)
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
 }
 
 module.exports = nextConfig
