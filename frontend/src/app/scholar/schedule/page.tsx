@@ -2043,6 +2043,7 @@ function ScheduleContent() {
             </div>
           </div>
         )}
+      </div>
     </SidebarLayout>
   )
 }

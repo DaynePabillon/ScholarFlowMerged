@@ -334,7 +334,10 @@ export default function ProjectBoardView({
                                             </button>
                                         )}
                                         {canAssign && (
+                                            <button
+                                                onClick={() => onDeleteTask(task.id)}
                                                 className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                            >
                                                 <Trash2 className="w-4 h-4" />
                                             </button>
                                         )}
