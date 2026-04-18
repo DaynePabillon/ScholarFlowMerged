@@ -2195,8 +2195,8 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
           let skippedCount = 0;
 
           for (const member of importedMembers) {
-            const emailLower = member.email.toLowerCase().trim();
-            if (existingEmails.has(emailLower)) {
+            // If they have an account, do not spam them UNLESS this is a forced replace (override setup/testing)
+            if (existingEmails.has(emailLower) && !forceReplace) {
               skippedCount++;
               continue; // Already has an account — skip
             }
@@ -2240,7 +2240,7 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
           for (const advisor of uniqueAdvisors) {
             const emailLower = advisor.email.toLowerCase().trim();
-            if (existingEmails.has(emailLower)) {
+            if (existingEmails.has(emailLower) && !forceReplace) {
               skippedCount++;
               continue; // Existed before, do not spam
             }
