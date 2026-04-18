@@ -2196,11 +2196,11 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
           for (const member of importedMembers) {
             const emailLower = member.email.toLowerCase().trim();
-            // If they have an account, do not spam them UNLESS this is a forced replace (override setup/testing)
-            if (existingEmails.has(emailLower) && !forceReplace) {
-              skippedCount++;
-              continue; // Already has an account — skip
-            }
+            // TEMPORARY BYPASS FOR TESTING: Always send emails even if they have an account
+            // if (existingEmails.has(emailLower) && !forceReplace) {
+            //   skippedCount++;
+            //   continue; // Already has an account — skip
+            // }
 
             const result = await sendTeamImportEmail({
               to: member.email,
@@ -2241,10 +2241,11 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
           for (const advisor of uniqueAdvisors) {
             const emailLower = advisor.email.toLowerCase().trim();
-            if (existingEmails.has(emailLower) && !forceReplace) {
-              skippedCount++;
-              continue; // Existed before, do not spam
-            }
+            // TEMPORARY BYPASS FOR TESTING
+            // if (existingEmails.has(emailLower) && !forceReplace) {
+            //   skippedCount++;
+            //   continue; // Existed before, do not spam
+            // }
 
             const result = await sendAdvisorImportEmail({
               to: advisor.email,
