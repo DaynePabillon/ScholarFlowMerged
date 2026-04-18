@@ -356,7 +356,8 @@ function BoardsContent() {
                 start_date: newTask.start_date || null,
                 is_absolute: newTask.is_absolute,
                 complexity_weight: newTask.complexity_weight,
-                parent_task_id: newTask.parent_task_id || null
+                parent_task_id: newTask.parent_task_id || null,
+                team_id: selectedTeam && selectedTeam !== 'all' ? selectedTeam : null
             })
 
             if (response.data) {
@@ -719,7 +720,7 @@ function BoardsContent() {
                                             <RotateCcw className={`w-5 h-5 ${isResyncing ? 'animate-spin text-emerald-500' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                                         </button>
                                     )}
-                                    {(boardSubView !== 'advisor' || getUserRole() !== 'member') && (
+                                    {boardSubView !== 'advisor' && (
                                         <button
                                             onClick={() => setIsCreateModalOpen(true)}
                                             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
