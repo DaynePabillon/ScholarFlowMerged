@@ -1,10 +1,62 @@
-import { Router } from 'express';
-import { pool } from '../db.js';
+import { Router, Request, Response, NextFunction } from 'express';
+import { pool } from '../../config/database';
 import jwt from 'jsonwebtoken';
 import { google } from 'googleapis';
-import { GoogleDocsService } from '../googleDocsService.js';
+import { GoogleDocsService } from '../../services/scholar/googleDocs.service';
+import GoogleAuthService from '../../services/google/auth.service';
 
 const router = Router();
+
+// Middleware to resolve numeric ss_account.account_id from user email
+const resolveAccountId = async (req: any, res: any, next: any) => {
+  const user = (req as any).user;
+  if (!user || !user.email) {
+    return res.status(401).json({ error: "User identity or email not found." });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      'SELECT account_id FROM ss_account WHERE "accountEmail" = $1 LIMIT 1',
+      [user.email]
+    );
+
+    if (rows.length === 0) {
+      return res.status(403).json({ 
+        error: "ScholarSync account not found. Please ensure you are registered in ScholarSync.",
+        email: user.email 
+      });
+    }
+
+    (req as any).adviserId = rows[0].account_id;
+    next();
+  } catch (err) {
+    console.error("Error resolving account ID:", err);
+    res.status(500).json({ error: "Internal server error resolving account." });
+  }
+};
+
+const normalizeTime = (raw: any): string => {
+  if (!raw) return '00:00:00';
+  
+  if (raw instanceof Date) {
+    const h = String(raw.getHours()).padStart(2, '0');
+    const m = String(raw.getMinutes()).padStart(2, '0');
+    const s = String(raw.getSeconds()).padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+
+  const str = String(raw).trim();
+  // Standardize HH:mm:ss using regex to handle complex strings or ISO fragments
+  const match = str.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+  if (match) {
+    const h = match[1].padStart(2, '0');
+    const m = match[2].padStart(2, '0');
+    const s = (match[3] || '00').padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  }
+
+  return '00:00:00';
+};
 
 // Middleware to verify JWT token
 const authenticate = (req: any, res: any, next: any) => {
@@ -12,8 +64,9 @@ const authenticate = (req: any, res: any, next: any) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
+  const secret = process.env.JWT_SECRET || 'default-secret-key';
   try {
-    const user = jwt.verify(token, process.env.JWT_SECRET || 'test');
+    const user = jwt.verify(token, secret);
     req.user = user;
     next();
   } catch {
@@ -23,6 +76,8 @@ const authenticate = (req: any, res: any, next: any) => {
 
 const normalizeSlotDate = (raw: any): string => {
   if (raw instanceof Date) {
+    // Use local methods because Node pg parses DATE columns as local midnight.
+    // This ensures consistency across different server timezones.
     const y = raw.getFullYear();
     const m = String(raw.getMonth() + 1).padStart(2, '0');
     const d = String(raw.getDate()).padStart(2, '0');
@@ -30,14 +85,33 @@ const normalizeSlotDate = (raw: any): string => {
   }
   const direct = String(raw || '').trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+  
   const parsed = new Date(direct);
   if (!Number.isNaN(parsed.getTime())) {
+    // For date strings without time, browsers/server might parse differently.
+    // We stick to local parts here as well for consistency with the DATE objects.
     const y = parsed.getFullYear();
     const m = String(parsed.getMonth() + 1).padStart(2, '0');
     const d = String(parsed.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
   return '';
+};
+
+const inferSavedFollowUpStatus = (concernsValue: unknown, actionValue: unknown): 'overdue' | 'open' | 'resolved' => {
+  const concern = String(concernsValue || '').trim().toLowerCase();
+  const action = String(actionValue || '').trim().toLowerCase();
+  const hasFollowUpContent = concern.length > 0 || action.length > 0;
+
+  if (!hasFollowUpContent) {
+    return 'resolved';
+  }
+
+  if (concern.includes('blocker') || concern.includes('risk')) {
+    return 'overdue';
+  }
+
+  return 'open';
 };
 
 const resolveStudentAssignedAdvisers = async (
@@ -98,19 +172,48 @@ const resolveStudentAssignedAdvisers = async (
 };
 
 const getCalendarClientForAccount = async (accountId: number) => {
-  const { rows } = await pool.query(
-    'SELECT "googleAccessToken" FROM ss_account WHERE account_id = $1',
-    [accountId]
-  );
-  const accessToken = rows[0]?.googleAccessToken;
-  if (!accessToken) return null;
+  try {
+    // 1. Get email from ss_account to bridge to SkyFlow user
+    const { rows: ssRows } = await pool.query(
+      'SELECT "accountEmail", "googleAccessToken" FROM ss_account WHERE account_id = $1',
+      [accountId]
+    );
+    const email = ssRows[0]?.accountEmail;
+    const ssAccessToken = ssRows[0]?.googleAccessToken;
 
-  const auth = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  );
-  auth.setCredentials({ access_token: accessToken });
-  return google.calendar({ version: 'v3', auth });
+    if (!email) return null;
+
+    // 2. Try to find the user in SkyFlow (unified auth) to get refresh capabilities
+    const { rows: userRows } = await pool.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+
+    let accessToken = ssAccessToken;
+    
+    if (userRows.length > 0) {
+      const userId = userRows[0].id;
+      try {
+        // Use the unified auth service which handles token refresh automatically
+        const userWithFreshTokens = await GoogleAuthService.getUserWithTokens(userId);
+        accessToken = userWithFreshTokens.access_token;
+      } catch (err) {
+        console.warn(`Failed to get fresh token for user ${userId}, falling back to ss_account token:`, err);
+      }
+    }
+
+    if (!accessToken) return null;
+
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    auth.setCredentials({ access_token: accessToken });
+    return google.calendar({ version: 'v3', auth });
+  } catch (err) {
+    console.error('Error getting calendar client for account:', err);
+    return null;
+  }
 };
 
 const createGoogleEventForSlot = async (
@@ -121,19 +224,29 @@ const createGoogleEventForSlot = async (
   const calendar = await getCalendarClientForAccount(ownerAccountId);
   if (!calendar) return null;
 
+  // Fetch the user's primary calendar timezone for adaptive sync
+  let userTimeZone = 'Asia/Manila';
+  try {
+    const calendarInfo = await calendar.calendars.get({ calendarId: 'primary' });
+    userTimeZone = calendarInfo.data.timeZone || 'Asia/Manila';
+  } catch (err) {
+    console.warn('Failed to fetch user calendar timezone, falling back to Asia/Manila');
+  }
+
   const day = normalizeSlotDate(slot.slot_date);
   if (!day) return null;
 
-  const startTime = String(slot.start_time || '').slice(0, 8);
-  const endTime = String(slot.end_time || '').slice(0, 8);
+  const startTime = normalizeTime(slot.start_time);
+  const endTime = normalizeTime(slot.end_time);
 
   const created = await calendar.events.insert({
     calendarId: 'primary',
     resource: {
       summary: `Consultation Slot - ${courseLabel}`,
       description: `ScholarSync consultation slot`,
-      start: { dateTime: `${day}T${startTime}`, timeZone: 'Asia/Manila' },
-      end: { dateTime: `${day}T${endTime}`, timeZone: 'Asia/Manila' },
+      // Use dynamic timezone and OMIT offset to allow Google to align with user's view
+      start: { dateTime: `${day}T${startTime}`, timeZone: userTimeZone },
+      end: { dateTime: `${day}T${endTime}`, timeZone: userTimeZone },
       location: 'ScholarSync',
     },
   } as any);
@@ -150,17 +263,27 @@ const upsertGoogleEventForSlot = async (
   const calendar = await getCalendarClientForAccount(ownerAccountId);
   if (!calendar) return existingGoogleEventId || null;
 
+  // Fetch the user's primary calendar timezone for adaptive sync
+  let userTimeZone = 'Asia/Manila';
+  try {
+    const calendarInfo = await calendar.calendars.get({ calendarId: 'primary' });
+    userTimeZone = calendarInfo.data.timeZone || 'Asia/Manila';
+  } catch (err) {
+    console.warn('Failed to fetch user calendar timezone, falling back to Asia/Manila');
+  }
+
   const day = normalizeSlotDate(slot.slot_date);
   if (!day) return existingGoogleEventId || null;
 
-  const startTime = String(slot.start_time || '').slice(0, 8);
-  const endTime = String(slot.end_time || '').slice(0, 8);
+  const startTime = normalizeTime(slot.start_time);
+  const endTime = normalizeTime(slot.end_time);
 
   const resource = {
     summary: `Consultation Slot - ${courseLabel}`,
     description: `ScholarSync consultation slot`,
-    start: { dateTime: `${day}T${startTime}`, timeZone: 'Asia/Manila' },
-    end: { dateTime: `${day}T${endTime}`, timeZone: 'Asia/Manila' },
+    // Use dynamic timezone and OMIT offset to allow Google to align with user's view
+    start: { dateTime: `${day}T${startTime}`, timeZone: userTimeZone },
+    end: { dateTime: `${day}T${endTime}`, timeZone: userTimeZone },
     location: 'ScholarSync',
   };
 
@@ -196,18 +319,41 @@ const deleteGoogleEventForSlot = async (ownerAccountId: number, googleEventId: s
     await calendar.events.delete({ calendarId: 'primary', eventId: googleEventId } as any);
   } catch (err: any) {
     const errorCode = err?.code || err?.status || err?.statusCode || err?.response?.status;
-    // Ignore 404/410 errors (event already deleted or gone)
-    if (errorCode === 404 || errorCode === 410 || err?.message?.includes('Not Found')) return;
-    throw err;
+    // Log warning instead of throwing for non-found errors to ensure DB deletion proceeds.
+    if (errorCode === 404 || errorCode === 410 || err?.message?.includes('Not Found')) {
+      console.warn(`Google event ${googleEventId} already deleted or not found.`);
+      return;
+    }
+    // For other errors (like auth), we still return to allow local deletion to proceed,
+    // but we log it as a warning.
+    console.error(`Failed to delete Google Calendar event ${googleEventId}:`, err.message || err);
   }
 };
 
 // GET slots for an adviser
 router.get('/slots/adviser/:adviserId', authenticate, async (req, res) => {
   try {
-    const { adviserId } = req.params;
+    let { adviserId } = req.params;
     
     console.log('Fetching slots for adviser ID:', adviserId);
+
+    // If adviserId is a UUID, resolve it to numeric account_id
+    if (adviserId && adviserId.includes('-')) {
+      const { rows: accountRows } = await pool.query(
+        `SELECT a.account_id 
+         FROM ss_account a
+         JOIN users u ON u.email = a."accountEmail"
+         WHERE u.id = $1 LIMIT 1`,
+        [adviserId]
+      );
+      if (accountRows.length > 0) {
+        adviserId = accountRows[0].account_id.toString();
+        console.log('Resolved UUID to account_id:', adviserId);
+      } else {
+        // If not found in ss_account, it might be an admin or a user without slots yet
+        return res.json({ slots: [] });
+      }
+    }
     
     const { rows } = await pool.query(
       `SELECT
@@ -387,7 +533,7 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
 });
 
 // POST create consultation slot(s)
-router.post('/slots', authenticate, async (req, res) => {
+router.post('/slots', authenticate, resolveAccountId, async (req, res) => {
   try {
     const {
       courseId,
@@ -398,14 +544,14 @@ router.post('/slots', authenticate, async (req, res) => {
       maxGroups,
       selectedGroups,
       isWholeDay,
-      multipleSlots
+      multipleSlots,
+      batchSlots
     } = req.body;
 
-    const user: any = req.user;
-    const adviserId = user.id;
+    const adviserId = (req as any).adviserId;
 
     // Validate required fields
-    if (!courseId || !slotDate) {
+    if (!courseId || (!slotDate && (!batchSlots || batchSlots.length === 0))) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -416,65 +562,88 @@ router.post('/slots', authenticate, async (req, res) => {
     const courseLabel = courseRows[0]?.courseCode || courseRows[0]?.courseName || `Course ${courseId}`;
 
     const createdSlots: any[] = [];
+    const targetMaxGroups = 1; // Enforce one group per slot as requested
 
-    // If multiple slots (whole week), create multiple entries
-    if (multipleSlots && multipleSlots.length > 0) {
+    // Helper to insert a slot only if it doesn't already exist for this adviser+time
+    const insertUniqueSlot = async (date: string, start: string, end: string) => {
+      const existing = await pool.query(
+        'SELECT slot_id FROM ss_consultation_slots WHERE adviser_id = $1 AND slot_date = $2 AND start_time = $3 AND end_time = $4 LIMIT 1',
+        [adviserId, date, start, end]
+      );
+      
+      if (existing.rows.length === 0) {
+        const res = await pool.query(
+          `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
+          [adviserId, courseId, date, start, end, slotType, targetMaxGroups]
+        );
+        return res.rows[0];
+      }
+      return null;
+    };
+
+    // If batch slots (from preview mode), use those directly
+    if (batchSlots && Array.isArray(batchSlots)) {
+      for (const bs of batchSlots) {
+        const s = await insertUniqueSlot(bs.slotDate, bs.startTime, bs.endTime);
+        if (s) createdSlots.push(s);
+      }
+    } else if (multipleSlots && multipleSlots.length > 0) {
+      // If multiple slots (whole week), create multiple entries
       for (const date of multipleSlots as string[]) {
         if (isWholeDay) {
-          const morning = await pool.query(
-            `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
-            [adviserId, courseId, date, '08:00', '12:00', slotType, maxGroups]
-          );
-          const afternoon = await pool.query(
-            `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
-            [adviserId, courseId, date, '13:00', '17:00', slotType, maxGroups]
-          );
-          createdSlots.push(morning.rows[0], afternoon.rows[0]);
+          const morning = await insertUniqueSlot(date, '08:00', '12:00');
+          const afternoon = await insertUniqueSlot(date, '13:00', '17:00');
+          if (morning) createdSlots.push(morning);
+          if (afternoon) createdSlots.push(afternoon);
         } else {
-          const single = await pool.query(
-            `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
-            [adviserId, courseId, date, startTime, endTime, slotType, maxGroups]
-          );
-          createdSlots.push(single.rows[0]);
+          const single = await insertUniqueSlot(date, startTime, endTime);
+          if (single) createdSlots.push(single);
         }
       }
     } else if (isWholeDay) {
-      // Single date, whole day: create morning + afternoon slots
-      const morning = await pool.query(
-        `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
-        [adviserId, courseId, slotDate, '08:00', '12:00', slotType, maxGroups]
-      );
-      const afternoon = await pool.query(
-        `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
-        [adviserId, courseId, slotDate, '13:00', '17:00', slotType, maxGroups]
-      );
-      createdSlots.push(morning.rows[0], afternoon.rows[0]);
+      // Single date, whole day
+      const morning = await insertUniqueSlot(slotDate, '08:00', '12:00');
+      const afternoon = await insertUniqueSlot(slotDate, '13:00', '17:00');
+      if (morning) createdSlots.push(morning);
+      if (afternoon) createdSlots.push(afternoon);
     } else {
-      // Single time slot
-      const single = await pool.query(
-        `INSERT INTO ss_consultation_slots (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $1, 'Adviser') RETURNING slot_id, slot_date, start_time, end_time`,
-        [adviserId, courseId, slotDate, startTime, endTime, slotType, maxGroups]
-      );
-      createdSlots.push(single.rows[0]);
+      // Single date, single slot
+      const single = await insertUniqueSlot(slotDate, startTime, endTime);
+      if (single) createdSlots.push(single);
     }
 
-    for (const slot of createdSlots) {
+    if (createdSlots.length === 0) {
+      // If we are here and createdSlots is empty, it means all requested slots were duplicates
+      // We still return success but maybe with a note
+      return res.json({ 
+        success: true, 
+        message: 'Slots were already scheduled for these times, no duplicates created.', 
+        slots: [] 
+      });
+    }
+
+    // Google Calendar Sync Recovery: Attempt to sync all unsynced slots for this course/adviser
+    const { rows: unsyncedSlots } = await pool.query(
+      'SELECT slot_id, slot_date, start_time, end_time FROM ss_consultation_slots WHERE adviser_id = $1 AND course_id = $2 AND google_event_id IS NULL',
+      [adviserId, courseId]
+    );
+
+    for (const slot of unsyncedSlots) {
       try {
-        const googleEventId = await createGoogleEventForSlot(adviserId, slot, courseLabel);
-        if (googleEventId) {
+        const syncedGoogleEventId = await upsertGoogleEventForSlot(
+          adviserId,
+          { slot_date: slot.slot_date, start_time: slot.start_time, end_time: slot.end_time },
+          courseLabel
+        );
+        if (syncedGoogleEventId) {
           await pool.query(
             'UPDATE ss_consultation_slots SET google_event_id = $1 WHERE slot_id = $2',
-            [googleEventId, slot.slot_id]
+            [syncedGoogleEventId, slot.slot_id]
           );
         }
       } catch (err: any) {
-        console.warn('Failed to create Google Calendar event for slot:', err?.message || err);
+        console.warn(`Failed to sync Google Calendar event for slot ${slot.slot_id}:`, err?.message || err);
       }
     }
 
@@ -486,9 +655,10 @@ router.post('/slots', authenticate, async (req, res) => {
 });
 
 // DELETE consultation slot
-router.delete('/slots/:slotId', authenticate, async (req, res) => {
+router.delete('/slots/:slotId', authenticate, resolveAccountId, async (req, res) => {
   try {
     const { slotId } = req.params;
+    const adviserId = (req as any).adviserId;
     const user: any = req.user;
 
     const { rows: slotRows } = await pool.query(
@@ -502,13 +672,17 @@ router.delete('/slots/:slotId', authenticate, async (req, res) => {
 
     const slot = slotRows[0];
     const requesterRole = String(user?.role || '');
-    const canDelete = Number(slot.owner_account_id) === Number(user?.id) || requesterRole === 'Admin';
+    const canDelete = Number(slot.owner_account_id) === Number(adviserId) || requesterRole === 'Admin';
     if (!canDelete) {
       return res.status(403).json({ error: 'Only the slot owner or an admin can delete this consultation slot.' });
     }
 
     if (slot.google_event_id) {
-      await deleteGoogleEventForSlot(slot.owner_account_id || user.id, slot.google_event_id);
+      try {
+        await deleteGoogleEventForSlot(slot.owner_account_id || adviserId, slot.google_event_id);
+      } catch (err) {
+        console.warn('Non-fatal error deleting Google event, proceeding with DB deletion:', err);
+      }
     }
     
     await pool.query('DELETE FROM ss_consultation_slots WHERE slot_id = $1', [slotId]);
@@ -521,32 +695,33 @@ router.delete('/slots/:slotId', authenticate, async (req, res) => {
 });
 
 // DELETE all slots for a specific day
-router.delete('/slots/day/:date', authenticate, async (req, res) => {
+router.delete('/slots/day/:date', authenticate, resolveAccountId, async (req, res) => {
   try {
     const { date } = req.params;
+    const adviserId = (req as any).adviserId;
     const user: any = req.user;
     const requesterRole = String(user?.role || '').toLowerCase();
     const canDeleteDay = requesterRole === 'admin' || requesterRole === 'adviser' || requesterRole === 'advisers';
     if (!canDeleteDay) {
-      return res.status(403).json({ error: 'Only advisers/admins can delete day consultation slots.' });
+      return res.status(403).json({ error: 'Only adviser/admins can delete day consultation slots.' });
     }
 
     const { rows: daySlots } = await pool.query(
       `SELECT slot_id, google_event_id, owner_account_id
        FROM ss_consultation_slots
        WHERE slot_date = $1 AND adviser_id = $2`,
-      [date, user.id]
+      [date, adviserId]
     );
 
     for (const slot of daySlots) {
       if (slot.google_event_id) {
-        await deleteGoogleEventForSlot(slot.owner_account_id || user.id, slot.google_event_id);
+        await deleteGoogleEventForSlot(slot.owner_account_id || adviserId, slot.google_event_id);
       }
     }
     
     await pool.query(
       'DELETE FROM ss_consultation_slots WHERE slot_date = $1 AND adviser_id = $2',
-      [date, user.id]
+      [date, adviserId]
     );
     
     return res.json({ success: true, message: 'Day slots deleted successfully' });
@@ -557,11 +732,11 @@ router.delete('/slots/day/:date', authenticate, async (req, res) => {
 });
 
 // PUT update consultation slot
-router.put('/slots/:slotId', authenticate, async (req, res) => {
+router.put('/slots/:slotId', authenticate, resolveAccountId, async (req, res) => {
   try {
     const { slotId } = req.params;
     const { slotDate, startTime, endTime, maxGroups, slotType } = req.body;
-    const user: any = req.user;
+    const adviserId = (req as any).adviserId;
 
     const updateRes = await pool.query(
       `UPDATE ss_consultation_slots 
@@ -571,7 +746,7 @@ router.put('/slots/:slotId', authenticate, async (req, res) => {
            max_groups = COALESCE($4, max_groups),
            slot_type = COALESCE($5, slot_type)
        WHERE slot_id = $6 AND adviser_id = $7`,
-      [slotDate || null, startTime || null, endTime || null, maxGroups ?? null, slotType || null, slotId, user.id]
+      [slotDate || null, startTime || null, endTime || null, maxGroups ?? null, slotType || null, slotId, adviserId]
     );
 
     if (updateRes.rowCount === 0) {
@@ -595,7 +770,7 @@ router.put('/slots/:slotId', authenticate, async (req, res) => {
         );
         const courseLabel = courseRows[0]?.courseCode || courseRows[0]?.courseName || `Course ${slot.course_id}`;
         const syncedGoogleEventId = await upsertGoogleEventForSlot(
-          Number(slot.owner_account_id || user.id),
+          Number(slot.owner_account_id || adviserId),
           slot,
           courseLabel,
           slot.google_event_id
@@ -620,11 +795,11 @@ router.put('/slots/:slotId', authenticate, async (req, res) => {
 });
 
 // PUT update all slots for a specific day
-router.put('/slots/day/:date', authenticate, async (req, res) => {
+router.put('/slots/day/:date', authenticate, resolveAccountId, async (req, res) => {
   try {
     const { date } = req.params;
     const { newDate, extraGroups } = req.body;
-    const user: any = req.user;
+    const adviserId = (req as any).adviserId;
 
     const targetDate = String(newDate || date).slice(0, 10);
 
@@ -637,7 +812,7 @@ router.put('/slots/day/:date', authenticate, async (req, res) => {
       `UPDATE ss_consultation_slots
        SET slot_date = $1
        WHERE slot_date = $2 AND adviser_id = $3`,
-      [targetDate, String(date).slice(0, 10), user.id]
+      [targetDate, String(date).slice(0, 10), adviserId]
     );
 
     const { rows: movedSlots } = await pool.query(
@@ -645,7 +820,7 @@ router.put('/slots/day/:date', authenticate, async (req, res) => {
        FROM ss_consultation_slots
        WHERE slot_date = $1 AND adviser_id = $2
        ORDER BY start_time`,
-      [targetDate, user.id]
+      [targetDate, adviserId]
     );
 
     // 2) Optionally add extra FCFS slots (1 hour each, 10-minute gap).
@@ -658,7 +833,7 @@ router.put('/slots/day/:date', authenticate, async (req, res) => {
          WHERE adviser_id = $1 AND slot_date = $2
          ORDER BY end_time DESC
          LIMIT 1`,
-        [user.id, targetDate]
+        [adviserId, targetDate]
       );
 
       if (existingRows.length === 0) {
@@ -684,7 +859,7 @@ router.put('/slots/day/:date', authenticate, async (req, res) => {
            (adviser_id, course_id, slot_date, start_time, end_time, slot_type, max_groups, owner_account_id, owner_role)
            VALUES ($1, $2, $3, $4, $5, 'FIRST_COME_FIRST_SERVE', 1, $1, 'Adviser')
            RETURNING slot_id, course_id, slot_date, start_time, end_time, google_event_id, owner_account_id`,
-          [user.id, courseId, targetDate, `${startH}:${startM}`, `${endH}:${endM}`]
+          [adviserId, courseId, targetDate, `${startH}:${startM}`, `${endH}:${endM}`]
         );
         addedSlots.push(...added.rows);
       }
@@ -707,7 +882,7 @@ router.put('/slots/day/:date', authenticate, async (req, res) => {
           }
 
           const syncedGoogleEventId = await upsertGoogleEventForSlot(
-            Number(slot.owner_account_id || user.id),
+            Number(slot.owner_account_id || adviserId),
             slot,
             courseLabelCache.get(courseIdNum) || `Course ${courseIdNum}`,
             slot.google_event_id
@@ -995,7 +1170,7 @@ router.post('/bookings', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Your group already booked this slot.' });
     }
 
-    const weeklyOrSameDayBooking = await client.query(
+    const sameDayBooking = await client.query(
       `SELECT b.booking_id,
               s_existing.slot_date::date as booked_date,
               s_target.slot_date::date as target_date
@@ -1010,24 +1185,17 @@ router.post('/bookings', authenticate, async (req, res) => {
          AND b.status = 'BOOKED'
          AND (
            s_existing.slot_date::date = s_target.slot_date::date
-           OR date_trunc('week', s_existing.slot_date)::date = date_trunc('week', s_target.slot_date)::date
          )
        LIMIT 1`,
       [numericGroupId, normalizedGroupName, bookerEmail, slotId]
     );
 
-    if (weeklyOrSameDayBooking.rows.length > 0) {
-      const existingBookedDate = String(weeklyOrSameDayBooking.rows[0].booked_date || '').slice(0, 10);
-      const targetBookedDate = String(weeklyOrSameDayBooking.rows[0].target_date || '').slice(0, 10);
-      if (existingBookedDate !== '' && targetBookedDate !== '' && existingBookedDate === targetBookedDate) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Your group already has a booked consultation on this day.' });
-      }
+    if (sameDayBooking.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Your group already has a booked consultation for this week.' });
+      return res.status(400).json({ error: 'Your group already has a booked consultation on this day.' });
     }
 
-    // Also block rebooking when a consultation record already exists this day/week,
+    // Also block rebooking when a consultation record already exists on this day,
     // even if its original slot/booking row was deleted later.
     const consultationHistoryCheck = await client.query(
       `SELECT
@@ -1052,12 +1220,6 @@ router.post('/bookings', authenticate, async (req, res) => {
                ELSE NULL
              END
            ) = $2::date
-           OR date_trunc('week', (
-             CASE
-               WHEN TRIM(COALESCE(c."conDate", '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(c."conDate")::date
-               ELSE NULL
-             END
-           ))::date = date_trunc('week', $2::date)::date
          )
        LIMIT 1`,
       [normalizedGroupName, slotDate]
@@ -1065,12 +1227,8 @@ router.post('/bookings', authenticate, async (req, res) => {
 
     if (consultationHistoryCheck.rows.length > 0) {
       const consultationDate = String(consultationHistoryCheck.rows[0].consultation_date || '').slice(0, 10);
-      if (consultationDate === slotDate) {
-        await client.query('ROLLBACK');
-        return res.status(400).json({ error: 'Your group already completed a consultation record on this day.' });
-      }
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Your group already completed a consultation record for this week.' });
+      return res.status(400).json({ error: 'Your group already completed a consultation record on this day.' });
     }
 
     const currentCountRes = await client.query(
@@ -1110,10 +1268,24 @@ router.post('/feedback', authenticate, async (req, res) => {
   const client = await pool.connect();
   try {
     const user: any = req.user;
-    const role = String(user?.role || '').toLowerCase();
-    const canSubmit = role === 'adviser' || role === 'advisers' || role === 'admin';
+    const role = String(user?.role || '').trim().toLowerCase();
+    let effectiveRole = role;
+
+    // JWT role can be stale (e.g., user.role=member while ss_account says Admin/Advisers).
+    // For consultation feedback permissions, prefer ScholarSync role when available.
+    if (!(effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin') && user?.email) {
+      const { rows: accountRoleRows } = await client.query(
+        'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+        [String(user.email)]
+      );
+      if (accountRoleRows.length > 0) {
+        effectiveRole = String(accountRoleRows[0].accountRole || '').trim().toLowerCase();
+      }
+    }
+
+    const canSubmit = effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin';
     if (!canSubmit) {
-      return res.status(403).json({ error: 'Only advisers/admins can submit consultation feedback.' });
+      return res.status(403).json({ error: 'Only adviser/admins can submit consultation feedback.' });
     }
 
     const {
@@ -1153,6 +1325,17 @@ router.post('/feedback', authenticate, async (req, res) => {
     }
 
     const booking = bookingRes.rows[0];
+    const canonicalGroupNameRes = await client.query(
+      `SELECT name
+       FROM team_groups
+       WHERE course_id = $1
+         AND LOWER(TRIM(COALESCE(name, ''))) = LOWER($2)
+       LIMIT 1`,
+      [Number(booking.course_id), String(booking.group_name || group_name || '').trim()]
+    );
+    const canonicalGroupName = String(
+      canonicalGroupNameRes.rows[0]?.name || booking.group_name || group_name || ''
+    ).trim();
 
     const existingRes = await client.query(
       `SELECT "conID"
@@ -1161,8 +1344,10 @@ router.post('/feedback', authenticate, async (req, res) => {
          AND LOWER(TRIM(COALESCE("groupName", ''))) = LOWER($2)
        ORDER BY "conID" DESC
        LIMIT 1`,
-      [Number(slot_id), String(group_name || '').trim()]
+      [Number(slot_id), canonicalGroupName]
     );
+
+    const followUpStatus = inferSavedFollowUpStatus(conConcerns, conAction);
 
     let consultation: any;
     if (existingRes.rows.length > 0) {
@@ -1180,14 +1365,15 @@ router.post('/feedback', authenticate, async (req, res) => {
              adviser_notes = $9,
              attendance_data = COALESCE($10::jsonb, '{}'::jsonb),
              participation_data = COALESCE($11::jsonb, '{}'::jsonb),
+             follow_up_status = $12,
              status = 'SUBMITTED',
              submitted_at = NOW(),
              updated_at = NOW()
-         WHERE "conID" = $12
+           WHERE "conID" = $13
          RETURNING *`,
         [
           Number(booking.course_id),
-          String(group_name || '').trim(),
+          canonicalGroupName,
           Number(slot_id),
           String(conDate || '').slice(0, 10),
           String(conMil || ''),
@@ -1197,6 +1383,7 @@ router.post('/feedback', authenticate, async (req, res) => {
           String(adviser_notes || ''),
           attendance_data ?? {},
           participation_data ?? {},
+          followUpStatus,
           conID,
         ]
       );
@@ -1204,13 +1391,13 @@ router.post('/feedback', authenticate, async (req, res) => {
     } else {
       const insertRes = await client.query(
         `INSERT INTO ss_consultation
-          ("courseID", "groupName", slot_id, "conDate", "conMil", "conSum", "conAction", "conConcerns", adviser_notes, attendance_data, participation_data, status, submitted_at)
+          ("courseID", "groupName", slot_id, "conDate", "conMil", "conSum", "conAction", "conConcerns", adviser_notes, attendance_data, participation_data, follow_up_status, status, submitted_at)
          VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::jsonb, '{}'::jsonb), COALESCE($11::jsonb, '{}'::jsonb), 'SUBMITTED', NOW())
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::jsonb, '{}'::jsonb), COALESCE($11::jsonb, '{}'::jsonb), $12, 'SUBMITTED', NOW())
          RETURNING *`,
         [
           Number(booking.course_id),
-          String(group_name || '').trim(),
+          canonicalGroupName,
           Number(slot_id),
           String(conDate || '').slice(0, 10),
           String(conMil || ''),
@@ -1220,6 +1407,7 @@ router.post('/feedback', authenticate, async (req, res) => {
           String(adviser_notes || ''),
           attendance_data ?? {},
           participation_data ?? {},
+          followUpStatus,
         ]
       );
       consultation = insertRes.rows[0];
@@ -1303,6 +1491,62 @@ router.post('/feedback', authenticate, async (req, res) => {
     await client.query('ROLLBACK');
     console.error('Error saving consultation feedback:', error);
     return res.status(500).json({ error: error?.message || 'Failed to save consultation feedback.' });
+  } finally {
+    client.release();
+  }
+});
+
+router.put('/followups/:conID/status', authenticate, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const user: any = req.user;
+    const role = String(user?.role || '').trim().toLowerCase();
+    let effectiveRole = role;
+
+    if (!(effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin') && user?.email) {
+      const { rows: accountRoleRows } = await client.query(
+        'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+        [String(user.email)]
+      );
+      if (accountRoleRows.length > 0) {
+        effectiveRole = String(accountRoleRows[0].accountRole || '').trim().toLowerCase();
+      }
+    }
+
+    const canUpdate = effectiveRole === 'adviser' || effectiveRole === 'advisers' || effectiveRole === 'admin';
+    if (!canUpdate) {
+      return res.status(403).json({ error: 'Only adviser/admins can update follow-up status.' });
+    }
+
+    const conID = Number(req.params.conID);
+    const status = String(req.body?.status || '').trim().toLowerCase();
+    const validStatuses = ['overdue', 'open', 'resolved'];
+
+    if (!Number.isFinite(conID) || conID <= 0) {
+      return res.status(400).json({ error: 'Invalid consultation id.' });
+    }
+
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: 'Invalid follow-up status.' });
+    }
+
+    const { rows } = await client.query(
+      `UPDATE ss_consultation
+       SET follow_up_status = $1,
+           updated_at = NOW()
+       WHERE "conID" = $2
+       RETURNING "conID", "groupName", follow_up_status`,
+      [status, conID]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Consultation not found.' });
+    }
+
+    return res.json({ success: true, consultation: rows[0] });
+  } catch (error: any) {
+    console.error('Error updating follow-up status:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to update follow-up status.' });
   } finally {
     client.release();
   }

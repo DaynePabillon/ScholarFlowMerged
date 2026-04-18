@@ -42,32 +42,95 @@ const verifyToken = (req: Request, res: Response, next: NextFunction) => {
   });
 };
 
-const verifyAdmin = (req: Request, res: Response, next: NextFunction) => {
+const verifyAdmin = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    if (user.role !== 'Admin') return res.status(403).json({ error: "Admin access required" });
+    let role = String(user.role || '').toLowerCase();
+    
+    if (role !== 'admin' && user.email) {
+      try {
+        const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
+        if (rows.length > 0) role = String(rows[0].accountRole || '').toLowerCase();
+      } catch (e) {}
+    }
+
+    if (role !== 'admin') return res.status(403).json({ error: "Admin access required" });
     (req as any).user = user;
     next();
   });
 };
 
-const verifyInstructor = (req: Request, res: Response, next: NextFunction) => {
+const verifyInstructor = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", (err: any, user: any) => {
+  jwt.verify(token, process.env.JWT_SECRET || "default-secret-key", async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    if (user.role !== 'Admin' && user.role !== 'Adviser' && user.role !== 'Advisers') {
+    let role = String(user.role || '').toLowerCase();
+    
+    if (role !== 'admin' && role !== 'adviser' && role !== 'advisers' && role !== 'manager' && user.email) {
+      try {
+        const { rows } = await pool.query('SELECT "accountRole" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
+        if (rows.length > 0) role = String(rows[0].accountRole || '').toLowerCase();
+      } catch (e) {}
+    }
+
+    if (role !== 'admin' && role !== 'adviser' && role !== 'advisers' && role !== 'manager') {
       return res.status(403).json({ error: "Instructor access required" });
     }
     (req as any).user = user;
     next();
   });
+};
+
+const normalizeAcademicRole = (value: unknown): 'admin' | 'advisers' | 'student' => {
+  const role = String(value || '').trim().toLowerCase();
+  if (role === 'admin') return 'admin';
+  if (role === 'adviser' || role === 'advisers' || role === 'manager') return 'advisers';
+  return 'student';
+};
+
+const inferFollowUpStatus = (
+  storedValue: unknown,
+  concernValue: unknown,
+  actionValue: unknown,
+  updatedAtValue?: unknown
+): 'overdue' | 'open' | 'resolved' => {
+  const storedStatus = String(storedValue || '').trim().toLowerCase();
+  if (storedStatus === 'overdue' || storedStatus === 'open' || storedStatus === 'resolved') {
+    return storedStatus;
+  }
+
+  const concern = String(concernValue || '').trim().toLowerCase();
+  const action = String(actionValue || '').trim().toLowerCase();
+  const hasFollowUpContent = concern.length > 0 || action.length > 0;
+
+  if (!hasFollowUpContent) {
+    return 'resolved';
+  }
+
+  const updatedAtSource: string | number | Date =
+    updatedAtValue instanceof Date
+      ? updatedAtValue
+      : (typeof updatedAtValue === 'string' || typeof updatedAtValue === 'number')
+        ? updatedAtValue
+        : 0;
+
+  const updatedAt = new Date(updatedAtSource).getTime();
+  const ageDays = Number.isFinite(updatedAt) && updatedAt > 0
+    ? Math.floor((Date.now() - updatedAt) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  if (ageDays > 14 || concern.includes('blocker') || concern.includes('risk')) {
+    return 'overdue';
+  }
+
+  return 'open';
 };
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -77,7 +140,20 @@ const getAccessToken = async (token: string): Promise<string | null> => {
   try {
     const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
     
-    // Try ss_account first (ScholarSync-native users) — match by email since decoded.id is SkyFlow UUID
+    // Try SkyFlow users table first (unified auth stores Google token here)
+    // Use getUserWithTokens to auto-refresh expired tokens
+    try {
+      // Quick check to avoid "User not found" logs for pure ScholarSync users
+      const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [decoded.id]);
+      if (userCheck.rows.length > 0) {
+        const user = await GoogleAuthService.getUserWithTokens(decoded.id);
+        if (user?.access_token) return user.access_token;
+      }
+    } catch (e) {
+      // Fall through to ss_account on any failure
+    }
+
+    // Try ss_account next (ScholarSync-native users) — match by email since decoded.id is SkyFlow UUID
     const ssResult = await pool.query(
       'SELECT "googleAccessToken" FROM ss_account WHERE "accountEmail" = $1',
       [decoded.email]
@@ -86,14 +162,7 @@ const getAccessToken = async (token: string): Promise<string | null> => {
       return ssResult.rows[0].googleAccessToken;
     }
     
-    // Fall back to SkyFlow users table (unified auth stores Google token here)
-    // Use getUserWithTokens to auto-refresh expired tokens
-    try {
-      const user = await GoogleAuthService.getUserWithTokens(decoded.id);
-      return user.access_token || null;
-    } catch {
-      return null;
-    }
+    return null;
   } catch {
     return null;
   }
@@ -207,6 +276,631 @@ router.delete('/accounts/:id', verifyAdmin, async (req: Request, res: Response) 
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Dashboard aggregate: Admin Data Integrity
+router.get('/dashboard/admin-data-integrity', verifyAdmin, async (_req: Request, res: Response) => {
+  try {
+    const [coursesRes, accountsRes, groupsRes, consultationsRes] = await Promise.all([
+      pool.query(`SELECT id, "courseName", "courseCode", "courseSection" FROM ss_courses ORDER BY id DESC`),
+      pool.query(`SELECT account_id, "accountName", "accountEmail", "accountRole" FROM ss_account ORDER BY "accountName"`),
+      pool.query(
+        `SELECT
+           tg.id,
+           tg.course_id,
+           tg.name,
+           tg.adviser_name,
+           COALESCE(m.member_count, 0)::int AS member_count
+         FROM team_groups tg
+         LEFT JOIN (
+           SELECT team_group_id, COUNT(*)::int AS member_count
+           FROM team_group_members
+           GROUP BY team_group_id
+         ) m ON m.team_group_id = tg.id
+         ORDER BY tg.course_id, tg.team_number, tg.name`
+      ),
+      pool.query(
+        `SELECT DISTINCT "courseID", LOWER(TRIM(COALESCE("groupName", ''))) AS group_key
+         FROM ss_consultation
+         WHERE COALESCE(TRIM("groupName"), '') <> ''`
+      )
+    ]);
+
+    const courses = coursesRes.rows;
+    const accounts = accountsRes.rows;
+    const groups = groupsRes.rows;
+    const consultationKeys = new Set(
+      consultationsRes.rows.map((row: any) => `${Number(row.courseID)}::${String(row.group_key || '')}`)
+    );
+
+    const roleBreakdown = { Admin: 0, Advisers: 0, Student: 0 };
+    for (const account of accounts) {
+      const role = normalizeAcademicRole(account.accountRole);
+      if (role === 'admin') roleBreakdown.Admin += 1;
+      else if (role === 'advisers') roleBreakdown.Advisers += 1;
+      else roleBreakdown.Student += 1;
+    }
+
+    const courseMap = new Map<number, any>();
+    for (const course of courses) {
+      courseMap.set(Number(course.id), {
+        id: Number(course.id),
+        courseName: course.courseName,
+        courseCode: course.courseCode,
+        courseSection: course.courseSection,
+        groups: [] as any[]
+      });
+    }
+
+    for (const group of groups) {
+      const courseId = Number(group.course_id);
+      if (!courseMap.has(courseId)) continue;
+      courseMap.get(courseId).groups.push(group);
+    }
+
+    const issues: Array<{ severity: 'high' | 'medium' | 'low'; title: string; detail: string; courseId?: number }> = [];
+
+    if (roleBreakdown.Admin === 0) {
+      issues.push({ severity: 'high', title: 'No Admin Account', detail: 'At least one Admin account is required for governance.' });
+    }
+
+    for (const course of courseMap.values()) {
+      if (!Array.isArray(course.groups) || course.groups.length === 0) {
+        issues.push({
+          severity: 'high',
+          title: 'Course Has No Groups',
+          detail: `${course.courseCode} (${course.courseSection}) has no groups configured.`,
+          courseId: course.id
+        });
+        continue;
+      }
+
+      for (const group of course.groups) {
+        const groupName = String(group.name || '').trim();
+        const groupKey = `${course.id}::${groupName.toLowerCase()}`;
+
+        if (!String(group.adviser_name || '').trim()) {
+          issues.push({
+            severity: 'high',
+            title: 'Group Missing Adviser',
+            detail: `${course.courseCode} · ${groupName || 'Unnamed Group'} has no adviser assignment.`,
+            courseId: course.id
+          });
+        }
+
+        if (Number(group.member_count || 0) === 0) {
+          issues.push({
+            severity: 'medium',
+            title: 'Group Missing Members',
+            detail: `${course.courseCode} · ${groupName || 'Unnamed Group'} has no enrolled members.`,
+            courseId: course.id
+          });
+        }
+
+        if (!consultationKeys.has(groupKey)) {
+          issues.push({
+            severity: 'low',
+            title: 'No Consultation History',
+            detail: `${course.courseCode} · ${groupName || 'Unnamed Group'} has no consultation logs yet.`,
+            courseId: course.id
+          });
+        }
+      }
+    }
+
+    const summary = {
+      high: issues.filter((i) => i.severity === 'high').length,
+      medium: issues.filter((i) => i.severity === 'medium').length,
+      low: issues.filter((i) => i.severity === 'low').length
+    };
+
+    return res.json({
+      courses,
+      accounts,
+      roleBreakdown,
+      summary,
+      issues
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to load admin dashboard integrity data.' });
+  }
+});
+
+// Dashboard aggregate: Admin Adviser Availability (by semester)
+router.get('/dashboard/adviser-availability', verifyAdmin, async (req: Request, res: Response) => {
+  try {
+    const requestedTerm = String(req.query.term || '').trim();
+
+    const [termsRes, advisersRes] = await Promise.all([
+      pool.query(
+        `SELECT DISTINCT "courseTerm"
+         FROM ss_courses
+         WHERE COALESCE(TRIM("courseTerm"), '') <> ''
+         ORDER BY "courseTerm" DESC`
+      ),
+      pool.query(
+        `SELECT account_id, "accountName", "accountEmail", "accountRole"
+         FROM ss_account
+         WHERE LOWER(COALESCE("accountRole", '')) IN ('adviser', 'advisers', 'manager')
+         ORDER BY "accountName" ASC NULLS LAST, "accountEmail" ASC`
+      )
+    ]);
+
+    const terms = termsRes.rows.map((row: any) => String(row.courseTerm || '').trim()).filter(Boolean);
+    const selectedTerm = requestedTerm || terms[0] || '';
+
+    const advisers = advisersRes.rows.map((row: any) => ({
+      accountId: row.account_id,
+      name: String(row.accountName || '').trim() || String(row.accountEmail || '').split('@')[0],
+      email: String(row.accountEmail || '').trim(),
+      role: String(row.accountRole || 'Advisers').trim()
+    }));
+
+    if (!selectedTerm) {
+      return res.json({
+        terms,
+        selectedTerm,
+        advisers: advisers.map((adviser: any) => ({
+          ...adviser,
+          assignedCount: 0,
+          availabilityStatus: 'Available',
+          assignedGroups: []
+        })),
+        summary: {
+          totalAdvisers: advisers.length,
+          assignedAdvisers: 0,
+          availableAdvisers: advisers.length,
+          totalGroupsInTerm: 0,
+          unassignedGroupsInTerm: 0,
+          mappedGroupsInTerm: 0
+        },
+        unassignedGroups: [],
+        unmappedAdviserLabels: []
+      });
+    }
+
+    const groupsRes = await pool.query(
+      `SELECT
+         tg.id AS "groupId",
+         tg.name AS "groupName",
+         tg.adviser_name,
+         tg.course_id AS "courseId",
+         c."courseCode",
+         c."courseSection",
+         c."courseTerm"
+       FROM team_groups tg
+       JOIN ss_courses c ON c.id = tg.course_id
+       WHERE c."courseTerm" = $1
+       ORDER BY c."courseCode", c."courseSection", tg.team_number, tg.name`,
+      [selectedTerm]
+    );
+
+    const groups = groupsRes.rows.map((row: any) => ({
+      groupId: String(row.groupId || '').trim(),
+      groupName: String(row.groupName || '').trim() || 'Unnamed Group',
+      adviserLabel: String(row.adviser_name || '').trim(),
+      courseId: Number(row.courseId),
+      courseCode: String(row.courseCode || '').trim(),
+      courseSection: String(row.courseSection || '').trim(),
+      courseTerm: String(row.courseTerm || '').trim()
+    }));
+
+    const adviserByKeys = new Map<string, any>();
+    for (const adviser of advisers) {
+      const emailKey = adviser.email.toLowerCase();
+      const nameKey = adviser.name.toLowerCase();
+      if (emailKey) adviserByKeys.set(emailKey, adviser);
+      if (nameKey) adviserByKeys.set(nameKey, adviser);
+    }
+
+    const adviserAssignments = new Map<string, any[]>();
+    for (const adviser of advisers) {
+      adviserAssignments.set(adviser.email.toLowerCase(), []);
+    }
+
+    const unassignedGroups: any[] = [];
+    const unmappedAdviserLabels = new Set<string>();
+    let mappedGroupsCount = 0;
+
+    for (const group of groups) {
+      const label = group.adviserLabel.toLowerCase();
+      if (!label) {
+        unassignedGroups.push(group);
+        continue;
+      }
+
+      const matched = adviserByKeys.get(label);
+      if (!matched) {
+        unmappedAdviserLabels.add(group.adviserLabel);
+        continue;
+      }
+
+      mappedGroupsCount += 1;
+      const key = matched.email.toLowerCase();
+      adviserAssignments.get(key)?.push({
+        groupId: group.groupId,
+        groupName: group.groupName,
+        courseId: group.courseId,
+        courseCode: group.courseCode,
+        courseSection: group.courseSection,
+        courseTerm: group.courseTerm
+      });
+    }
+
+    const adviserAvailability = advisers.map((adviser) => {
+      const assignedGroups = adviserAssignments.get(adviser.email.toLowerCase()) || [];
+      return {
+        ...adviser,
+        assignedCount: assignedGroups.length,
+        availabilityStatus: assignedGroups.length > 0 ? 'Assigned' : 'Available',
+        assignedGroups
+      };
+    });
+
+    const assignedAdvisers = adviserAvailability.filter((adviser) => adviser.assignedCount > 0).length;
+
+    return res.json({
+      terms,
+      selectedTerm,
+      advisers: adviserAvailability,
+      summary: {
+        totalAdvisers: adviserAvailability.length,
+        assignedAdvisers,
+        availableAdvisers: adviserAvailability.length - assignedAdvisers,
+        totalGroupsInTerm: groups.length,
+        unassignedGroupsInTerm: unassignedGroups.length,
+        mappedGroupsInTerm: mappedGroupsCount
+      },
+      unassignedGroups,
+      unmappedAdviserLabels: Array.from(unmappedAdviserLabels).sort((a, b) => a.localeCompare(b))
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to load adviser availability dashboard data.' });
+  }
+});
+
+// Dashboard aggregate: Admin Semester Readiness Checklist (by term)
+router.get('/dashboard/semester-readiness', verifyAdmin, async (req: Request, res: Response) => {
+  try {
+    const requestedTerm = String(req.query.term || '').trim();
+
+    const [termsRes, advisersRes] = await Promise.all([
+      pool.query(
+        `SELECT DISTINCT "courseTerm"
+         FROM ss_courses
+         WHERE COALESCE(TRIM("courseTerm"), '') <> ''
+         ORDER BY "courseTerm" DESC`
+      ),
+      pool.query(
+        `SELECT account_id, "accountName", "accountEmail"
+         FROM ss_account
+         WHERE LOWER(COALESCE("accountRole", '')) IN ('adviser', 'advisers', 'manager')`
+      )
+    ]);
+
+    const terms = termsRes.rows.map((row: any) => String(row.courseTerm || '').trim()).filter(Boolean);
+    const selectedTerm = requestedTerm || terms[0] || '';
+
+    if (!selectedTerm) {
+      return res.json({
+        terms,
+        selectedTerm,
+        summary: {
+          coursesInTerm: 0,
+          groupsInTerm: 0,
+          advisersInSystem: advisersRes.rows.length,
+          assignedAdvisersInTerm: 0,
+          availableAdvisersInTerm: advisersRes.rows.length,
+          readinessScore: 100
+        },
+        checklist: {
+          coursesWithoutGroups: [],
+          groupsWithoutAdviser: [],
+          groupsWithoutMembers: [],
+          groupsWithoutConsultation: []
+        }
+      });
+    }
+
+    const coursesRes = await pool.query(
+      `SELECT id, "courseName", "courseCode", "courseSection", "courseTerm"
+       FROM ss_courses
+       WHERE "courseTerm" = $1
+       ORDER BY "courseCode", "courseSection"`,
+      [selectedTerm]
+    );
+
+    const courses = coursesRes.rows;
+    const courseIds = courses.map((course: any) => Number(course.id)).filter(Number.isFinite);
+
+    if (courseIds.length === 0) {
+      return res.json({
+        terms,
+        selectedTerm,
+        summary: {
+          coursesInTerm: 0,
+          groupsInTerm: 0,
+          advisersInSystem: advisersRes.rows.length,
+          assignedAdvisersInTerm: 0,
+          availableAdvisersInTerm: advisersRes.rows.length,
+          readinessScore: 100
+        },
+        checklist: {
+          coursesWithoutGroups: [],
+          groupsWithoutAdviser: [],
+          groupsWithoutMembers: [],
+          groupsWithoutConsultation: []
+        }
+      });
+    }
+
+    const [groupsRes, consultationsRes] = await Promise.all([
+      pool.query(
+        `SELECT
+           tg.id AS "groupId",
+           tg.name AS "groupName",
+           tg.adviser_name,
+           tg.course_id AS "courseId",
+           c."courseCode",
+           c."courseSection",
+           COALESCE(m.member_count, 0)::int AS member_count
+         FROM team_groups tg
+         JOIN ss_courses c ON c.id = tg.course_id
+         LEFT JOIN (
+           SELECT team_group_id, COUNT(*)::int AS member_count
+           FROM team_group_members
+           GROUP BY team_group_id
+         ) m ON m.team_group_id = tg.id
+         WHERE tg.course_id = ANY($1::int[])
+         ORDER BY c."courseCode", c."courseSection", tg.team_number, tg.name`,
+        [courseIds]
+      ),
+      pool.query(
+        `SELECT DISTINCT "courseID", LOWER(TRIM(COALESCE("groupName", ''))) AS group_key
+         FROM ss_consultation
+         WHERE "courseID" = ANY($1::int[])
+           AND COALESCE(TRIM("groupName"), '') <> ''`,
+        [courseIds]
+      )
+    ]);
+
+    const groups = groupsRes.rows;
+    const consultationKeys = new Set(
+      consultationsRes.rows.map((row: any) => `${Number(row.courseID)}::${String(row.group_key || '')}`)
+    );
+
+    const coursesWithoutGroups = courses
+      .filter((course: any) => !groups.some((group: any) => Number(group.courseId) === Number(course.id)))
+      .map((course: any) => ({
+        courseId: Number(course.id),
+        courseCode: String(course.courseCode || ''),
+        courseSection: String(course.courseSection || ''),
+        courseName: String(course.courseName || '')
+      }));
+
+    const groupsWithoutAdviser = groups
+      .filter((group: any) => !String(group.adviser_name || '').trim())
+      .map((group: any) => ({
+        groupId: String(group.groupId || '').trim(),
+        groupName: String(group.groupName || 'Unnamed Group'),
+        courseId: Number(group.courseId),
+        courseCode: String(group.courseCode || ''),
+        courseSection: String(group.courseSection || '')
+      }));
+
+    const groupsWithoutMembers = groups
+      .filter((group: any) => Number(group.member_count || 0) === 0)
+      .map((group: any) => ({
+        groupId: String(group.groupId || '').trim(),
+        groupName: String(group.groupName || 'Unnamed Group'),
+        courseId: Number(group.courseId),
+        courseCode: String(group.courseCode || ''),
+        courseSection: String(group.courseSection || ''),
+        memberCount: Number(group.member_count || 0)
+      }));
+
+    const groupsWithoutConsultation = groups
+      .filter((group: any) => {
+        const key = `${Number(group.courseId)}::${String(group.groupName || '').trim().toLowerCase()}`;
+        return !consultationKeys.has(key);
+      })
+      .map((group: any) => ({
+        groupId: String(group.groupId || '').trim(),
+        groupName: String(group.groupName || 'Unnamed Group'),
+        courseId: Number(group.courseId),
+        courseCode: String(group.courseCode || ''),
+        courseSection: String(group.courseSection || '')
+      }));
+
+    const adviserEmails = new Set(
+      advisersRes.rows.map((adviser: any) => String(adviser.accountEmail || '').trim().toLowerCase()).filter(Boolean)
+    );
+
+    const assignedAdviserKeys = new Set<string>();
+    for (const group of groups) {
+      const label = String(group.adviser_name || '').trim().toLowerCase();
+      if (!label) continue;
+      if (adviserEmails.has(label)) assignedAdviserKeys.add(label);
+    }
+
+    const penalty =
+      coursesWithoutGroups.length * 12 +
+      groupsWithoutAdviser.length * 6 +
+      groupsWithoutMembers.length * 6 +
+      groupsWithoutConsultation.length * 3;
+    const readinessScore = Math.max(0, Math.min(100, 100 - penalty));
+
+    return res.json({
+      terms,
+      selectedTerm,
+      summary: {
+        coursesInTerm: courses.length,
+        groupsInTerm: groups.length,
+        advisersInSystem: advisersRes.rows.length,
+        assignedAdvisersInTerm: assignedAdviserKeys.size,
+        availableAdvisersInTerm: Math.max(0, advisersRes.rows.length - assignedAdviserKeys.size),
+        readinessScore
+      },
+      checklist: {
+        coursesWithoutGroups,
+        groupsWithoutAdviser,
+        groupsWithoutMembers,
+        groupsWithoutConsultation
+      }
+    });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to load semester readiness checklist data.' });
+  }
+});
+
+// Dashboard aggregate: Adviser Follow-up Queue
+router.get('/dashboard/adviser-followups', verifyInstructor, async (req: Request, res: Response) => {
+  try {
+    const user: any = (req as any).user || {};
+    const email = String(user?.email || '').toLowerCase().trim();
+    const name = String(user?.name || '').toLowerCase().trim();
+
+    let role = normalizeAcademicRole(user?.role);
+    if (email) {
+      try {
+        const roleRes = await pool.query(
+          'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+          [email]
+        );
+        if (roleRes.rows.length > 0) {
+          role = normalizeAcademicRole(roleRes.rows[0].accountRole);
+        }
+      } catch {
+        // keep role from token fallback
+      }
+    }
+
+    let courses: any[] = [];
+    if (role === 'admin') {
+      const coursesRes = await pool.query(
+        `SELECT id, "courseName", "courseCode"
+         FROM ss_courses
+         ORDER BY id DESC`
+      );
+      courses = coursesRes.rows;
+    } else {
+      const coursesRes = await pool.query(
+        `SELECT DISTINCT c.id, c."courseName", c."courseCode"
+         FROM ss_courses c
+         LEFT JOIN team_groups tg ON tg.course_id = c.id
+         WHERE LOWER(COALESCE(c."courseAdviser", '')) = $1
+            OR LOWER(COALESCE(tg.adviser_name, '')) = $1
+            OR LOWER(COALESCE(tg.adviser_name, '')) = $2
+         ORDER BY c.id DESC`,
+        [email, name]
+      );
+      courses = coursesRes.rows;
+    }
+
+    const courseIds = courses.map((course: any) => Number(course.id)).filter(Number.isFinite);
+    if (courseIds.length === 0) {
+      return res.json({ items: [] });
+    }
+
+    const [groupsRes, consultationsRes] = await Promise.all([
+      pool.query(
+        `SELECT tg.id, tg.name AS "groupName", tg.course_id AS "courseId", c."courseCode"
+         FROM team_groups tg
+         JOIN ss_courses c ON c.id = tg.course_id
+         WHERE tg.course_id = ANY($1::int[])
+         ORDER BY tg.course_id, tg.team_number, tg.name`,
+        [courseIds]
+      ),
+      pool.query(
+        `SELECT
+           "conID",
+           "courseID",
+           "groupName",
+           "conAction",
+           "conConcerns",
+           COALESCE(follow_up_status, '') as follow_up_status,
+           submitted_at,
+           updated_at,
+           created_at,
+           "conDate"
+         FROM ss_consultation
+         WHERE "courseID" = ANY($1::int[])
+         ORDER BY COALESCE(submitted_at, updated_at, created_at) DESC NULLS LAST, "conID" DESC`,
+        [courseIds]
+      )
+    ]);
+
+    const latestByGroupKey = new Map<string, any>();
+    for (const log of consultationsRes.rows) {
+      const key = `${Number(log.courseID)}::${String(log.groupName || '').trim().toLowerCase()}`;
+      if (!key.endsWith('::')) {
+        if (!latestByGroupKey.has(key)) {
+          latestByGroupKey.set(key, log);
+        }
+      }
+    }
+
+    const daysSince = (value: any): number => {
+      const ts = new Date(value || 0).getTime();
+      if (!Number.isFinite(ts) || ts <= 0) return 999;
+      return Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+    };
+
+    const items = groupsRes.rows.map((group: any) => {
+      const key = `${Number(group.courseId)}::${String(group.groupName || '').trim().toLowerCase()}`;
+      const latest = latestByGroupKey.get(key);
+
+      if (!latest) {
+        return {
+          id: `${group.id}-no-log`,
+          groupId: String(group.id),
+          groupName: String(group.groupName || 'Unnamed Group'),
+          courseId: Number(group.courseId),
+          courseCode: String(group.courseCode || 'Course'),
+          concern: 'No consultation logs yet.',
+          action: 'Schedule and complete an initial consultation.',
+          status: 'overdue',
+          updatedAt: ''
+        };
+      }
+
+      const updatedAt = String(latest.submitted_at || latest.updated_at || latest.created_at || latest.conDate || '');
+      const concern = String(latest.conConcerns || '').trim();
+      const action = String(latest.conAction || '').trim();
+      const ageDays = daysSince(updatedAt);
+
+      const status = inferFollowUpStatus(
+        latest.follow_up_status,
+        latest.conConcerns,
+        latest.conAction,
+        updatedAt
+      );
+
+      return {
+        id: `${group.id}-${latest.conID || 'latest'}`,
+        consultationId: Number(latest.conID || 0),
+        groupId: String(group.id),
+        groupName: String(group.groupName || 'Unnamed Group'),
+        courseId: Number(group.courseId),
+        courseCode: String(group.courseCode || 'Course'),
+        concern: concern || 'No concern details entered.',
+        action: action || 'No action item provided.',
+        status,
+        updatedAt
+      };
+    });
+
+    items.sort((a: any, b: any) => {
+      const score = (status: string) => (status === 'overdue' ? 2 : status === 'open' ? 1 : 0);
+      const scoreDiff = score(b.status) - score(a.status);
+      if (scoreDiff !== 0) return scoreDiff;
+      return daysSince(b.updatedAt) - daysSince(a.updatedAt);
+    });
+
+    return res.json({ items });
+  } catch (error: any) {
+    return res.status(500).json({ error: error.message || 'Failed to load adviser follow-up queue.' });
   }
 });
 
@@ -623,18 +1317,22 @@ router.get('/groups/:id', async (req: Request, res: Response) => {
 
   try {
     jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
+    const groupId = String(req.params.id || '').trim();
+    if (!groupId || groupId === 'null' || groupId === 'undefined') {
+      return res.status(400).json({ error: 'Invalid group id' });
+    }
     const { rows: groups } = await pool.query(
       `SELECT id as "groupID", name as "groupName", team_number, adviser_name as adviser, proposed_project,
               consultation_dates, comments, grade, course_id as "courseID"
        FROM team_groups WHERE id = $1`,
-      [req.params.id]
+      [groupId]
     );
     if (groups.length === 0) return res.status(404).json({ error: "Group not found" });
     const group = groups[0];
 
     const { rows: members } = await pool.query(
       `SELECT member_number, name, email, is_leader FROM team_group_members WHERE team_group_id = $1 ORDER BY member_number`,
-      [req.params.id]
+      [groupId]
     );
 
     const groupData: any = {
@@ -864,7 +1562,8 @@ router.get('/scholar/sheets/list', async (req: Request, res: Response) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  const DRIVE_URL = `https://www.googleapis.com/drive/v3/files?q=mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27&pageSize=50&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,owners)`;
+  // Note: Include both Google Sheets and MS Excel formats
+  const DRIVE_URL = `https://www.googleapis.com/drive/v3/files?q=(mimeType%3D%27application%2Fvnd.google-apps.spreadsheet%27%20or%20mimeType%3D%27application%2Fvnd.openxmlformats-officedocument.spreadsheetml.sheet%27%20or%20mimeType%3D%27application%2Fvnd.ms-excel%27)&pageSize=50&orderBy=modifiedTime%20desc&fields=files(id,name,modifiedTime,owners)`;
 
   const fetchSheets = async (accessTok: string) => {
     const response = await axios.get(DRIVE_URL, { headers: { Authorization: `Bearer ${accessTok}` } });
@@ -962,14 +1661,18 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     let records: any[] = [];
     let sheetTitle = 'Imported Sheet';
 
-    // Helper: find the actual header row (scans until it finds a row with a cell === 'TEAM CODE')
-    const findHeaderRow = (rows: string[][]): { headers: string[]; dataRows: string[][] } | null => {
+    // Helper: find the actual header row (scans until it finds a row with a cell === 'TEAM CODE' or 'GROUP')
+    const findHeaderRow = (rows: any[][]): { headers: string[]; dataRows: any[][] } | null => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i] ?? [];
-        const hasTeamCode = row.some(cell => cell.toString().trim().toUpperCase() === 'TEAM CODE');
+        const hasTeamCode = row.some((cell: any) => {
+          if (cell === null || cell === undefined) return false;
+          const v = cell.toString().trim().toUpperCase();
+          return ['TEAM CODE', 'TEAMCODE', 'GROUP', 'GROUP NAME'].includes(v);
+        });
         if (hasTeamCode) {
           return {
-            headers: row.map(h => h.toString().trim()),
+            headers: row.map((h: any) => (h || '').toString().trim()),
             dataRows: rows.slice(i + 1)
           };
         }
@@ -977,47 +1680,77 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
       return null;
     };
 
-    // Try Google Sheets API first (private sheets)
+    // Try Google Sheets API first (private sheets) or Google Drive directly for Excel
     if (accessToken) {
+      let mimeType = 'application/vnd.google-apps.spreadsheet';
       try {
-        const metaRes = await axios.get(
-          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        sheetTitle = metaRes.data?.properties?.title || sheetTitle;
-
-        const dataRes = await axios.get(
-          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1000`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const values: string[][] = dataRes.data.values || [];
-        const found = findHeaderRow(values);
-        if (found && found.dataRows.length > 0) {
-          records = found.dataRows
-            .filter(row => row.some(cell => cell.toString().trim() !== ''))
-            .map(row => {
-              const obj: any = {};
-              found.headers.forEach((h, i) => { obj[h] = (row[i] ?? '').toString().trim(); });
-              return obj;
-            });
-        }
+        const metaDriveRes = await axios.get(`https://www.googleapis.com/drive/v3/files/${sheetId}?fields=name,mimeType`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        sheetTitle = metaDriveRes.data?.name || sheetTitle;
+        mimeType = metaDriveRes.data?.mimeType || mimeType;
       } catch (e: any) {
-        logger.info('Sheets API failed, falling back to CSV:', e.message);
+         logger.info('Could not get Drive metadata, assuming Google Sheets');
+      }
+
+      if (mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || mimeType === 'application/vnd.ms-excel') {
+         try {
+            const fileRes = await axios.get(`https://www.googleapis.com/drive/v3/files/${sheetId}?alt=media`, {
+                headers: { Authorization: `Bearer ${accessToken}` },
+                responseType: 'arraybuffer'
+            });
+            const xlsx = require('xlsx');
+            const workbook = xlsx.read(fileRes.data, { type: 'buffer' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const values: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+            const found = findHeaderRow(values);
+            if (found && found.dataRows.length > 0) {
+              records = found.dataRows
+                .filter((row: any[]) => row.some((cell: any) => cell && cell.toString().trim() !== ''))
+                .map((row: any[]) => {
+                  const obj: any = {};
+                  found.headers.forEach((h: string, i: number) => { obj[h] = (row[i] ?? '').toString().trim(); });
+                  return obj;
+                });
+            }
+         } catch(e: any) {
+             logger.error('Excel processing failed:', e.message);
+         }
+      } else {
+         // Google Sheets API as normal
+         try {
+           const dataRes = await axios.get(
+             `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/A1:Z1000`,
+             { headers: { Authorization: `Bearer ${accessToken}` } }
+           );
+           const values: any[][] = dataRes.data.values || [];
+           const found = findHeaderRow(values);
+           if (found && found.dataRows.length > 0) {
+             records = found.dataRows
+               .filter((row: any[]) => row.some((cell: any) => cell && cell.toString().trim() !== ''))
+               .map((row: any[]) => {
+                 const obj: any = {};
+                 found.headers.forEach((h: string, i: number) => { obj[h] = (row[i] ?? '').toString().trim(); });
+                 return obj;
+               });
+           }
+         } catch (e: any) {
+           logger.info('Sheets API failed, falling back to CSV:', e.message);
+         }
       }
     }
 
     // Fallback: public CSV
     if (records.length === 0) {
       const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
-      const response = await axios.get(csvUrl);
-      const rawRows: string[][] = parse(response.data, { columns: false, skip_empty_lines: false, relax_column_count: true });
+      const response = await axios.get(csvUrl, accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : {});
+      const rawRows: any[][] = parse(response.data, { columns: false, skip_empty_lines: false, relax_column_count: true });
       const found = findHeaderRow(rawRows);
       if (found && found.dataRows.length > 0) {
         records = found.dataRows
-          .filter(row => row.some(cell => cell.toString().trim() !== ''))
+          .filter(row => row.some((cell: any) => cell && cell.toString().trim() !== ''))
           .map(row => {
             const obj: any = {};
-            found.headers.forEach((h, i) => { obj[h] = (row[i] ?? '').toString().trim(); });
+            found.headers.forEach((h: string, i: number) => { obj[h] = (row[i] ?? '').toString().trim(); });
             return obj;
           });
       } else {
@@ -1155,7 +1888,6 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
         if (existingConflicts.length > 0) {
           await client.query('ROLLBACK');
-          client.release();
           return res.status(409).json({
             conflict: true,
             message: `Teams for ${existingConflicts.map(c => c.courseCode).join(', ')} already exist.`,
@@ -1318,8 +2050,8 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
             // Upsert member into SkyFlow users table
             const memberSkyRes = await client.query(
-              `INSERT INTO users (google_id, email, name, role, created_at)
-               VALUES ($1, $2, $3, 'member', NOW())
+              `INSERT INTO users (google_id, email, name, created_at)
+               VALUES ($1, $2, $3, NOW())
                ON CONFLICT (email) DO UPDATE SET name = COALESCE(NULLIF(EXCLUDED.name, ''), users.name)
                RETURNING id`,
               [member.email, member.email, member.fullName || member.email.split('@')[0]]
@@ -1554,6 +2286,365 @@ router.get('/member-journals/course/:courseId/group/:groupId', async (req: Reque
   } catch (err: any) {
     logger.error('Error fetching member journals:', err);
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════════
+// CONSULTATION PREP CHECKLIST AGGREGATE
+// ═══════════════════════════════════════════════════════════════════════════════════
+// GET /scholar/consultation/prep/:bookingId
+// Aggregates all prep data: group info, recent journals, outstanding follow-ups, consultation history, attendance/participation
+router.get('/consultation/prep/:bookingId', verifyInstructor, async (req: Request, res: Response) => {
+  try {
+    const bookingId = req.params.bookingId;
+    if (!bookingId) return res.status(400).json({ error: 'Missing booking ID' });
+
+    // Get booking details (consultation slot)
+    const bookingRes = await pool.query(
+      `SELECT
+         s.slot_id,
+         s.slot_date,
+         s.start_time,
+         s.end_time,
+         s.max_groups AS capacity,
+         s.owner_account_id,
+         COALESCE(a."accountName", 'Unknown Adviser') as adviser_name,
+         COALESCE(a."accountEmail", '') as adviser_email
+       FROM ss_consultation_slots s
+       LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
+       WHERE s.slot_id = $1
+       LIMIT 1`,
+      [bookingId]
+    );
+
+    if (bookingRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultation slot not found' });
+    }
+
+    const booking = bookingRes.rows[0];
+
+    // Get booked groups for this slot from bookings table (consultation logs may not exist yet)
+    const bookedGroupsRes = await pool.query(
+      `SELECT DISTINCT
+         b.group_id AS booking_group_id,
+         b.group_name AS booking_group_name,
+         b.course_id AS booking_course_id,
+         tg.id AS team_group_id,
+         tg.name AS team_group_name,
+         tg.course_id AS team_course_id,
+         tg.adviser_name,
+         tg.proposed_project,
+         sc.id AS course_id,
+         sc."courseName",
+         sc."courseCode",
+         sc."courseSection"
+       FROM ss_consultation_bookings b
+       LEFT JOIN team_groups tg
+         ON LOWER(TRIM(COALESCE(tg.name, ''))) = LOWER(TRIM(COALESCE(b.group_name, '')))
+        AND (b.course_id IS NULL OR tg.course_id = b.course_id)
+       LEFT JOIN ss_courses sc ON sc.id = COALESCE(b.course_id, tg.course_id)
+       WHERE b.slot_id = $1
+         AND UPPER(COALESCE(b.status, 'CONFIRMED')) <> 'CANCELLED'
+       LIMIT 5`,
+      [bookingId]
+    );
+
+    const bookedGroups = bookedGroupsRes.rows;
+
+    if (bookedGroups.length === 0) {
+      return res.status(404).json({ error: 'No group bookings found for this slot' });
+    }
+
+    // Use the first booked group as the primary group to prep for
+    const primaryGroup = bookedGroups[0];
+    let groupId = String(primaryGroup.team_group_id || primaryGroup.booking_group_id || '').trim() || null;
+    let groupName = String(primaryGroup.team_group_name || primaryGroup.booking_group_name || '').trim();
+    let courseId = Number(primaryGroup.team_course_id || primaryGroup.booking_course_id || 0) || null;
+
+    // Fallback resolver when booking rows have legacy/non-team group ids
+    if (!groupId && groupName) {
+      const fallbackGroupRes = await pool.query(
+        `SELECT id, course_id, name, adviser_name, proposed_project
+         FROM team_groups
+         WHERE LOWER(TRIM(name)) = LOWER($1)
+         ORDER BY CASE WHEN course_id = $2 THEN 0 ELSE 1 END, id
+         LIMIT 1`,
+        [groupName, courseId || 0]
+      );
+
+      if (fallbackGroupRes.rows.length > 0) {
+        const fallback = fallbackGroupRes.rows[0];
+        groupId = String(fallback.id || groupId || '').trim() || groupId;
+        courseId = Number(fallback.course_id || courseId || 0) || courseId;
+        groupName = String(fallback.name || groupName);
+      }
+    }
+
+    // Get group members
+    const membersRes = groupId
+      ? await pool.query(
+          `SELECT member_number, name, email, is_leader
+           FROM team_group_members
+           WHERE team_group_id = $1
+           ORDER BY member_number`,
+          [groupId]
+        )
+      : { rows: [] as any[] };
+
+    const members = membersRes.rows.map((m: any) => ({
+      memberNumber: m.member_number,
+      name: m.name,
+      email: m.email,
+      isLeader: m.is_leader
+    }));
+
+    // Get recent member journals (last 5)
+    const journalsRes = groupId
+      ? await pool.query(
+          `SELECT
+             id,
+             member_email,
+             journal_date as consultation_date,
+             journal_text as summary,
+             created_at
+           FROM member_journals
+           WHERE LOWER(group_id::text) = LOWER($1)
+           ORDER BY created_at DESC
+           LIMIT 5`,
+          [groupId]
+        )
+      : { rows: [] as any[] };
+
+    const journals = journalsRes.rows;
+
+    // Get recent consultation logs (last 5) for this group
+    const consultationLogsRes = await pool.query(
+      `SELECT
+         c."conID",
+         c."conDate" as consultation_date,
+         c."conSum" as summary,
+         c."conAction" as action,
+         c."conConcerns" as concerns,
+         COALESCE(c.follow_up_status, '') as follow_up_status,
+         COALESCE(
+           to_jsonb(c)->>'conAtt',
+           to_jsonb(c)->>'attendance_data',
+           ''
+         ) as attendance,
+         c.submitted_at,
+         c.created_at
+       FROM ss_consultation c
+       WHERE LOWER(TRIM(COALESCE(c."groupName", ''))) = LOWER($1)
+       ORDER BY COALESCE(c.submitted_at, c.created_at) DESC
+       LIMIT 5`,
+      [String(groupName || '').trim().toLowerCase()]
+    );
+
+    const consultationLogs = consultationLogsRes.rows;
+
+    // Get outstanding follow-ups for this group (from follow-ups queue logic)
+    const daysSince = (value: any): number => {
+      const ts = new Date(value || 0).getTime();
+      if (!Number.isFinite(ts) || ts <= 0) return 999;
+      return Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+    };
+
+    let outstandingFollowUps: any[] = [];
+    if (consultationLogs.length > 0) {
+      const latest = consultationLogs[0];
+      const concern = String(latest.concerns || '').trim();
+      const action = String(latest.action || '').trim();
+      const updatedAt = latest.submitted_at || latest.created_at;
+      const ageDays = daysSince(updatedAt);
+
+      const status = inferFollowUpStatus(
+        latest.follow_up_status,
+        latest.concerns,
+        latest.action,
+        updatedAt
+      );
+
+      if (status !== 'resolved') {
+        outstandingFollowUps.push({
+          id: latest.conID,
+          consultationId: latest.conID,
+          concern: concern || 'No concern details entered.',
+          action: action || 'No action item provided.',
+          status,
+          lastUpdated: updatedAt,
+          daysSince: ageDays
+        });
+      }
+    }
+
+    // Build participation summary from consultation JSON snapshots saved by feedback endpoint.
+    const participationRes = await pool.query(
+      `SELECT
+         "conID",
+         "conDate" as consultation_date,
+         COALESCE(attendance_data, '{}'::jsonb) as attendance_data,
+         COALESCE(participation_data, '{}'::jsonb) as participation_data
+       FROM ss_consultation
+       WHERE LOWER(TRIM(COALESCE("groupName", ''))) = LOWER($1)
+       ORDER BY "conDate" DESC, "conID" DESC
+       LIMIT 20`,
+      [String(groupName || '').trim().toLowerCase()]
+    );
+
+    const participationRows = participationRes.rows;
+
+    const participationScoreFromText = (value: unknown): number => {
+      const text = String(value || '').trim().toLowerCase();
+      if (!text) return 0;
+
+      const numeric = Number(text.replace('%', ''));
+      if (Number.isFinite(numeric)) {
+        return numeric > 1 ? Math.max(0, Math.min(1, numeric / 100)) : Math.max(0, Math.min(1, numeric));
+      }
+
+      if (['excellent', 'very high', 'high', 'active', 'engaged'].some((k) => text.includes(k))) return 1;
+      if (['good', 'moderate', 'average', 'participated'].some((k) => text.includes(k))) return 0.75;
+      if (['fair', 'low', 'passive'].some((k) => text.includes(k))) return 0.5;
+      if (['poor', 'minimal'].some((k) => text.includes(k))) return 0.25;
+      if (['absent', 'none', 'no show', 'did not attend'].some((k) => text.includes(k))) return 0;
+
+      return 0.5;
+    };
+
+    const isAttendedFromText = (value: unknown): boolean => {
+      const text = String(value || '').trim().toLowerCase();
+      if (!text) return false;
+      return !['absent', 'none', 'no show', 'did not attend', 'n/a'].some((k) => text.includes(k));
+    };
+
+    const statsByMemberNumber = new Map<number, {
+      consultations: number;
+      attended: number;
+      scoreTotal: number;
+      scoreCount: number;
+      lastConsultation: string;
+    }>();
+
+    const getValueForMember = (obj: any, keys: string[]): string => {
+      if (!obj || typeof obj !== 'object') return '';
+      const direct = Object.entries(obj as Record<string, unknown>);
+      for (const key of keys) {
+        const exact = (obj as Record<string, unknown>)[key];
+        if (exact !== undefined && exact !== null) return String(exact);
+      }
+      for (const [rawKey, rawValue] of direct) {
+        const normalized = String(rawKey || '').trim().toLowerCase();
+        if (keys.includes(normalized) && rawValue !== undefined && rawValue !== null) {
+          return String(rawValue);
+        }
+      }
+      return '';
+    };
+
+    for (const row of participationRows) {
+      const attendanceData = row.attendance_data || {};
+      const participationDataRow = row.participation_data || {};
+
+      for (const member of members) {
+        const memberNumber = Number(member.memberNumber || 0);
+        if (!Number.isFinite(memberNumber) || memberNumber <= 0) continue;
+
+        const memberName = String(member.name || '').trim().toLowerCase();
+        const memberEmail = String(member.email || '').trim().toLowerCase();
+        const memberAlias = memberEmail.includes('@') ? memberEmail.split('@')[0] : memberEmail;
+        const lookupKeys = [memberName, memberEmail, memberAlias].filter(Boolean);
+
+        const attendanceValue = getValueForMember(attendanceData, lookupKeys);
+        const participationValue = getValueForMember(participationDataRow, lookupKeys);
+
+        const existing = statsByMemberNumber.get(memberNumber) || {
+          consultations: 0,
+          attended: 0,
+          scoreTotal: 0,
+          scoreCount: 0,
+          lastConsultation: '',
+        };
+
+        existing.consultations += 1;
+
+        if (attendanceValue) {
+          const attendanceText = attendanceValue.trim().toLowerCase();
+          if (attendanceText === 'present' || attendanceText === 'attended' || attendanceText === 'yes') {
+            existing.attended += 1;
+          }
+        } else if (isAttendedFromText(participationValue)) {
+          existing.attended += 1;
+        }
+
+        if (String(participationValue || '').trim()) {
+          const score = participationScoreFromText(participationValue);
+          existing.scoreTotal += score;
+          existing.scoreCount += 1;
+        }
+
+        if (!existing.lastConsultation && row.consultation_date) {
+          existing.lastConsultation = String(row.consultation_date);
+        }
+
+        statsByMemberNumber.set(memberNumber, existing);
+      }
+    }
+
+    const participationData = members.map((member: any) => {
+      const stat = statsByMemberNumber.get(Number(member.memberNumber || 0));
+      const totalConsultations = stat?.consultations || 0;
+      const totalAttended = stat?.attended || 0;
+      const attendanceRate = totalConsultations > 0 ? (totalAttended / totalConsultations) * 100 : 0;
+      const participationAvg = (stat?.scoreCount || 0) > 0 ? (stat!.scoreTotal / stat!.scoreCount) : 0;
+
+      return {
+        member_id: Number(member.memberNumber || 0),
+        member_email: String(member.email || ''),
+        total_consultations: totalConsultations,
+        total_attended: totalAttended,
+        attendance_rate: attendanceRate,
+        participation_avg: participationAvg,
+        last_consultation: stat?.lastConsultation || null,
+      };
+    });
+
+    return res.json({
+      consultation: {
+        slotId: booking.slot_id,
+        slotDate: booking.slot_date,
+        startTime: booking.start_time,
+        endTime: booking.end_time,
+        capacity: booking.capacity,
+        adviserName: booking.adviser_name,
+        adviserEmail: booking.adviser_email
+      },
+      group: {
+        id: groupId,
+        courseId: Number(primaryGroup.course_id || courseId || primaryGroup.courseId || 0) || null,
+        name: groupName,
+        courseName: primaryGroup.courseName,
+        courseCode: primaryGroup.courseCode,
+        courseSection: primaryGroup.courseSection,
+        adviser: primaryGroup.adviser_name,
+        proposedProject: primaryGroup.proposed_project
+      },
+      members,
+      recentJournals: journals,
+      recentConsultations: consultationLogs,
+      outstandingFollowUps,
+      participationSummary: participationData,
+      checklist: {
+        groupInfoReviewed: false,
+        membersReviewed: false,
+        recentJournalsReviewed: false,
+        outstandingFollowUpsReviewed: false,
+        previousConsultationReviewed: false,
+        readyForConsultation: false
+      }
+    });
+  } catch (error: any) {
+    logger.error('Error fetching consultation prep data:', error);
+    return res.status(500).json({ error: error.message || 'Failed to fetch consultation prep data' });
   }
 });
 

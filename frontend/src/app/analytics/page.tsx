@@ -189,7 +189,7 @@ export default function AnalyticsPage() {
           <div className="bg-white/70 backdrop-blur-xl rounded-3xl p-12 border border-white/40 shadow-lg">
             <BarChart3 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Analytics Not Available</h2>
-            <p className="text-gray-500">Analytics and AI Insights are available for teachers, advisers, and admins only.</p>
+            <p className="text-gray-500">Analytics and AI Insights are available for teachers, adviser, and admins only.</p>
           </div>
         </div>
       </AppLayout>

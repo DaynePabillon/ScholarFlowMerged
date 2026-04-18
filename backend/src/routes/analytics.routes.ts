@@ -23,7 +23,7 @@ const requireAdviserRole = async (req: AuthRequest, res: Response, next: any) =>
         );
         const role = memberResult.rows[0]?.role;
         if (!role || role === 'member') {
-            return res.status(403).json({ error: 'Analytics is available for advisers, managers, and admins only.' });
+            return res.status(403).json({ error: 'Analytics is available for adviser, managers, and admins only.' });
         }
         next();
     } catch (err) {

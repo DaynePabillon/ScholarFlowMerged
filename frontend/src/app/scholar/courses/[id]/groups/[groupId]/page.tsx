@@ -125,7 +125,7 @@ export default function GroupPage() {
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) {
-            router.push('/scholar/login');
+            router.push('/login');
             return;
         }
 
@@ -133,7 +133,7 @@ export default function GroupPage() {
             const decoded = jwtDecode(token);
             setUser(decoded);
         } catch (err) {
-            router.push('/scholar/login');
+            router.push('/login');
             return;
         }
 
@@ -250,7 +250,7 @@ export default function GroupPage() {
     ].filter(m => m.email); // Filter out empty slots
 
     const isLeader = membersList.some(m => m.email === user?.email && m.role === 'leader');
-    const isAdmin = user?.role === 'Admin' || user?.role === 'Advisers';
+    const isAdmin = user?.role === 'Admin' || String(user?.role || '').toLowerCase() === 'adviser';
     const canUseAI = user?.role === 'Admin';
     const canCreateTasks = isLeader || isAdmin;
 
@@ -303,7 +303,7 @@ export default function GroupPage() {
                                 {membersList.length > 0 ? (
                                     <div className="flex flex-col gap-3">
                                         {membersList.map((member, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50/50">
+                                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-gray-100 bg-gray-50">
                                                 <div className="flex flex-col truncate pr-2">
                                                     <span className="font-semibold text-sm text-gray-800 truncate" title={member.email!}>{member.email}</span>
                                                 </div>
@@ -693,7 +693,7 @@ export default function GroupPage() {
                                 <div className="bg-[#0095FF] px-6 py-4 flex justify-between items-center shrink-0">
                                     <div className="flex items-center gap-4">
                                         <h2 className="text-lg font-bold text-white">Journal Details</h2>
-                                        {(user?.role === 'Admin' || user?.role === 'Advisers') && (
+                                        {(user?.role === 'Admin' || String(user?.role || '').toLowerCase() === 'adviser') && (
                                             <button 
                                                 onClick={handleExportDocs}
                                                 disabled={exportingDocs}
@@ -741,7 +741,7 @@ export default function GroupPage() {
                                     {/* Middle Section: Description */}
                                     <div className="space-y-3">
                                         <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.2em]">Milestone Description</h4>
-                                        <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 shadow-sm">
+                                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 shadow-sm">
                                             <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">
                                                 {selectedJournal.conSum || <span className="italic text-gray-400">No description provided.</span>}
                                             </p>
@@ -775,7 +775,7 @@ export default function GroupPage() {
                                                             const status = journalAttendance[attendee] || 'Absent';
                                                             const rating = journalParticipation[attendee] || 'None';
                                                             return (
-                                                                <tr key={i} className="hover:bg-gray-50/50 transition-colors">
+                                                                <tr key={i} className="hover:bg-gray-50 transition-colors">
                                                                     <td className="px-6 py-4">
                                                                         <div className="flex items-center gap-3">
                                                                             <div className="w-8 h-8 rounded-full bg-[#0095FF]/10 flex items-center justify-center text-[#0095FF] font-black text-xs border border-[#0095FF]/20 shadow-sm">

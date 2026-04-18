@@ -33,8 +33,8 @@ export default function SheetsPage() {
 
     useEffect(() => {
         const token = localStorage.getItem('auth_token');
-        if (!token) { router.push('/scholar/login'); return; }
-        try { setUser(jwtDecode(token)); } catch { router.push('/scholar/login'); return; }
+        if (!token) { router.push('/login'); return; }
+        try { setUser(jwtDecode(token)); } catch { router.push('/login'); return; }
         fetchSheets();
     }, [router]);
 
@@ -93,7 +93,7 @@ export default function SheetsPage() {
                             <p className="font-medium">{error}</p>
                             {error.includes('re-login') && (
                                 <p className="mt-1 text-amber-700">
-                                    To access Google Sheets, <a href="/scholar/login" className="underline font-medium">sign in again</a> — we need Drive and Sheets permissions.
+                                    To access Google Sheets, <a href="/login" className="underline font-medium">sign in again</a> — we need Drive and Sheets permissions.
                                     Also ensure the Google Sheets API is enabled in Cloud Console with the required scopes.
                                 </p>
                             )}

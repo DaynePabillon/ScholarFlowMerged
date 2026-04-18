@@ -955,6 +955,46 @@ async function runMigrations(): Promise<void> {
           WHEN others THEN NULL;
         END $$;
       `
+    },
+    {
+      name: '031_scholarsync_consultation',
+      sql: `
+        -- 1. Create Consultation Slots Table
+        CREATE TABLE IF NOT EXISTS ss_consultation_slots (
+          slot_id SERIAL PRIMARY KEY,
+          adviser_id INTEGER NOT NULL REFERENCES ss_account(account_id) ON DELETE CASCADE,
+          course_id INTEGER NOT NULL REFERENCES ss_courses(id) ON DELETE CASCADE,
+          slot_date DATE NOT NULL,
+          start_time TIME NOT NULL,
+          end_time TIME NOT NULL,
+          slot_type VARCHAR(50) DEFAULT 'FIRST_COME_FIRST_SERVE',
+          max_groups INTEGER DEFAULT 2,
+          owner_account_id INTEGER REFERENCES ss_account(account_id) ON DELETE SET NULL,
+          owner_role VARCHAR(50) DEFAULT 'Adviser',
+          google_event_id VARCHAR(255),
+          status VARCHAR(20) DEFAULT 'available',
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 2. Create Consultation Bookings Table
+        CREATE TABLE IF NOT EXISTS ss_consultation_bookings (
+          booking_id SERIAL PRIMARY KEY,
+          slot_id INTEGER NOT NULL REFERENCES ss_consultation_slots(slot_id) ON DELETE CASCADE,
+          group_id INTEGER,
+          group_name VARCHAR(255),
+          student_email VARCHAR(255),
+          status VARCHAR(20) DEFAULT 'pending',
+          notes TEXT,
+          booked_at TIMESTAMP DEFAULT NOW()
+        );
+
+        -- 3. Create Indexes
+        CREATE INDEX IF NOT EXISTS idx_ss_consultation_slots_adviser ON ss_consultation_slots(adviser_id);
+        CREATE INDEX IF NOT EXISTS idx_ss_consultation_slots_course ON ss_consultation_slots(course_id);
+        CREATE INDEX IF NOT EXISTS idx_ss_consultation_slots_date ON ss_consultation_slots(slot_date);
+        CREATE INDEX IF NOT EXISTS idx_ss_consultation_bookings_slot ON ss_consultation_bookings(slot_id);
+      `
     }
   ];
 

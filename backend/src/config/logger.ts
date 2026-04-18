@@ -27,9 +27,16 @@ if (process.env.NODE_ENV !== 'production') {
         winston.format.colorize(),
         winston.format.simple(),
         winston.format.printf(({ level, message, timestamp, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${
-            Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''
-          }`;
+          let metaStr = '';
+          if (Object.keys(meta).length) {
+            try {
+              metaStr = JSON.stringify(meta, null, 2);
+            } catch (err) {
+              const util = require('util');
+              metaStr = util.inspect(meta, { depth: 2, colors: false });
+            }
+          }
+          return `${timestamp} [${level}]: ${message} ${metaStr}`;
         })
       ),
     })

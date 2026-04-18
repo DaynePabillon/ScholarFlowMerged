@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { AIService } from '../services/ai.service.js';
-import { authenticate, authorizeRole } from '../middleware/auth.js';
+import { AIService } from '../../services/scholar/ai.service';
+import { authenticate, authorizeRole } from '../../middleware/scholar/auth';
 
 const router = Router();
 const aiService = new AIService();

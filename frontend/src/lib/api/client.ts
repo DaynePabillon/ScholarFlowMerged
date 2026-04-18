@@ -42,7 +42,7 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('token');
         localStorage.removeItem('auth_token');
         localStorage.removeItem('scholar_profile');
-        window.location.href = '/landing';
+        window.location.href = '/login';
       }
     }
     return Promise.reject(error);

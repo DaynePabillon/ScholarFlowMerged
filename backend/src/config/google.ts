@@ -47,7 +47,7 @@ export const getGoogleAuthUrl = (state?: string) => {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: GOOGLE_SCOPES,
-    prompt: 'consent',
+    prompt: 'consent select_account',
     state: state || '',
   });
 };

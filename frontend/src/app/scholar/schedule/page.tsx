@@ -1,7 +1,7 @@
 "use client"
 
 import { API_URL } from '@/lib/api/client'
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   Calendar,
   Plus,
@@ -13,7 +13,7 @@ import {
   MoreVertical,
   ChevronDown,
 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import SidebarLayout from "@/components/scholar/SidebarLayout"
 
@@ -110,6 +110,8 @@ interface DeleteConfirmState {
 
 export default function SchedulePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const autoRecordHandledRef = useRef(false)
   const [user, setUser] = useState<any>(null)
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [courses, setCourses] = useState<any[]>([])
@@ -153,9 +155,12 @@ export default function SchedulePage() {
     multipleSlots: [] as string[],
     wholeDay: false,
     wholeWeek: false,
+    totalSlots: '', // Manual override or auto-detected group count
   })
+  const [previewSlots, setPreviewSlots] = useState<{ slotDate: string, startTime: string, endTime: string }[]>([])
   const [formError, setFormError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
+  const [loadingGroups, setLoadingGroups] = useState(false)
 
   // Consultation form state
   const [showConsultationForm, setShowConsultationForm] = useState(false)
@@ -174,6 +179,12 @@ export default function SchedulePage() {
   const [consultationError, setConsultationError] = useState('')
   const [loadingFormButton, setLoadingFormButton] = useState<number | null>(null)
 
+  const autoOpenRecord = searchParams.get('openRecord') === '1'
+  const autoSlotId = Number(searchParams.get('slotId') || 0)
+  const autoGroupId = String(searchParams.get('groupId') || '').trim()
+  const autoGroupName = String(searchParams.get('groupName') || '').trim()
+  const autoCourseId = Number(searchParams.get('courseId') || 0)
+
   // Auth
   useEffect(() => {
     const token = localStorage.getItem("auth_token")
@@ -181,7 +192,20 @@ export default function SchedulePage() {
 
     try {
       const decoded: any = jwtDecode(token)
-      if (decoded.role !== 'Adviser' && decoded.role !== 'Advisers' && decoded.role !== 'Admin') {
+      let role = String(decoded.role || '').toLowerCase()
+      
+      const cachedProfileStr = localStorage.getItem('scholar_profile')
+      if (cachedProfileStr) {
+        try {
+          const cached = JSON.parse(cachedProfileStr)
+          const cachedRole = cached.scholarsyncRole || cached.role
+          if (cachedRole) {
+            role = String(cachedRole).toLowerCase()
+          }
+        } catch { }
+      }
+
+      if (role !== 'adviser' && role !== 'advisers' && role !== 'admin' && role !== 'manager') {
         router.push("/scholar/dashboard")
       }
       setUser(decoded)
@@ -267,6 +291,7 @@ export default function SchedulePage() {
       setGroups([])
       return
     }
+    setLoadingGroups(true)
     try {
       const token = localStorage.getItem("auth_token")
       const res = await fetch(`${API_URL}/api/courses/${courseId}/groups`, {
@@ -274,7 +299,10 @@ export default function SchedulePage() {
       })
       if (res.ok) {
         const data = await res.json()
-        setGroups(sortGroupsNaturally(data.groups || []))
+        const fetchedGroups = sortGroupsNaturally(data.groups || [])
+        setGroups(fetchedGroups)
+        // Auto-fill totalSlots with the detected group count
+        setFormData(prev => ({ ...prev, totalSlots: String(fetchedGroups.length) }))
       } else {
         console.error('Failed to fetch groups:', res.status, res.statusText)
         setGroups([])
@@ -282,6 +310,8 @@ export default function SchedulePage() {
     } catch (err) {
       console.error('Error fetching groups:', err)
       setGroups([])
+    } finally {
+      setLoadingGroups(false)
     }
   }
 
@@ -293,35 +323,134 @@ export default function SchedulePage() {
     }
   }, [formData.courseId])
 
-  const handleCreateSlot = async () => {
-    // Validate required fields
+  const handleGeneratePreview = () => {
     if (!formData.courseId || !formData.slotDate) {
-      setFormError("Please fill in all required fields.")
+      setFormError("Please fill in course and date first.")
       return
     }
 
-    // Check if selected date is in the past
     const selectedDate = parseLocalDateInput(formData.slotDate)
     if (!selectedDate) {
-      setFormError("Please select a valid date.")
+      setFormError("Invalid date selected.")
       return
     }
-    selectedDate.setHours(0, 0, 0, 0)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+
+    const targetCount = formData.slotType === 'SPECIFIC_GROUP' 
+      ? formData.selectedGroups.length 
+      : (parseInt(formData.totalSlots) || groups.length)
+
+    if (targetCount === 0) {
+      setFormError(loadingGroups ? "Still loading course details... Please wait." : "No groups found for this course or none selected.")
+      return
+    }
+
+    let dates: string[] = []
+    if (formData.wholeWeek) {
+      const monday = new Date(selectedDate)
+      const dayOfWeek = monday.getDay()
+      const toMondayOffset = (dayOfWeek === 0 ? -6 : 1 - dayOfWeek)
+      monday.setDate(monday.getDate() + toMondayOffset)
+
+      for (let i = 0; i < 6; i++) {
+        const d = new Date(monday)
+        d.setDate(monday.getDate() + i)
+        dates.push(d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0'))
+      }
+    } else {
+      dates = [formData.slotDate]
+    }
+
+    // Robust time parsing helper that handles both 24h and AM/PM formats (e.g., "13:30" or "01:30 PM")
+    const parseTimeMins = (timeStr: string): number => {
+      if (!timeStr) return 0;
+      const match = timeStr.match(/(\d{1,2}):(\d{1,2})(?:\s*(AM|PM))?/i);
+      if (!match) return 0;
+      let hours = parseInt(match[1]);
+      const minutes = parseInt(match[2]);
+      const ampm = match[3]?.toUpperCase();
+      
+      if (ampm === 'PM' && hours < 12) hours += 12;
+      if (ampm === 'AM' && hours === 12) hours = 0;
+      return (hours * 60) + minutes;
+    };
+
+    // 1. Calculate time pattern settings (duration and start time)
+    let startMins = 480 // 8:00 AM default for Whole Day
+    let duration = 60    // 1 hour default for Whole Day
+
+    if (!formData.wholeDay) {
+      const sMins = parseTimeMins(formData.startTime || "08:00");
+      const eMins = parseTimeMins(formData.endTime || "09:00");
+      startMins = sMins;
+      duration = Math.max(15, eMins - sMins);
+    }
+
+    // 2. Generate the daily pattern based on target count
+    const baseDayPattern: { startTime: string, endTime: string }[] = []
+    let patternMins = startMins
+    let patternCount = 0
+    const dayEndMins = 1140 // 7:00 PM cutoff
     
-    if (selectedDate < today) {
-      setFormError("Cannot create consultation slots for past dates.")
-      return
+    while (patternCount < targetCount && patternMins < dayEndMins) {
+      const slotEndMins = patternMins + duration
+      
+      // Handle 12:00 PM - 1:00 PM lunch break (720 to 780 minutes)
+      const LUNCH_START = 720
+      const LUNCH_END = 780
+      
+      if (patternMins < LUNCH_END && slotEndMins > LUNCH_START) {
+        patternMins = LUNCH_END
+        continue
+      }
+
+      const h1 = String(Math.floor(patternMins / 60)).padStart(2, '0')
+      const m1 = String(patternMins % 60).padStart(2, '0')
+      const h2 = String(Math.floor((patternMins + duration) / 60)).padStart(2, '0')
+      const m2 = String((patternMins + duration) % 60).padStart(2, '0')
+      
+      baseDayPattern.push({ 
+        startTime: `${h1}:${m1}`, 
+        endTime: `${h2}:${m2}` 
+      })
+      patternCount++
+      patternMins += duration
     }
 
-    if (formData.wholeDay && formData.wholeWeek) {
-      setFormError("Choose either Whole Day or Whole Week, not both.")
-      return
+    const preview: { slotDate: string, startTime: string, endTime: string }[] = []
+    
+    // 3. Replicate the pattern across all selected dates (Single Day or Whole Week)
+    for (const date of dates) {
+      for (const p of baseDayPattern) {
+        preview.push({ 
+          ...p,
+          slotDate: date
+        })
+      }
     }
 
-    // If not whole day, require start and end times
-    if (!formData.wholeDay && (!formData.startTime || !formData.endTime)) {
+    // Sort by date, then by time
+    preview.sort((a, b) => {
+      if (a.slotDate !== b.slotDate) return a.slotDate.localeCompare(b.slotDate)
+      return a.startTime.localeCompare(b.startTime)
+    })
+
+    const finalCount = preview.length
+    const expectedPerDay = targetCount
+    const expectedTotal = formData.wholeWeek ? (expectedPerDay * dates.length) : expectedPerDay
+
+    if (finalCount < expectedTotal) {
+      const missing = expectedTotal - finalCount
+      setFormError(`Only ${finalCount} slots could fit. ${missing} slots still need space. Please extend your daily hours or add dates.`)
+    } else {
+      setFormError("")
+    }
+
+    setPreviewSlots(preview)
+  }
+
+  const handleCreateSlot = async () => {
+    // Validate required fields
+    if (!formData.courseId || (!formData.slotDate && (!previewSlots || previewSlots.length === 0))) {
       setFormError("Please fill in all required fields.")
       return
     }
@@ -331,57 +460,21 @@ export default function SchedulePage() {
 
     try {
       const token = localStorage.getItem("auth_token")
-      let startTime = formData.startTime
-      let endTime = formData.endTime
-      let multipleSlots = [formData.slotDate]
-      let isWholeDay = false
-      let isWholeWeek = false
-
-      // Build Monday-Saturday dates for the selected week.
-      if (formData.wholeWeek) {
-        isWholeWeek = true
-        const base = parseLocalDateInput(formData.slotDate)
-        if (!base) {
-          setFormError('Please pick a valid date for whole-week scheduling.')
-          setIsSaving(false)
-          return
-        }
-        const monday = new Date(base)
-        const dayOfWeek = monday.getDay() // 0=Sun ... 6=Sat
-        const toMondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
-        monday.setDate(monday.getDate() + toMondayOffset)
-
-        const weekDates: string[] = []
-        for (let i = 0; i < 6; i++) {
-          const d = new Date(monday)
-          d.setDate(monday.getDate() + i)
-          const yyyy = d.getFullYear()
-          const mm = String(d.getMonth() + 1).padStart(2, '0')
-          const dd = String(d.getDate()).padStart(2, '0')
-          weekDates.push(`${yyyy}-${mm}-${dd}`)
-        }
-        multipleSlots = weekDates
-      }
-
-      // If whole day, create slots for 8am-12pm, 1pm-5pm
-      if (formData.wholeDay) {
-        isWholeDay = true
-        multipleSlots = [formData.slotDate, formData.slotDate]
-        startTime = "08:00" // First slot starts at 8am
-        endTime = "17:00"   // Slots cover until 5pm
-      }
-
-      const payload = {
+      
+      let payload: any = {
         courseId: parseInt(formData.courseId),
-        slotDate: formData.slotDate,
-        startTime: startTime,
-        endTime: endTime,
         slotType: formData.slotType,
-        maxGroups: formData.slotType === 'FIRST_COME_FIRST_SERVE' ? parseInt(formData.maxGroups) : 1,
+        maxGroups: formData.slotType === 'FIRST_COME_FIRST_SERVE' ? 1 : 1, // Enforce 1 as per instruction
         selectedGroups: formData.slotType === 'SPECIFIC_GROUP' ? formData.selectedGroups : undefined,
-        isWholeDay: isWholeDay,
-        isWholeWeek: isWholeWeek,
-        multipleSlots: multipleSlots.length > 1 ? multipleSlots : undefined,
+      }
+
+      if (previewSlots && previewSlots.length > 0) {
+        payload.batchSlots = previewSlots
+      } else {
+        payload.slotDate = formData.slotDate
+        payload.startTime = formData.startTime
+        payload.endTime = formData.endTime
+        payload.isWholeDay = formData.wholeDay
       }
 
       const res = await fetch(`${API_URL}/api/consultation/slots`, {
@@ -392,13 +485,14 @@ export default function SchedulePage() {
 
       if (res.ok) {
         setShowCreateForm(false)
+        setPreviewSlots([])
         setFormData({
           courseId: '',
           slotDate: '',
           startTime: '',
           endTime: '',
           slotType: 'FIRST_COME_FIRST_SERVE',
-          maxGroups: '2',
+          maxGroups: '1',
           selectedGroups: [],
           multipleSlots: [],
           wholeDay: false,
@@ -559,8 +653,8 @@ export default function SchedulePage() {
     }
 
     const groupIdForMembers =
-      typeof normalizedBooking.group_id === 'string' && normalizedBooking.group_id.includes('-')
-        ? normalizedBooking.group_id
+      normalizedBooking.group_id !== undefined && normalizedBooking.group_id !== null && String(normalizedBooking.group_id).trim() !== ''
+        ? String(normalizedBooking.group_id)
         : null
 
     console.log('Setting current booking:', normalizedBooking)
@@ -578,8 +672,11 @@ export default function SchedulePage() {
       memberParticipation: {},
     })
     
-    // Fetch group members to initialize attendance and participation data
-    // If this fails, form still opens with empty member sections
+    // Fetch group members to initialize attendance and participation data.
+    // Primary path: /api/groups/:id (team group id)
+    // Fallback path: /api/courses/:id/group-members matched by group name.
+    let hydratedMembers: string[] = []
+
     if (groupIdForMembers) {
       try {
         const token = localStorage.getItem("auth_token")
@@ -590,45 +687,61 @@ export default function SchedulePage() {
         if (res.ok) {
           const groupData = await res.json()
           console.log('Group data fetched:', groupData)
-          const members = [
+          hydratedMembers = [
             groupData.nameOne || groupData.member1,
             groupData.nameTwo || groupData.member2,
             groupData.nameThree || groupData.member3,
             groupData.nameFour || groupData.member4,
             groupData.nameFive || groupData.member5,
-          ].filter((m) => m)
-
-          console.log('Members:', members)
-          const initialAttendance: Record<string, 'Present' | 'Absent'> = {}
-          const initialParticipation: Record<string, 'High' | 'Moderate' | 'Low'> = {}
-          members.forEach(member => {
-            initialAttendance[member] = 'Present'
-            initialParticipation[member] = 'Moderate'
-          })
-
-          setConsultationForm(prev => ({
-            ...prev,
-            memberAttendance: initialAttendance,
-            memberParticipation: initialParticipation,
-          }))
+          ]
+            .map((m: any) => String(m || '').trim())
+            .filter((m: string) => m.length > 0)
         } else {
           console.error('Failed to fetch group members:', res.status)
-          setConsultationForm(prev => ({
-            ...prev,
-            memberAttendance: {},
-            memberParticipation: {},
-          }))
         }
       } catch (err) {
         console.error("Error fetching group members:", err)
-        setConsultationForm(prev => ({
-          ...prev,
-          memberAttendance: {},
-          memberParticipation: {},
-        }))
       }
+    }
+
+    if (hydratedMembers.length === 0 && normalizedBooking.course_id) {
+      try {
+        const token = localStorage.getItem("auth_token")
+        const res = await fetch(`${API_URL}/api/courses/${normalizedBooking.course_id}/group-members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (res.ok) {
+          const groupsData = await res.json()
+          const normalizedGroupName = String(normalizedBooking.group_name || '').trim().toLowerCase()
+          const matchedGroup = (Array.isArray(groupsData) ? groupsData : []).find((g: any) =>
+            String(g.groupName || '').trim().toLowerCase() === normalizedGroupName
+          )
+
+          hydratedMembers = (matchedGroup?.members || [])
+            .map((m: any) => String(m?.name || m?.email || '').trim())
+            .filter((m: string) => m.length > 0)
+        }
+      } catch (err) {
+        console.error('Fallback group-members fetch failed:', err)
+      }
+    }
+
+    if (hydratedMembers.length > 0) {
+      const initialAttendance: Record<string, 'Present' | 'Absent'> = {}
+      const initialParticipation: Record<string, 'High' | 'Moderate' | 'Low'> = {}
+      hydratedMembers.forEach(member => {
+        initialAttendance[member] = 'Present'
+        initialParticipation[member] = 'Moderate'
+      })
+
+      setConsultationForm(prev => ({
+        ...prev,
+        memberAttendance: initialAttendance,
+        memberParticipation: initialParticipation,
+      }))
     } else {
-      console.warn('No group ID available, opening form with empty member sections')
+      console.warn('No group members resolved, opening form with empty member sections')
       setConsultationForm(prev => ({
         ...prev,
         memberAttendance: {},
@@ -639,6 +752,62 @@ export default function SchedulePage() {
     console.log('Setting showConsultationForm to true')
     setShowConsultationForm(true)
   }
+
+  useEffect(() => {
+    if (!user?.id || !autoOpenRecord || autoRecordHandledRef.current) return
+    if (!Number.isFinite(autoSlotId) || autoSlotId <= 0) return
+
+    const openFromQuery = async () => {
+      autoRecordHandledRef.current = true
+
+      try {
+        const token = localStorage.getItem("auth_token")
+        const res = await fetch(`${API_URL}/api/consultation/bookings/slot/${autoSlotId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        let bookings: Booking[] = []
+        if (res.ok) {
+          const data = await res.json()
+          bookings = Array.isArray(data.bookings) ? data.bookings : []
+          setSlotBookings(prev => ({ ...prev, [autoSlotId]: bookings }))
+        }
+
+        const slot = slots.find(s => s.slot_id === autoSlotId)
+        const matchedBooking = bookings.find((b) => {
+          const byId = autoGroupId && String(b.group_id || '').trim() === autoGroupId
+          const byName = autoGroupName && String(b.group_name || '').trim().toLowerCase() === autoGroupName.toLowerCase()
+          return byId || byName
+        })
+
+        const bookingToOpen: Booking = matchedBooking || {
+          booking_id: undefined,
+          consultation_id: null,
+          group_name: autoGroupName || 'Scheduled Group',
+          slot_date: slot?.slot_date || '',
+          slot_date_only: slot?.slot_date_only || String(slot?.slot_date || '').slice(0, 10),
+          start_time: slot?.start_time || '',
+          status: 'CONFIRMED',
+          group_id: autoGroupId || 0,
+          slot_id: autoSlotId,
+          course_id: Number.isFinite(autoCourseId) && autoCourseId > 0 ? autoCourseId : slot?.course_id,
+        }
+
+        if (!bookingToOpen.group_name || !bookingToOpen.slot_id) {
+          setConsultationError('Could not resolve consultation booking details.')
+          return
+        }
+
+        await openConsultationForm(bookingToOpen)
+      } catch (err) {
+        console.error('Failed to auto-open consultation form from query:', err)
+      } finally {
+        router.replace('/scholar/schedule')
+      }
+    }
+
+    openFromQuery()
+  }, [user?.id, autoOpenRecord, autoSlotId, autoGroupId, autoGroupName, autoCourseId, slots])
 
   const handleSaveConsultation = async () => {
     if (isSavingConsultation || !currentBooking) return
@@ -1018,7 +1187,7 @@ export default function SchedulePage() {
 
         {/* Create Slot Form */}
         {showCreateForm && (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl shadow-sm border border-white/50 p-6 mb-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Create Consultation Slot</h2>
 
             {formError && (
@@ -1178,23 +1347,142 @@ export default function SchedulePage() {
                 </div>
               )}
 
+              {/* Total Slots Override */}
+              {formData.slotType === 'FIRST_COME_FIRST_SERVE' && !previewSlots.length && (
+                <div className="space-y-1">
+                  <label className="block text-sm font-semibold text-gray-700">Total Slots to Generate</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 3"
+                    value={formData.totalSlots}
+                    onChange={(e) => setFormData(prev => ({ ...prev, totalSlots: e.target.value }))}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium"
+                  />
+                  <p className="text-[10px] text-gray-400 font-medium px-1">
+                    System detected {groups.length} groups. Adjust this if you want more or fewer slots.
+                  </p>
+                </div>
+              )}
+
               {/* Action Buttons */}
-              <div className="flex gap-3 pt-2">
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
                 <button
-                  onClick={handleCreateSlot}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                >
-                  {isSaving ? "Creating..." : "Create Slot"}
-                </button>
-                <button
-                  onClick={() => setShowCreateForm(false)}
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                  onClick={() => {
+                    setShowCreateForm(false)
+                    setPreviewSlots([])
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
                 >
                   Cancel
                 </button>
+                {((formData.wholeDay || formData.wholeWeek || (formData.slotType === 'FIRST_COME_FIRST_SERVE' && parseInt(formData.totalSlots) > 1) || (formData.slotType === 'SPECIFIC_GROUP' && formData.selectedGroups.length > 1)) && previewSlots.length === 0) ? (
+                  <button
+                    onClick={handleGeneratePreview}
+                    disabled={loadingGroups}
+                    className="flex items-center gap-2 bg-[#1a237e] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#1a237e]/90 transition-all shadow-lg hover:shadow-[#1a237e]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingGroups ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Loading Groups...
+                      </>
+                    ) : (
+                      `Generate Preview for ${formData.slotType === 'SPECIFIC_GROUP' ? formData.selectedGroups.length : (parseInt(formData.totalSlots) || groups.length)} Groups`
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleCreateSlot}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 bg-[#1a237e] text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[#1a237e]/90 transition-all shadow-lg hover:shadow-[#1a237e]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      previewSlots.length > 0 ? `Create ${previewSlots.length} Slots` : 'Create Slot'
+                    )}
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Preview Section */}
+            {previewSlots.length > 0 && (
+              <div className="mt-6 border-t border-gray-100 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-[#1a237e]" />
+                    Review Generated Slots
+                  </h4>
+                  <button 
+                    onClick={() => setPreviewSlots([])}
+                    className="text-xs text-red-500 hover:text-red-600 font-medium"
+                  >
+                    Reset Preview
+                  </button>
+                </div>
+                
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {previewSlots.map((slot, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100 group hover:border-[#1a237e]/20 transition-all"
+                    >
+                      <div className="w-24">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Date</span>
+                        <span className="text-sm font-semibold text-gray-900">{formatDayLabel(slot.slotDate)}</span>
+                      </div>
+                      
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="flex-1">
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Start</span>
+                          <input
+                            type="time"
+                            value={slot.startTime}
+                            onChange={(e) => {
+                              const newPreview = [...previewSlots]
+                              newPreview[idx].startTime = e.target.value
+                              setPreviewSlots(newPreview)
+                            }}
+                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-[#1a237e]/20 focus:border-[#1a237e] outline-none transition-all"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">End</span>
+                          <input
+                            type="time"
+                            value={slot.endTime}
+                            onChange={(e) => {
+                              const newPreview = [...previewSlots]
+                              newPreview[idx].endTime = e.target.value
+                              setPreviewSlots(newPreview)
+                            }}
+                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-[#1a237e]/20 focus:border-[#1a237e] outline-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setPreviewSlots(previewSlots.filter((_, i) => i !== idx))
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                
+                <p className="mt-4 text-xs text-gray-500 italic">
+                  * You can adjust the times for each slot above or remove specific ones before finalizing.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -1658,32 +1946,20 @@ export default function SchedulePage() {
                                 <p className="text-xs text-gray-600">{isCompleted ? 'COMPLETED' : booking.status}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation()
-                                setExpandedSlot(null)
-                                setLoadingFormButton(booking.booking_id || slot.slot_id)
-                                try {
-                                  await openConsultationForm({
-                                    ...booking,
-                                    slot_date: booking.slot_date || slot.slot_date,
-                                    slot_date_only: booking.slot_date_only || slot.slot_date_only || String(slot.slot_date || '').slice(0, 10),
-                                  })
-                                } finally {
-                                  setLoadingFormButton(null)
-                                }
-                              }}
-                              disabled={isCompleted || loadingFormButton === (booking.booking_id || slot.slot_id)}
-                              className={`w-full px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                                isCompleted ? 'bg-gray-300 text-gray-700' : 'bg-blue-600 text-white hover:bg-blue-700'
-                              }`}
-                            >
-                              {loadingFormButton === (booking.booking_id || slot.slot_id)
-                                ? 'Loading...'
-                                : isCompleted
-                                  ? 'Completed'
-                                  : 'Consultation Record'}
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/scholar/adviser/consultation-prep/${booking.slot_id || slot.slot_id}`)
+                                }}
+                                disabled={isCompleted}
+                                className={`w-full px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                                  isCompleted ? 'bg-gray-300 text-gray-700' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                }`}
+                              >
+                                {isCompleted ? 'Completed' : 'Prepare'}
+                              </button>
+                            </div>
                           </div>
                         )})
                       ) : slot.slot_type === 'SPECIFIC_GROUP' && slot.reserved_group_name ? (
@@ -1691,29 +1967,13 @@ export default function SchedulePage() {
                           <p className="text-sm font-medium text-blue-900 mb-2">Reserved: {slot.reserved_group_name}</p>
                           <p className="text-xs text-blue-700 mb-3">Ready for consultation record.</p>
                           <button
-                            onClick={async (e) => {
+                            onClick={(e) => {
                               e.stopPropagation()
-                              setExpandedSlot(null)
-                              setLoadingFormButton(slot.slot_id)
-                              try {
-                                await openConsultationForm({
-                                  booking_id: undefined,
-                                  group_name: slot.reserved_group_name || 'Reserved Group',
-                                  slot_date: slot.slot_date,
-                                  start_time: slot.start_time,
-                                  status: 'CONFIRMED',
-                                  group_id: slot.allowed_group_id || 0,
-                                  slot_id: slot.slot_id,
-                                  course_id: slot.course_id,
-                                })
-                              } finally {
-                                setLoadingFormButton(null)
-                              }
+                              router.push(`/scholar/adviser/consultation-prep/${slot.slot_id}`)
                             }}
-                            disabled={loadingFormButton === slot.slot_id}
-                            className="w-full px-3 py-1 bg-blue-600 text-white rounded text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            className="w-full px-3 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold hover:bg-amber-200 transition-colors"
                           >
-                            {loadingFormButton === slot.slot_id ? 'Loading...' : 'Consultation Record'}
+                            Prepare
                           </button>
                         </div>
                       ) : (

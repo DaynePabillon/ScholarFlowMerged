@@ -97,15 +97,23 @@ export class GoogleCalendarService {
     try {
       const { calendar } = getGoogleClients(accessToken, refreshToken);
 
+      // Helper to format date as YYYY-MM-DD using local methods
+      const formatDate = (date: Date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
       const event = {
         summary: eventData.title,
         description: eventData.description,
         location: eventData.location,
         start: eventData.allDay
-          ? { date: eventData.startTime.toISOString().split('T')[0] }
+          ? { date: formatDate(new Date(eventData.startTime)) }
           : { dateTime: eventData.startTime.toISOString(), timeZone: 'UTC' },
         end: eventData.allDay
-          ? { date: eventData.endTime.toISOString().split('T')[0] }
+          ? { date: formatDate(new Date(eventData.endTime)) }
           : { dateTime: eventData.endTime.toISOString(), timeZone: 'UTC' },
       };
 
@@ -157,15 +165,23 @@ export class GoogleCalendarService {
     try {
       const { calendar } = getGoogleClients(accessToken, refreshToken);
 
+      // Helper to format date as YYYY-MM-DD using local methods
+      const formatDate = (date: Date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+
       const event = {
         summary: eventData.title,
         description: eventData.description,
         location: eventData.location,
         start: eventData.allDay
-          ? { date: eventData.startTime.toISOString().split('T')[0] }
+          ? { date: formatDate(new Date(eventData.startTime)) }
           : { dateTime: eventData.startTime.toISOString(), timeZone: 'UTC' },
         end: eventData.allDay
-          ? { date: eventData.endTime.toISOString().split('T')[0] }
+          ? { date: formatDate(new Date(eventData.endTime)) }
           : { dateTime: eventData.endTime.toISOString(), timeZone: 'UTC' },
       };
 

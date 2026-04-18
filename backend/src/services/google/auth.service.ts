@@ -73,28 +73,51 @@ export class GoogleAuthService {
     try {
       const tokenExpiry = new Date(Date.now() + 3600 * 1000); // 1 hour from now
 
-      const result = await query(
-        `INSERT INTO users (google_id, email, name, profile_picture, access_token, refresh_token, token_expiry, last_login)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-         ON CONFLICT (email)
-         DO UPDATE SET
-           google_id = EXCLUDED.google_id,
-           name = EXCLUDED.name,
-           profile_picture = EXCLUDED.profile_picture,
-           access_token = EXCLUDED.access_token,
-           refresh_token = COALESCE(EXCLUDED.refresh_token, users.refresh_token),
-           token_expiry = EXCLUDED.token_expiry,
-           last_login = NOW(),
-           updated_at = NOW()
+      // First try to update an existing account matched by Google ID OR email.
+      // This avoids callback failures when a user was pre-seeded by email before first OAuth login.
+      const updateResult = await query(
+        `UPDATE users
+         SET google_id = $1,
+             email = $2,
+             name = $3,
+             profile_picture = $4,
+             access_token = $5,
+             refresh_token = COALESCE($6, refresh_token),
+             token_expiry = $7,
+             last_login = NOW(),
+             updated_at = NOW()
+         WHERE google_id = $1 OR LOWER(email) = LOWER($2)
          RETURNING *`,
         [googleUser.id, googleUser.email, googleUser.name, googleUser.picture, accessToken, refreshToken, tokenExpiry]
       );
 
-      return result.rows[0];
-    } catch (error: any) {
+      let user = updateResult.rows[0];
+
+      if (!user) {
+        const insertResult = await query(
+          `INSERT INTO users (google_id, email, name, profile_picture, access_token, refresh_token, token_expiry, last_login)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+           RETURNING *`,
+          [googleUser.id, googleUser.email, googleUser.name, googleUser.picture, accessToken, refreshToken, tokenExpiry]
+        );
+
+        user = insertResult.rows[0];
+      }
+
+      // Sync Google Access Token to ScholarSync account if it exists (ScholarSync Bridge)
+      try {
+        await query(
+          'UPDATE ss_account SET "googleAccessToken" = $1 WHERE "accountEmail" = $2',
+          [accessToken, googleUser.email]
+        );
+      } catch (ssErr: any) {
+        logger.warn('Failed to bridge token to ss_account:', ssErr.message);
+      }
+
+      return user;
+    } catch (error) {
       logger.error('Error upserting user:', error);
-      // Re-throw original error so the exact DB message propagates to the caller
-      throw new Error(`DB upsertUser failed: ${error?.message || error}`);
+      throw new Error('Failed to save user information');
     }
   }
 
@@ -183,6 +206,20 @@ export class GoogleAuthService {
         'UPDATE users SET access_token = $1, token_expiry = $2, updated_at = NOW() WHERE id = $3',
         [credentials.access_token, new Date(credentials.expiry_date!), userId]
       );
+
+      // ScholarSync Bridge: Also update ss_account if it exists
+      try {
+        const userRes = await query('SELECT email FROM users WHERE id = $1', [userId]);
+        const email = userRes.rows[0]?.email;
+        if (email) {
+          await query(
+            'UPDATE ss_account SET "googleAccessToken" = $1 WHERE "accountEmail" = $2',
+            [credentials.access_token, email]
+          );
+        }
+      } catch (ssErr: any) {
+        logger.warn('Failed to bridge refreshed token to ss_account:', ssErr.message);
+      }
 
       return credentials.access_token;
     } catch (error) {

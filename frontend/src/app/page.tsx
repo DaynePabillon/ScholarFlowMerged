@@ -27,7 +27,7 @@ function RootPortalContent() {
       
       if (!token) {
         console.warn("No token found in portal, redirecting to landing")
-        router.push("/landing")
+        router.push("/login")
         return
       }
 
@@ -54,7 +54,7 @@ function RootPortalContent() {
           setUser(JSON.parse(storedUser));
           setIsLoading(false);
         } else {
-          router.push("/landing");
+          router.push("/login");
         }
       }
     }
