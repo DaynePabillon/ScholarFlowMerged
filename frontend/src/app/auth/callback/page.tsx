@@ -64,10 +64,12 @@ function AuthCallbackContent() {
               setStatus('error')
               setMessage('Authentication failed')
 
-              // Clear invalid token
+              // Clear invalid token (both keys must be cleared together)
               localStorage.removeItem('token')
+              localStorage.removeItem('auth_token')
               localStorage.removeItem('user')
               localStorage.removeItem('organizations')
+              localStorage.removeItem('ss_user')
 
               // Redirect to login after showing error
               setTimeout(() => {

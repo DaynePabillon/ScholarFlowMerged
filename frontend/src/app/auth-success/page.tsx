@@ -18,7 +18,7 @@ function AuthSuccessContent() {
       const fetchUserData = async () => {
         try {
           const { API_URL } = await import('@/lib/api/client');
-          const res = await fetch(`${API_URL}/auth/me`, {
+          const res = await fetch(`${API_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` }
           });
 
