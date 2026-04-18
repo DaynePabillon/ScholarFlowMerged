@@ -2214,8 +2214,8 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
             if (result.success) sentCount++;
             else logger.warn(`⚠️ Failed to send import email to ${member.email}: ${result.error}`);
 
-            // Small delay to avoid rate limiting
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // 5 second delay to comfortably bypass Resend's 2 request/sec rate limit
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
 
           logger.info(`📨 Import invitations: ${sentCount} sent, ${skippedCount} skipped (existing accounts)`);
@@ -2255,7 +2255,8 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
             if (result.success) sentCount++;
             else logger.warn(`⚠️ Failed to send advisor import email to ${advisor.email}: ${result.error}`);
 
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // 5 second delay between emails
+            await new Promise(resolve => setTimeout(resolve, 5000));
           }
           logger.info(`📨 Advisor Import Emails — Sent: ${sentCount}, Skipped (Existing Users): ${skippedCount}`);
         } catch (emailErr: any) {
