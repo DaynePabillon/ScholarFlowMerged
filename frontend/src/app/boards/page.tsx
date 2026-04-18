@@ -720,15 +720,13 @@ function BoardsContent() {
                                             <RotateCcw className={`w-5 h-5 ${isResyncing ? 'animate-spin text-emerald-500' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                                         </button>
                                     )}
-                                    {boardSubView !== 'advisor' && (
-                                        <button
-                                            onClick={() => setIsCreateModalOpen(true)}
-                                            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
-                                        >
-                                            <Plus className="w-5 h-5" />
-                                            <span className="font-medium">New Task</span>
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={() => setIsCreateModalOpen(true)}
+                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
+                                    >
+                                        <Plus className="w-5 h-5" />
+                                        <span className="font-medium">New Task</span>
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -1039,16 +1037,17 @@ function BoardsContent() {
                                     className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">Unassigned</option>
-                                    {members.filter(m => {
-                                        // If a specific team is selected, only show that team's members
+                                    {(() => {
+                                        // If a specific team is selected, filter to only that team's members
                                         if (selectedTeam && selectedTeam !== 'all') {
                                             const teamGroup = teamGroups.find(tg => tg.id === selectedTeam);
-                                            // For now, show all members if we can't filter by team
-                                            // TODO: Add team_group_members email matching
-                                            return true;
+                                            if (teamGroup && (teamGroup as any).members) {
+                                                const teamMemberEmails = (teamGroup as any).members.map((m: any) => m.email?.toLowerCase());
+                                                return members.filter(m => teamMemberEmails.includes(m.email?.toLowerCase()));
+                                            }
                                         }
-                                        return true;
-                                    }).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                        return members;
+                                    })().map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                             </div>
                         </div>

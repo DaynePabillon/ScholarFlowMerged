@@ -102,7 +102,18 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
             );
         }
 
-        res.json({ teams: result.rows, userRole: role });
+        // Fetch members for each team
+        const teamsWithMembers = await Promise.all(
+            result.rows.map(async (team) => {
+                const membersResult = await query(
+                    'SELECT id, name, email, student_id, member_number, is_leader FROM team_group_members WHERE team_group_id = $1 ORDER BY member_number ASC',
+                    [team.id]
+                );
+                return { ...team, members: membersResult.rows };
+            })
+        );
+
+        res.json({ teams: teamsWithMembers, userRole: role });
     } catch (error) {
         logger.error('Error fetching team groups:', error);
         res.status(500).json({ error: 'Failed to fetch team groups' });
