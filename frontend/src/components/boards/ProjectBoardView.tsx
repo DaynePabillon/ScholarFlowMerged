@@ -265,7 +265,7 @@ export default function ProjectBoardView({
 
             {/* Unassigned tasks section */}
             {unassignedTasks.length > 0 && (
-                <div className="bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-white/5 shadow-lg overflow-hidden">>
+                <div className="bg-white/70 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-white/5 shadow-lg overflow-hidden">
                     <div className="p-4 border-b border-gray-100 dark:border-slate-800/50">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-gray-500 rounded-lg">
