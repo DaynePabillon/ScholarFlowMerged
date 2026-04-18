@@ -1,7 +1,7 @@
 "use client"
 
 import { API_URL } from '@/lib/api/client'
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, Suspense } from "react"
 import {
   Calendar,
   Plus,
@@ -108,7 +108,7 @@ interface DeleteConfirmState {
   daySlotCount?: number
 }
 
-export default function SchedulePage() {
+function ScheduleContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const autoRecordHandledRef = useRef(false)
@@ -2043,7 +2043,14 @@ export default function SchedulePage() {
             </div>
           </div>
         )}
-      </div>
     </SidebarLayout>
+  )
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading schedule...</div>}>
+      <ScheduleContent />
+    </Suspense>
   )
 }
