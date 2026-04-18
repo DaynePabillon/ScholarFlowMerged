@@ -279,7 +279,7 @@ export default function ProjectBoardView({
                     </div>
                     <div className="divide-y divide-gray-100 dark:divide-slate-800/50">
                         {unassignedTasks.map((task) => (
-                            <div key={task.id} className="p-4 hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors group">>
+                            <div key={task.id} className="p-4 hover:bg-gray-50/50 dark:hover:bg-slate-800/30 transition-colors group">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-2 mb-1">
