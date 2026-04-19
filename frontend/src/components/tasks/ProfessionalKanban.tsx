@@ -110,6 +110,13 @@ export default function ProfessionalKanban({
         setDraggedTask(null)
     }
 
+    // Always clean up drag state, even if drop is cancelled (outside any column)
+    const handleDragEnd = () => {
+        draggedTaskRef.current = null
+        setDraggedTask(null)
+        setDragOverColumn(null)
+    }
+
     const toggleModule = (code: string) => {
         const newCollapsed = new Set(collapsedModules);
         if (newCollapsed.has(code)) newCollapsed.delete(code);
@@ -139,6 +146,7 @@ export default function ProfessionalKanban({
             <div
                 draggable={canDrag}
                 onDragStart={(e) => handleDragStart(e, task)}
+                onDragEnd={handleDragEnd}
                 className={`transition-all duration-200 ${draggedTask?.id === task.id ? 'opacity-30 scale-95' : ''}`}
             >
                 <ProfessionalTaskCard
