@@ -90,7 +90,10 @@ export default function ProfessionalKanban({
         e.dataTransfer.setData('text/plain', task.id)
         e.dataTransfer.effectAllowed = 'move'
         draggedTaskRef.current = task
-        setDraggedTask(task)
+        // Delay state update so browser captures full-opacity drag ghost first
+        requestAnimationFrame(() => {
+            setDraggedTask(task)
+        })
     }
 
     const handleDrop = (e: React.DragEvent, newStatus: string) => {

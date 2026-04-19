@@ -138,7 +138,6 @@ function BoardsContent() {
     const [showSheetTemplate, setShowSheetTemplate] = useState(false)
     const [newTeam, setNewTeam] = useState({ team_number: 1, name: '', description: '', adviser_name: '' })
     const [isResyncing, setIsResyncing] = useState(false)
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
 
     const searchParams = useSearchParams()
 
@@ -244,32 +243,7 @@ function BoardsContent() {
         }
     }, [selectedTeam])
 
-    // Fetch team-specific members when a team is selected
-    useEffect(() => {
-        const fetchTeamMembers = async () => {
-            if (!selectedTeam) {
-                setTeamMembers([])
-                return
-            }
-            try {
-                const response = await apiClient.get(`/team-groups/${selectedTeam}`)
-                if (response.data?.members) {
-                    // Map team_group_members to TeamMember format
-                    const mapped = response.data.members.map((m: any) => ({
-                        id: m.user_id || m.id,
-                        name: m.name || m.email || 'Unknown',
-                        email: m.email || '',
-                        role: m.is_leader ? 'leader' : 'member'
-                    }))
-                    setTeamMembers(mapped)
-                }
-            } catch (error) {
-                console.error('Error fetching team members:', error)
-                setTeamMembers([])
-            }
-        }
-        fetchTeamMembers()
-    }, [selectedTeam])
+    // No separate API call needed — teamGroups already includes members from the endpoint
 
     const fetchData = async (orgId: string) => {
         await Promise.all([
@@ -586,8 +560,26 @@ function BoardsContent() {
 
     // Show team-specific members when a team is selected, otherwise all org members
     const displayMembers = useMemo(() => {
-        return selectedTeam && teamMembers.length > 0 ? teamMembers : members
-    }, [selectedTeam, teamMembers, members])
+        if (!selectedTeam) return members
+
+        // Find the selected team group (teamGroups already includes .members from API)
+        const selectedGroup = teamGroups.find((tg: any) => tg.id === selectedTeam)
+        if (!selectedGroup || !(selectedGroup as any).members?.length) return members
+
+        // Get team member emails for cross-reference
+        const teamEmails = new Set(
+            (selectedGroup as any).members
+                .map((m: any) => m.email?.toLowerCase())
+                .filter(Boolean)
+        )
+
+        // Filter org members to only those in this team (preserves correct users.id)
+        const filtered = members.filter(m =>
+            teamEmails.has((m as any).email?.toLowerCase())
+        )
+
+        return filtered.length > 0 ? filtered : members
+    }, [selectedTeam, teamGroups, members])
 
     const generalTaskCount = useMemo(() => {
         return tasks.filter(t => !t.synced && !t.sheet_name && t.status !== 'archived').length
