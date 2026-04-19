@@ -598,21 +598,23 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
         [sheetDbStatus, id]
       );
 
-        // 2. Write status back to Google Sheet (two-way sync)
-        try {
-          const workspaceSyncService = new WorkspaceSyncService();
-          const writebackResult = await workspaceSyncService.updateSheetTask(id, 'status', sheetDbStatus);
-          
-          if (writebackResult.success) {
-            logger.info(`Sheet task ${id} status written back to Google Sheet`);
-            // Trigger hierarchical progress calculation
-            await workspaceSyncService.calculateParentProgress(id);
-          } else {
-            logger.warn(`Sheet writeback failed for task ${id}: ${writebackResult.error}`);
+        // 2. Write status back to Google Sheet (two-way sync) — fire-and-forget
+        // Do NOT await; respond to client immediately. Background sync avoids
+        // blocking the drag UX on Google Sheets API latency (~1-3s).
+        (async () => {
+          try {
+            const workspaceSyncService = new WorkspaceSyncService();
+            const writebackResult = await workspaceSyncService.updateSheetTask(id, 'status', sheetDbStatus);
+            if (writebackResult.success) {
+              logger.info(`Sheet task ${id} status written back to Google Sheet (background)`);
+              await workspaceSyncService.calculateParentProgress(id);
+            } else {
+              logger.warn(`Sheet writeback failed for task ${id}: ${writebackResult.error}`);
+            }
+          } catch (writebackErr: any) {
+            logger.warn(`Sheet writeback error for task ${id}: ${writebackErr.message}`);
           }
-        } catch (writebackErr: any) {
-          logger.warn(`Sheet writeback error for task ${id}: ${writebackErr.message}`);
-        }
+        })();
 
       // 3. Log activity
       await query(

@@ -396,14 +396,14 @@ function BoardsContent() {
             const response = await apiClient.patch(`/tasks/${taskId}/status`, { status: newStatus })
             if (response.status !== 200 && response.status !== 204) {
                 setTasks(previousTasks)
-            } else if (selectedOrg) {
-                fetchTasks(selectedOrg.id)
             }
+            // No refetch — optimistic update is authoritative. Background
+            // Google Sheet sync on the server won't block the UI.
         } catch (error: any) {
             console.error('Error updating status:', error)
             setTasks(previousTasks)
         }
-    }, [tasks, selectedOrg, fetchTasks]);
+    }, [tasks]);
 
     const handleProgressChange = useCallback(async (taskId: string, newProgress: number) => {
         const previousTasks = [...tasks]

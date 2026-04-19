@@ -47,11 +47,11 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
                 `SELECT tg.*,
                   (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
                   (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) + 
-                  (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id) + 
-                  (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id) as total_checkpoints,
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) + 
+                  (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
                   (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') + 
-                  (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) + 
-                  (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) as completed_checkpoints
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) + 
+                  (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
            FROM team_groups tg
            WHERE tg.organization_id = $1
              AND (tg.adviser_id = $2 OR LOWER(tg.adviser_name) = LOWER($3))
@@ -68,11 +68,11 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
                     `SELECT tg.*,
                       (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
                       (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) + 
-                      (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id) + 
-                      (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id) as total_checkpoints,
+                      (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) + 
+                      (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
                       (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') + 
-                      (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) + 
-                      (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) as completed_checkpoints
+                      (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) + 
+                      (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
                FROM team_groups tg
                WHERE tg.organization_id = $1
                  AND tg.id IN (
@@ -90,11 +90,11 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
                 `SELECT tg.*,
                   (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
                   (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) + 
-                  (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id) + 
-                  (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id) as total_checkpoints,
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) + 
+                  (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
                   (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') + 
-                  (SELECT COUNT(*) FROM tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) + 
-                  (SELECT COUNT(*) FROM sheet_tasks WHERE team_id = tg.id AND status IN ('completed', 'done', 'Done')) as completed_checkpoints
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) + 
+                  (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
            FROM team_groups tg
            WHERE tg.organization_id = $1
            ORDER BY tg.team_number ASC`,
