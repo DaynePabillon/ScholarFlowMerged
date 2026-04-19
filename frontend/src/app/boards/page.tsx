@@ -383,12 +383,12 @@ function BoardsContent() {
     }
 
     const handleStatusChange = useCallback(async (taskId: string, newStatus: string) => {
-        const taskToUpdate = tasks.find(t => t.id === taskId)
+        const taskToUpdate = tasks.find(t => String(t.id) === String(taskId))
         if (!taskToUpdate) return
 
         const previousTasks = [...tasks]
         const updatedTasks = tasks.map(t => 
-            t.id === taskId ? { ...t, status: normalizeStatus(newStatus) } : t
+            String(t.id) === String(taskId) ? { ...t, status: normalizeStatus(newStatus) } : t
         )
         setTasks(updatedTasks)
 
@@ -407,7 +407,7 @@ function BoardsContent() {
 
     const handleProgressChange = useCallback(async (taskId: string, newProgress: number) => {
         const previousTasks = [...tasks]
-        const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, progress_percent: newProgress } : t)
+        const updatedTasks = tasks.map(t => String(t.id) === String(taskId) ? { ...t, progress_percent: newProgress } : t)
         setTasks(updatedTasks)
 
         try {
@@ -423,7 +423,7 @@ function BoardsContent() {
         try {
             const response = await apiClient.delete(`/tasks/${taskId}`)
             if (response.status === 200 || response.status === 204) {
-                setTasks(prev => prev.filter(t => t.id !== taskId))
+                setTasks(prev => prev.filter(t => String(t.id) !== String(taskId)))
             }
         } catch (error: any) {
             console.error('Error deleting task:', error)
@@ -433,7 +433,7 @@ function BoardsContent() {
     const handleArchiveTask = useCallback(async (taskId: string) => {
         try {
             await apiClient.post(`/tasks/${taskId}/archive`)
-            setTasks(prev => prev.filter(t => t.id !== taskId))
+            setTasks(prev => prev.filter(t => String(t.id) !== String(taskId)))
         } catch (error) {
             console.error('Error archiving task:', error)
         }
@@ -745,13 +745,32 @@ function BoardsContent() {
                                             <RotateCcw className={`w-5 h-5 ${isResyncing ? 'animate-spin text-emerald-500' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
                                         </button>
                                     )}
-                                    <button
-                                        onClick={() => setIsCreateModalOpen(true)}
-                                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
-                                    >
-                                        <Plus className="w-5 h-5" />
-                                        <span className="font-medium">New Task</span>
-                                    </button>
+                                    <div className="relative group/tool">
+                                        <button
+                                            onClick={() => {
+                                                if (!selectedTeam) {
+                                                    alert('⚠️ Please select a specific team first!\n\nYou cannot add tasks to "All Teams". Select a team from the dropdown so the task belongs to that team.');
+                                                    return;
+                                                }
+                                                setIsCreateModalOpen(true);
+                                            }}
+                                            disabled={!selectedTeam}
+                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all shadow-md ${
+                                                !selectedTeam
+                                                    ? 'bg-gray-200 dark:bg-slate-800 text-gray-400 dark:text-slate-600 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:from-blue-600 hover:to-cyan-600 hover:shadow-lg'
+                                            }`}
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                            <span className="font-medium">New Task</span>
+                                        </button>
+                                        {!selectedTeam && (
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 px-4 py-2 bg-rose-600 text-white text-[10px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover/tool:opacity-100 transition-all duration-300 pointer-events-none whitespace-nowrap z-[100] shadow-2xl scale-90 group-hover/tool:scale-100">
+                                                Select a team first
+                                                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[6px] border-transparent border-t-rose-600"></div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
