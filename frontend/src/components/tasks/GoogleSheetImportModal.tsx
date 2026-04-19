@@ -141,7 +141,7 @@ export default function GoogleSheetImportModal({
             setError('Invalid Google Sheet URL')
             return
         }
-        handlePreview({ id, name: 'Imported via URL', modifiedTime: new Date().toISOString() })
+        handlePreview({ id, name: 'Work Breakdown Structure', modifiedTime: new Date().toISOString() })
     }
 
     const handleConfirmSync = async () => {

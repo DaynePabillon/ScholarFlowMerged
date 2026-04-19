@@ -866,7 +866,6 @@ function BoardsContent() {
                             <button
                                 onClick={() => {
                                     setActiveTab('all');
-                                    setSelectedTeam(null);
                                     setSelectedSheetId(null);
                                 }}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'all'
@@ -880,7 +879,6 @@ function BoardsContent() {
                             <button
                                 onClick={() => {
                                     setActiveTab('general');
-                                    setSelectedTeam(null);
                                     setSelectedSheetId(null);
                                 }}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'general'
@@ -897,7 +895,6 @@ function BoardsContent() {
                                     <button
                                         onClick={() => {
                                             setActiveTab(sheet.sheet_name);
-                                            setSelectedTeam(sheet.team_id);
                                             setSelectedSheetId(sheet.id);
                                         }}
                                         className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === sheet.sheet_name
@@ -906,7 +903,7 @@ function BoardsContent() {
                                             }`}
                                     >
                                         <FileSpreadsheet className="w-4 h-4" />
-                                        {sheet.sheet_name}
+                                        {sheet.sheet_name === 'Imported via URL' ? 'Work Breakdown Structure' : sheet.sheet_name}
                                         <span className="text-xs opacity-80">{sheet.task_count || 0}</span>
                                     </button>
                                     <button

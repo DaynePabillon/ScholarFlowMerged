@@ -80,12 +80,12 @@ export default function TeamSelector({
                 <>
                     {/* Backdrop */}
                     <div 
-                        className="fixed inset-0 z-40" 
+                        className="fixed inset-0 z-[90]" 
                         onClick={() => setIsOpen(false)}
                     />
                     
                     {/* Dropdown */}
-                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 max-h-80 overflow-y-auto">
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-[100] max-h-80 overflow-y-auto">
                         {/* All Teams option (for admin/manager only) */}
                         {(userRole === 'admin' || userRole === 'manager') && (
                             <button
