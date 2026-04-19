@@ -838,7 +838,13 @@ class WorkspaceSyncService {
             logger_1.default.info(`importTeams: Raw headers: ${JSON.stringify(headers)}`);
             const colTeamCode = headers.findIndex(h => /team.?code/i.test(h));
             const colMemberNum = headers.findIndex(h => /member.?#|member.?no|member.?num/i.test(h));
-            const colStudentId = headers.findIndex(h => /student.?id|student.?no/i.test(h));
+            let colStudentId = headers.findIndex(h => /student.?id|student.?(no|number)|\bstd.?id\b|\bs\.?n\.?\b/i.test(h));
+            if (colStudentId === -1) {
+                colStudentId = headers.findIndex(h => {
+                    const cleaned = h.trim();
+                    return /^id$/i.test(cleaned) || /^id.?(num|no|number)?$/i.test(cleaned);
+                });
+            }
             const colLastname = headers.findIndex(h => /last.?name|surname/i.test(h));
             const colFirstname = headers.findIndex(h => /first.?name|given/i.test(h));
             const colEmail = headers.findIndex(h => /email|e-mail/i.test(h));

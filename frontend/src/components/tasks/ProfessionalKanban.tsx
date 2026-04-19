@@ -90,10 +90,8 @@ export default function ProfessionalKanban({
         e.dataTransfer.setData('text/plain', task.id)
         e.dataTransfer.effectAllowed = 'move'
         draggedTaskRef.current = task
-        // Delay state update so browser captures full-opacity drag ghost first
-        requestAnimationFrame(() => {
-            setDraggedTask(task)
-        })
+        // Don't set React state here — it triggers a re-render mid-drag that
+        // can cancel the drag operation. Browser's native drag ghost is enough.
     }
 
     const handleDrop = (e: React.DragEvent, newStatus: string) => {
@@ -147,7 +145,6 @@ export default function ProfessionalKanban({
                 draggable={canDrag}
                 onDragStart={(e) => handleDragStart(e, task)}
                 onDragEnd={handleDragEnd}
-                className={`transition-all duration-200 ${draggedTask?.id === task.id ? 'opacity-30 scale-95' : ''}`}
             >
                 <ProfessionalTaskCard
                     task={task}
@@ -165,7 +162,7 @@ export default function ProfessionalKanban({
                 </div>
             )}
         </div>
-    ), [canDrag, draggedTask, onTaskClick, onStatusChange, onDeleteTask, onArchiveTask, onProgressChange, role]);
+    ), [canDrag, onTaskClick, onStatusChange, onDeleteTask, onArchiveTask, onProgressChange, role]);
 
     const boardData = useMemo(() => {
         return sortedModuleCodes.map(code => {

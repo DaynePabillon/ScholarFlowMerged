@@ -239,12 +239,12 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                             </div>
                             {team.adviser_name && (
                                 <div className="flex items-center gap-4 bg-white dark:bg-slate-900/60 p-4 rounded-3xl border border-gray-200 dark:border-white/5 shadow-md dark:shadow-xl">
-                                    <div className="p-3 bg-amber-500/10 rounded-2xl">
+                                    <div className="p-3 bg-amber-500/10 rounded-2xl flex-shrink-0">
                                         <Award size={20} className="text-amber-500" />
                                     </div>
-                                    <div>
+                                    <div className="min-w-0 flex-1">
                                         <div className="text-[9px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest">Adviser</div>
-                                        <div className="text-[14px] text-gray-900 dark:text-white font-black uppercase tracking-tight">{team.adviser_name}</div>
+                                        <div className="text-[13px] text-gray-900 dark:text-white font-black uppercase tracking-tight break-all">{team.adviser_name}</div>
                                     </div>
                                 </div>
                             )}
