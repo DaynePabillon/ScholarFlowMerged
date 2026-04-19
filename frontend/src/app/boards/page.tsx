@@ -880,6 +880,8 @@ function BoardsContent() {
                                 onClick={() => {
                                     setActiveTab('general');
                                     setSelectedSheetId(null);
+                                    // Auto-switch to Team Board since general tasks live there
+                                    setBoardSubView('team');
                                 }}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'general'
                                     ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
@@ -896,6 +898,8 @@ function BoardsContent() {
                                         onClick={() => {
                                             setActiveTab(sheet.sheet_name);
                                             setSelectedSheetId(sheet.id);
+                                            // Auto-switch to Advisor Board since WBS/synced sheets are absolute tasks
+                                            setBoardSubView('advisor');
                                         }}
                                         className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === sheet.sheet_name
                                             ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
