@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useRef, useState, useEffect, useMemo, useCallback, memo } from 'react'
+import React, { useRef, useState, useEffect, useMemo, useCallback, memo, DragEvent } from 'react'
 import { Plus, MoreHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
 import ProfessionalTaskCard from './ProfessionalTaskCard'
 
@@ -59,6 +59,7 @@ export default function ProfessionalKanban({
     ]
 
     const [draggedTask, setDraggedTask] = useState<Task | null>(null)
+    const draggedTaskRef = useRef<Task | null>(null)
     const [dragOverColumn, setDragOverColumn] = useState<{col: string, module: string} | null>(null)
 
     // Helper: Extract numeric WBS code
@@ -84,20 +85,25 @@ export default function ProfessionalKanban({
         );
     }, [moduleGroups]);
 
-    const handleDragStart = (task: Task) => {
+    const handleDragStart = (e: DragEvent<HTMLDivElement>, task: Task) => {
         if (!canDrag) return
+        e.dataTransfer.setData('text/plain', task.id)
+        e.dataTransfer.effectAllowed = 'move'
+        draggedTaskRef.current = task
         setDraggedTask(task)
     }
 
     const handleDrop = (e: React.DragEvent, newStatus: string) => {
         e.preventDefault()
         setDragOverColumn(null)
-        if (draggedTask && onStatusChange) {
-            const currentStatus = (draggedTask.status || '').toLowerCase().replace(/[- ]/g, '_')
+        const task = draggedTaskRef.current
+        if (task && onStatusChange) {
+            const currentStatus = (task.status || '').toLowerCase().replace(/[- ]/g, '_')
             if (currentStatus !== newStatus) {
-                onStatusChange(draggedTask.id, newStatus)
+                onStatusChange(task.id, newStatus)
             }
         }
+        draggedTaskRef.current = null
         setDraggedTask(null)
     }
 
@@ -129,7 +135,7 @@ export default function ProfessionalKanban({
         <div key={task.id} className="relative">
             <div
                 draggable={canDrag}
-                onDragStart={() => handleDragStart(task)}
+                onDragStart={(e) => handleDragStart(e, task)}
                 className={`transition-all duration-200 ${draggedTask?.id === task.id ? 'opacity-30 scale-95' : ''}`}
             >
                 <ProfessionalTaskCard
@@ -279,6 +285,7 @@ export default function ProfessionalKanban({
                                             isOver={dragOverColumn?.col === col.id && dragOverColumn?.module === moduleData.code}
                                             onDragOver={(e: any) => {
                                                 e.preventDefault();
+                                                e.dataTransfer.dropEffect = 'move';
                                                 throttledSetDragOverColumn({ col: col.id, module: moduleData.code });
                                             }}
                                             onDragLeave={() => throttledSetDragOverColumn(null)}

@@ -138,6 +138,7 @@ function BoardsContent() {
     const [showSheetTemplate, setShowSheetTemplate] = useState(false)
     const [newTeam, setNewTeam] = useState({ team_number: 1, name: '', description: '', adviser_name: '' })
     const [isResyncing, setIsResyncing] = useState(false)
+    const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
 
     const searchParams = useSearchParams()
 
@@ -241,6 +242,33 @@ function BoardsContent() {
         if (selectedOrg) {
             fetchTasks(selectedOrg.id)
         }
+    }, [selectedTeam])
+
+    // Fetch team-specific members when a team is selected
+    useEffect(() => {
+        const fetchTeamMembers = async () => {
+            if (!selectedTeam) {
+                setTeamMembers([])
+                return
+            }
+            try {
+                const response = await apiClient.get(`/team-groups/${selectedTeam}`)
+                if (response.data?.members) {
+                    // Map team_group_members to TeamMember format
+                    const mapped = response.data.members.map((m: any) => ({
+                        id: m.user_id || m.id,
+                        name: m.name || m.email || 'Unknown',
+                        email: m.email || '',
+                        role: m.is_leader ? 'leader' : 'member'
+                    }))
+                    setTeamMembers(mapped)
+                }
+            } catch (error) {
+                console.error('Error fetching team members:', error)
+                setTeamMembers([])
+            }
+        }
+        fetchTeamMembers()
     }, [selectedTeam])
 
     const fetchData = async (orgId: string) => {
@@ -556,6 +584,11 @@ function BoardsContent() {
         })
     }, [tasks, activeTab]);
 
+    // Show team-specific members when a team is selected, otherwise all org members
+    const displayMembers = useMemo(() => {
+        return selectedTeam && teamMembers.length > 0 ? teamMembers : members
+    }, [selectedTeam, teamMembers, members])
+
     const generalTaskCount = useMemo(() => {
         return tasks.filter(t => !t.synced && !t.sheet_name && t.status !== 'archived').length
     }, [tasks]);
@@ -778,7 +811,7 @@ function BoardsContent() {
                                     onStatusChange={handleStatusChange}
                                     onProgressChange={handleProgressChange}
                                     role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
-                                    members={members}
+                                    members={displayMembers}
                                 />
                             </div>
                         ) : (
@@ -808,7 +841,7 @@ function BoardsContent() {
                                     onStatusChange={handleStatusChange}
                                     onProgressChange={handleProgressChange}
                                     role={getUserRole() === 'member' ? 'manager' : getUserRole() as any}
-                                    members={members}
+                                    members={displayMembers}
                                 />
                             </div>
                         )}
@@ -1037,17 +1070,7 @@ function BoardsContent() {
                                     className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">Unassigned</option>
-                                    {(() => {
-                                        // If a specific team is selected, filter to only that team's members
-                                        if (selectedTeam && selectedTeam !== 'all') {
-                                            const teamGroup = teamGroups.find(tg => tg.id === selectedTeam);
-                                            if (teamGroup && (teamGroup as any).members) {
-                                                const teamMemberEmails = (teamGroup as any).members.map((m: any) => m.email?.toLowerCase());
-                                                return members.filter(m => teamMemberEmails.includes(m.email?.toLowerCase()));
-                                            }
-                                        }
-                                        return members;
-                                    })().map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    {displayMembers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                                 </select>
                             </div>
                         </div>
