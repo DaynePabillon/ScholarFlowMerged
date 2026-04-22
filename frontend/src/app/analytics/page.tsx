@@ -44,20 +44,254 @@ interface AnalyticsOverview {
   }>
 }
 
+interface ScoreBreakdown {
+  schedule_fit: number
+  momentum: number
+  discipline: number
+  engagement: number
+  distribution: number
+  collaboration: number
+}
+
+interface TeamHealth {
+  team_id: string
+  name: string
+  team_number: number
+  health_score: number
+  classification: 'Top Performer' | 'On Track' | 'Watch' | 'At Risk'
+  breakdown: ScoreBreakdown
+  weighted_breakdown: ScoreBreakdown
+  strengths: string[]
+  concerns: string[]
+  suggested_actions: string[]
+  narrative: string | null
+  signals?: {
+    overall_progress_pct: number
+    expected_progress_pct: number
+    schedule_delta_pct: number
+    completed_count: number
+    total_count: number
+    velocity_7d: number
+    overdue_count: number
+    blocked_count: number
+    participation_ratio: number
+    active_members_7d: number
+    member_count: number
+    total_discussions: number
+    work_concentration: number
+  }
+}
+
 interface AIInsights {
   summary: string
   recommendations: string[]
-  atRiskTeams: Array<{ name: string; reason: string }>
-  topPerformers: Array<{ name: string; reason: string }>
+  atRiskTeams: Array<{ name: string; reason: string; classification?: string; score?: number }>
+  topPerformers: Array<{ name: string; reason: string; classification?: string; score?: number }>
   keyInsight: string
   cached?: boolean
   generated_at?: string
+  // New richer fields (optional during rollout)
+  class_health?: {
+    overall_score: number
+    team_count: number
+    medians?: any
+  }
+  teams?: TeamHealth[]
+  executive_summary?: string
+  focus_this_week?: string
 }
 
 interface Organization {
   id: string
   name: string
   role: 'admin' | 'manager' | 'member'
+}
+
+// ─── Team Health Card ───
+// Per-team card showing classification, health score, strengths, concerns,
+// and an expandable score breakdown. Classifications are computed
+// deterministically on the backend — NOT by the AI — so the chips here
+// always reflect hard data.
+function TeamHealthCard({ team, orgId }: { team: TeamHealth; orgId: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const [feedbackSent, setFeedbackSent] = useState<string | null>(null)
+
+  const classificationStyle = {
+    'Top Performer': { bg: 'bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+    'On Track': { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dot: 'bg-blue-500' },
+    'Watch': { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500' },
+    'At Risk': { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', dot: 'bg-red-500' },
+  }[team.classification]
+
+  const scoreColor =
+    team.health_score >= 75 ? 'text-emerald-600' :
+    team.health_score >= 50 ? 'text-blue-600' :
+    team.health_score >= 30 ? 'text-amber-600' :
+    'text-red-600'
+
+  const sendFeedback = async (kind: 'correct' | 'incorrect') => {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    try {
+      await fetch(`${API_URL}/api/analytics/ai-insights/feedback`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-organization-id': orgId,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          team_group_id: team.team_id,
+          classification: team.classification,
+          feedback: kind,
+        }),
+      })
+      setFeedbackSent(kind)
+    } catch (err) {
+      console.error('Feedback failed:', err)
+    }
+  }
+
+  return (
+    <div className={`${classificationStyle.bg} border ${classificationStyle.border} rounded-xl p-4 transition-all`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-3 mb-1.5">
+            <div className={`w-2 h-2 rounded-full ${classificationStyle.dot}`} />
+            <h5 className="text-sm font-bold text-gray-800 truncate">{team.name}</h5>
+            <span className={`text-[10px] font-black uppercase tracking-wider ${classificationStyle.text}`}>
+              {team.classification}
+            </span>
+          </div>
+
+          {team.narrative && (
+            <p className="text-xs text-gray-600 leading-relaxed mb-2">{team.narrative}</p>
+          )}
+
+          {/* Signal strip */}
+          {team.signals && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500 mb-2">
+              <span>Progress: <span className="font-bold text-gray-700">{team.signals.overall_progress_pct}%</span> (exp {team.signals.expected_progress_pct}%)</span>
+              <span>Velocity 7d: <span className="font-bold text-gray-700">{team.signals.velocity_7d}</span></span>
+              <span>Overdue: <span className={`font-bold ${team.signals.overdue_count > 0 ? 'text-red-600' : 'text-gray-700'}`}>{team.signals.overdue_count}</span></span>
+              <span>Active: <span className="font-bold text-gray-700">{team.signals.active_members_7d}/{team.signals.member_count}</span></span>
+              <span>Discussions: <span className="font-bold text-gray-700">{team.signals.total_discussions}</span></span>
+            </div>
+          )}
+
+          {/* Strengths */}
+          {team.strengths.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              {team.strengths.slice(0, 2).map((s, i) => (
+                <span key={i} className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">
+                  ✓ {s}
+                </span>
+              ))}
+            </div>
+          )}
+          {/* Concerns */}
+          {team.concerns.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {team.concerns.slice(0, 3).map((c, i) => (
+                <span key={i} className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded-full border border-red-200">
+                  ⚠ {c}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Score */}
+        <div className="flex-shrink-0 text-right">
+          <div className={`text-2xl font-black ${scoreColor}`}>{team.health_score}</div>
+          <div className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">/ 100</div>
+        </div>
+      </div>
+
+      {/* Expandable breakdown + feedback */}
+      <div className="mt-3 pt-3 border-t border-gray-200/50 flex items-center justify-between gap-3">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-[11px] text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1"
+        >
+          <ChevronRight className={`w-3 h-3 transition-transform ${expanded ? 'rotate-90' : ''}`} />
+          {expanded ? 'Hide' : 'Why this score?'}
+        </button>
+
+        {feedbackSent ? (
+          <span className="text-[11px] text-gray-400 italic">Thanks for the feedback</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-400">Looks right?</span>
+            <button
+              onClick={() => sendFeedback('correct')}
+              className="text-[10px] px-2 py-0.5 bg-white hover:bg-emerald-50 text-emerald-600 rounded-full border border-emerald-200 font-bold"
+              title="Classification is accurate"
+            >
+              Yes
+            </button>
+            <button
+              onClick={() => sendFeedback('incorrect')}
+              className="text-[10px] px-2 py-0.5 bg-white hover:bg-red-50 text-red-600 rounded-full border border-red-200 font-bold"
+              title="Classification feels wrong"
+            >
+              No
+            </button>
+          </div>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="mt-3 bg-white/80 rounded-lg p-3 border border-gray-200">
+          <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Score Breakdown</div>
+          <div className="space-y-2">
+            {Object.entries(team.breakdown).map(([key, val]) => {
+              const labels: Record<string, { label: string; weight: string }> = {
+                schedule_fit: { label: 'Schedule fit', weight: '40%' },
+                momentum: { label: 'Momentum', weight: '20%' },
+                discipline: { label: 'On-time discipline', weight: '15%' },
+                engagement: { label: 'Member engagement', weight: '10%' },
+                distribution: { label: 'Work distribution', weight: '10%' },
+                collaboration: { label: 'Collaboration', weight: '5%' },
+              }
+              const info = labels[key] || { label: key, weight: '' }
+              const pct = val as number
+              return (
+                <div key={key} className="flex items-center gap-3">
+                  <div className="text-[11px] text-gray-600 w-44 flex items-center justify-between">
+                    <span>{info.label}</span>
+                    <span className="text-[9px] text-gray-400 font-bold">{info.weight}</span>
+                  </div>
+                  <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        pct >= 75 ? 'bg-emerald-500' : pct >= 50 ? 'bg-blue-500' : pct >= 30 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.min(100, pct)}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] font-bold text-gray-700 w-10 text-right">{pct}</div>
+                </div>
+              )
+            })}
+          </div>
+          {team.suggested_actions.length > 0 && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1.5">Suggested actions</div>
+              <ul className="space-y-1">
+                {team.suggested_actions.map((a, i) => (
+                  <li key={i} className="text-[11px] text-gray-600 flex items-start gap-2">
+                    <span className="text-indigo-400 flex-shrink-0">→</span>
+                    <span>{a}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ─── Simple Bar Chart Component ───
@@ -200,8 +434,14 @@ export default function AnalyticsPage() {
     ? Math.round((overview.checkpoints.completed / overview.checkpoints.total) * 100)
     : 0
 
-  // Sort teams by progress for leaderboard
+  // Sort teams — prefer health score (deterministic) over raw progress.
+  const healthByName = new Map<string, TeamHealth>()
+  insights?.teams?.forEach(t => healthByName.set(t.name, t))
+
   const sortedTeams = overview ? [...overview.teams].sort((a, b) => {
+    const ha = healthByName.get(a.name)?.health_score
+    const hb = healthByName.get(b.name)?.health_score
+    if (ha !== undefined && hb !== undefined) return hb - ha
     const progressA = parseInt(a.total_checkpoints) > 0 ? parseInt(a.completed_checkpoints) / parseInt(a.total_checkpoints) : 0
     const progressB = parseInt(b.total_checkpoints) > 0 ? parseInt(b.completed_checkpoints) / parseInt(b.total_checkpoints) : 0
     return progressB - progressA
@@ -390,6 +630,9 @@ export default function AnalyticsPage() {
                             {insights.atRiskTeams.map((t, i) => (
                               <li key={i} className="text-xs">
                                 <span className="font-semibold text-red-700">{t.name}</span>
+                                {t.score !== undefined && (
+                                  <span className="ml-1 text-[10px] text-red-500 font-bold">({t.score}/100)</span>
+                                )}
                                 <span className="text-gray-500 ml-1">— {t.reason}</span>
                               </li>
                             ))}
@@ -409,6 +652,9 @@ export default function AnalyticsPage() {
                             {insights.topPerformers.map((t, i) => (
                               <li key={i} className="text-xs">
                                 <span className="font-semibold text-emerald-700">{t.name}</span>
+                                {t.score !== undefined && (
+                                  <span className="ml-1 text-[10px] text-emerald-500 font-bold">({t.score}/100)</span>
+                                )}
                                 <span className="text-gray-500 ml-1">— {t.reason}</span>
                               </li>
                             ))}
@@ -416,6 +662,31 @@ export default function AnalyticsPage() {
                         )}
                       </div>
                     </div>
+
+                    {/* ─── Team Health Cards (new rich view) ─── */}
+                    {insights.teams && insights.teams.length > 0 && (
+                      <div className="mt-6 pt-6 border-t border-indigo-100/50">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4 text-indigo-500" /> Team Health Breakdown
+                          </h4>
+                          {insights.class_health && (
+                            <span className="text-xs text-gray-500">
+                              Class avg: <span className="font-bold text-indigo-600">{insights.class_health.overall_score}/100</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-3">
+                          {insights.teams.map((team) => (
+                            <TeamHealthCard
+                              key={team.team_id}
+                              team={team}
+                              orgId={selectedOrg!.id}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -467,6 +738,7 @@ export default function AnalyticsPage() {
                       <th className="text-left py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Team</th>
                       <th className="text-left py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Project</th>
                       <th className="text-center py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Members</th>
+                      <th className="text-center py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Health</th>
                       <th className="text-center py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Progress</th>
                       <th className="text-center py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Discussions</th>
                       <th className="text-center py-3 px-2 text-xs font-bold text-gray-400 uppercase tracking-wider">Grade</th>
@@ -498,6 +770,22 @@ export default function AnalyticsPage() {
                           </td>
                           <td className="py-3 px-2 text-center">
                             <span className="text-gray-700 font-medium">{team.member_count}</span>
+                          </td>
+                          <td className="py-3 px-2 text-center">
+                            {(() => {
+                              const h = healthByName.get(team.name)
+                              if (!h) return <span className="text-gray-300 text-xs">—</span>
+                              const color =
+                                h.health_score >= 75 ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
+                                h.health_score >= 50 ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                                h.health_score >= 30 ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                                'bg-red-100 text-red-700 border-red-200'
+                              return (
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-bold border ${color}`} title={h.classification}>
+                                  {h.health_score}
+                                </span>
+                              )
+                            })()}
                           </td>
                           <td className="py-3 px-2">
                             <div className="flex items-center gap-2 justify-center">

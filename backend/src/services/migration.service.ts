@@ -995,6 +995,47 @@ async function runMigrations(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_ss_consultation_slots_date ON ss_consultation_slots(slot_date);
         CREATE INDEX IF NOT EXISTS idx_ss_consultation_bookings_slot ON ss_consultation_bookings(slot_id);
       `
+    },
+    {
+      name: '032_team_health_snapshots',
+      sql: `
+        -- Daily per-team health snapshots for trend analysis
+        CREATE TABLE IF NOT EXISTS team_health_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          team_group_id UUID NOT NULL REFERENCES team_groups(id) ON DELETE CASCADE,
+          organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          snapshot_date DATE NOT NULL DEFAULT CURRENT_DATE,
+          health_score NUMERIC(5,2) NOT NULL,
+          classification VARCHAR(30) NOT NULL,
+          progress_pct NUMERIC(5,2),
+          expected_progress_pct NUMERIC(5,2),
+          velocity_7d INTEGER DEFAULT 0,
+          velocity_30d INTEGER DEFAULT 0,
+          overdue_count INTEGER DEFAULT 0,
+          blocked_count INTEGER DEFAULT 0,
+          discussions_count INTEGER DEFAULT 0,
+          participation_ratio NUMERIC(4,3),
+          work_concentration NUMERIC(4,3),
+          score_breakdown JSONB,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(team_group_id, snapshot_date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_health_snapshots_team ON team_health_snapshots(team_group_id, snapshot_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_health_snapshots_org ON team_health_snapshots(organization_id, snapshot_date DESC);
+
+        -- Teacher feedback on AI classifications for future tuning
+        CREATE TABLE IF NOT EXISTS ai_classification_feedback (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          team_group_id UUID NOT NULL REFERENCES team_groups(id) ON DELETE CASCADE,
+          organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+          classification VARCHAR(30) NOT NULL,
+          feedback VARCHAR(20) NOT NULL CHECK (feedback IN ('correct', 'incorrect', 'unsure')),
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_ai_feedback_team ON ai_classification_feedback(team_group_id);
+      `
     }
   ];
 

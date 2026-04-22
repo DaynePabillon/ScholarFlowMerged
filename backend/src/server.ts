@@ -33,6 +33,7 @@ import consultationRoutes from './routes/scholar/consultation.routes';
 import aiRoutes from './routes/scholar/ai.routes';
 import memberJournalsRoutes from './routes/scholar/member-journals.routes';
 import { runAutoMigrations } from './services/migration.service';
+import { startHealthSnapshotJob } from './jobs/snapshotHealth.job';
 import passport from 'passport';
 import { apiLimiter, authLimiter, aiLimiter } from './middleware/rateLimit.middleware';
 
@@ -177,6 +178,9 @@ const startServer = async () => {
     // Run auto-migrations to ensure schema is up to date
     await runAutoMigrations();
     logger.info('✅ Migrations completed');
+
+    // Schedule nightly team health snapshots (for analytics trend lines)
+    startHealthSnapshotJob();
   } catch (error) {
     logger.error('❌ Database connection failed:', error);
     // Don't exit - keep server running so we can debug via health endpoint

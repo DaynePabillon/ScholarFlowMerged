@@ -122,11 +122,27 @@ export default function ProfessionalKanban({
         setCollapsedModules(newCollapsed);
     }
 
+    // Priority ordering — critical tasks bubble to the top of each column.
+    const priorityRank = (p?: string) => {
+        const v = (p || '').toLowerCase();
+        if (v === 'critical') return 0;
+        if (v === 'high') return 1;
+        if (v === 'medium') return 2;
+        if (v === 'low') return 3;
+        return 4;
+    };
+
+    const sortByPriorityThenWbs = (a: any, b: any) => {
+        const pDiff = priorityRank(a.priority) - priorityRank(b.priority);
+        if (pDiff !== 0) return pDiff;
+        return (a.wbs_code || '').localeCompare(b.wbs_code || '', undefined, { numeric: true });
+    };
+
     const buildTaskTree = useCallback((taskList: Task[]): any[] => {
         const nodes = taskList.map(t => ({ ...t, children: [] as any[] }));
         const nodeMap: Record<string, any> = {};
         nodes.forEach(n => nodeMap[n.id] = n);
-        
+
         const roots: any[] = [];
         nodes.forEach(n => {
             if (n.parent_task_id && nodeMap[n.parent_task_id]) {
@@ -135,8 +151,15 @@ export default function ProfessionalKanban({
                 roots.push(n);
             }
         });
-        
-        return roots.sort((a, b) => (a.wbs_code || '').localeCompare(b.wbs_code || '', undefined, { numeric: true }));
+
+        // Sort children too so priority ordering is recursive
+        Object.values(nodeMap).forEach((n: any) => {
+            if (n.children && n.children.length > 0) {
+                n.children.sort(sortByPriorityThenWbs);
+            }
+        });
+
+        return roots.sort(sortByPriorityThenWbs);
     }, []);
 
     const renderTask = useCallback((task: any, depth: number = 0) => (
