@@ -200,7 +200,8 @@ const ProfessionalTaskCard = memo(({
                         }`}
                         style={{ width: `${localProgress}%` }}
                     />
-                    {/* Draggable Overlay */}
+                    {/* Progress slider overlay — only intercepts double-click so it
+                        doesn't block the parent card's HTML5 drag on single-click */}
                     <input 
                         type="range"
                         min="0"
@@ -208,8 +209,10 @@ const ProfessionalTaskCard = memo(({
                         value={localProgress}
                         onChange={handleProgressChange}
                         onClick={(e) => e.stopPropagation()}
-                        className="absolute inset-0 opacity-0 cursor-pointer accent-emerald-500"
-                        title="Slide to update task weight"
+                        onDragStart={(e) => e.preventDefault()}
+                        draggable={false}
+                        className="absolute inset-0 opacity-0 cursor-pointer accent-emerald-500 pointer-events-none group-hover/progress:pointer-events-auto"
+                        title="Hover and slide to update task weight"
                     />
                 </div>
             </div>

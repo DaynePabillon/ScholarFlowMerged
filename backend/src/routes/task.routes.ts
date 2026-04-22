@@ -557,7 +557,8 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
       const result = await query(
         `UPDATE tasks
          SET status = $1::text,
-             completed_at = CASE WHEN $1::text IN ('done', 'completed') THEN NOW() ELSE completed_at END
+             completed_at = CASE WHEN $1::text IN ('done', 'completed') THEN NOW() ELSE completed_at END,
+             updated_at = NOW()
          WHERE id = $2::uuid
          RETURNING *`,
         [dbStatus, id]
@@ -592,7 +593,8 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
       const result = await query(
         `UPDATE sheet_tasks
          SET status = $1::text,
-             synced_at = NOW()
+             synced_at = NOW(),
+             updated_at = NOW()
          WHERE id = $2::uuid
          RETURNING *`,
         [sheetDbStatus, id]

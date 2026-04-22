@@ -31,7 +31,9 @@ const requireAdviserRole = async (req: AuthRequest, res: Response, next: any) =>
     }
 };
 
-// Helper: compute a hash of team data so we know when something changed
+// Helper: compute a hash of team data so we know when something changed.
+// IMPORTANT: Includes per-status counts so any status transition (todo → in_progress,
+// in_progress → review, etc.) invalidates the cache, not just completion.
 async function computeDataHash(orgId: string): Promise<string> {
     const result = await pool.query(
         `SELECT
@@ -40,11 +42,24 @@ async function computeDataHash(orgId: string): Promise<string> {
        (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1)
          + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1)
          + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1) as checkpoints,
+       -- Per-status breakdown (any status transition changes at least two of these)
+       (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 AND t.status IN ('todo', 'pending')) as todo,
+       (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 AND t.status IN ('in_progress', 'in-progress'))
+         + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 AND st.status IN ('in_progress', 'in-progress'))
+         + (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 AND tc.status = 'in_progress') as in_progress,
+       (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 AND t.status = 'review')
+         + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 AND st.status = 'review') as review,
        (SELECT COUNT(*) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1 AND tc.status = 'completed')
          + (SELECT COUNT(*) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1 AND t.status IN ('completed', 'done', 'Done'))
          + (SELECT COUNT(*) FROM sheet_tasks st JOIN team_groups tg ON st.team_id = tg.id WHERE tg.organization_id = $1 AND st.status IN ('completed', 'done', 'Done')) as completed,
-       (SELECT COUNT(*) FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1) as comments,
-       (SELECT MAX(tc.created_at) FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1) as last_comment,
+       (SELECT COUNT(*) FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1)
+         + (SELECT COUNT(*) FROM task_comments c JOIN tasks t ON c.task_id = t.id JOIN team_groups tg ON tg.id = t.team_id WHERE tg.organization_id = $1)
+         + (SELECT COUNT(*) FROM task_comments c JOIN sheet_tasks st ON c.task_id = st.id JOIN team_groups tg ON tg.id = st.team_id WHERE tg.organization_id = $1) as comments,
+       GREATEST(
+         (SELECT MAX(tc.created_at) FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1),
+         (SELECT MAX(c.created_at) FROM task_comments c JOIN tasks t ON c.task_id = t.id JOIN team_groups tg ON tg.id = t.team_id WHERE tg.organization_id = $1),
+         (SELECT MAX(c.created_at) FROM task_comments c JOIN sheet_tasks st ON c.task_id = st.id JOIN team_groups tg ON tg.id = st.team_id WHERE tg.organization_id = $1)
+       ) as last_comment,
        GREATEST(
          (SELECT MAX(tc.updated_at) FROM team_checkpoints tc JOIN team_groups tg ON tc.team_group_id = tg.id WHERE tg.organization_id = $1),
          (SELECT MAX(t.updated_at) FROM tasks t JOIN team_groups tg ON t.team_id = tg.id WHERE tg.organization_id = $1),
@@ -127,9 +142,21 @@ router.get('/analytics/overview', authenticateToken, async (req: AuthRequest, re
         };
 
         const totalComments = parseInt((await pool.query(
-            `SELECT COUNT(*) as count FROM team_comments tc 
-             JOIN team_groups tg ON tc.team_group_id = tg.id 
-             WHERE tg.organization_id = $1 ${teamFilter}`,
+            `SELECT (
+               (SELECT COUNT(*) FROM team_comments tc
+                JOIN team_groups tg ON tc.team_group_id = tg.id
+                WHERE tg.organization_id = $1 ${teamFilter})
+               +
+               (SELECT COUNT(*) FROM task_comments c
+                JOIN tasks t ON c.task_id = t.id
+                JOIN team_groups tg ON tg.id = t.team_id
+                WHERE tg.organization_id = $1 ${teamFilter})
+               +
+               (SELECT COUNT(*) FROM task_comments c
+                JOIN sheet_tasks st ON c.task_id = st.id
+                JOIN team_groups tg ON tg.id = st.team_id
+                WHERE tg.organization_id = $1 ${teamFilter})
+             ) AS count`,
             [orgId]
         )).rows[0].count);
 
@@ -153,10 +180,48 @@ router.get('/analytics/overview', authenticateToken, async (req: AuthRequest, re
         const teamsByStatus: Record<string, number> = {};
         statusBreakdown.rows.forEach((r: any) => { teamsByStatus[r.status] = parseInt(r.count); });
 
+        // Recent discussion activity — unions team-level comments AND
+        // task/sheet-task comments so discussions inside individual board
+        // tasks also show up here.
         const recentActivity = await pool.query(
-            `SELECT tc.user_name, tc.content, tc.created_at, tg.name as team_name
-       FROM team_comments tc JOIN team_groups tg ON tc.team_group_id = tg.id
-       WHERE tg.organization_id = $1 ${teamFilter} ORDER BY tc.created_at DESC LIMIT 10`, [orgId]
+            `SELECT user_name, content, created_at, team_name, source FROM (
+                -- Team-level discussion
+                SELECT tc.user_name, tc.content, tc.created_at, tg.name AS team_name, 'team' AS source
+                FROM team_comments tc
+                JOIN team_groups tg ON tc.team_group_id = tg.id
+                WHERE tg.organization_id = $1 ${teamFilter}
+
+                UNION ALL
+
+                -- Task-level discussion (regular tasks)
+                SELECT COALESCE(u.name, 'Unknown') AS user_name,
+                       c.comment AS content,
+                       c.created_at,
+                       tg.name AS team_name,
+                       'task' AS source
+                FROM task_comments c
+                LEFT JOIN users u ON c.user_id = u.id
+                JOIN tasks t ON c.task_id = t.id
+                JOIN team_groups tg ON tg.id = t.team_id
+                WHERE tg.organization_id = $1 ${teamFilter}
+
+                UNION ALL
+
+                -- Task-level discussion (sheet tasks)
+                SELECT COALESCE(u.name, 'Unknown') AS user_name,
+                       c.comment AS content,
+                       c.created_at,
+                       tg.name AS team_name,
+                       'task' AS source
+                FROM task_comments c
+                LEFT JOIN users u ON c.user_id = u.id
+                JOIN sheet_tasks st ON c.task_id = st.id
+                JOIN team_groups tg ON tg.id = st.team_id
+                WHERE tg.organization_id = $1 ${teamFilter}
+            ) AS combined
+            ORDER BY created_at DESC
+            LIMIT 10`,
+            [orgId]
         );
 
         return res.json({ totalTeams, totalMembers, totalComments, checkpoints, teamsByStatus, teams: teamsBreakdown.rows, recentActivity: recentActivity.rows });

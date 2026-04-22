@@ -296,7 +296,14 @@ export default function ProfessionalKanban({
                                                 e.dataTransfer.dropEffect = 'move';
                                                 throttledSetDragOverColumn({ col: col.id, module: moduleData.code });
                                             }}
-                                            onDragLeave={() => throttledSetDragOverColumn(null)}
+                                            onDragLeave={(e: any) => {
+                                                // Only clear drop-target state when the cursor truly
+                                                // leaves the column — not when crossing into a
+                                                // child element (task cards, gradient overlay, etc.)
+                                                const relatedTarget = e.relatedTarget as Node | null;
+                                                if (relatedTarget && e.currentTarget.contains(relatedTarget)) return;
+                                                throttledSetDragOverColumn(null);
+                                            }}
                                             onDrop={(e: any) => handleDrop(e, col.id)}
                                             onAddTask={onAddTask}
                                             renderTask={renderTask}
