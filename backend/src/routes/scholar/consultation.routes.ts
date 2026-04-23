@@ -562,7 +562,8 @@ router.post('/slots', authenticate, resolveAccountId, async (req, res) => {
     const courseLabel = courseRows[0]?.courseCode || courseRows[0]?.courseName || `Course ${courseId}`;
 
     const createdSlots: any[] = [];
-    const targetMaxGroups = 1; // Enforce one group per slot as requested
+    const requestedMaxGroups = Math.max(1, Number(maxGroups || 1) || 1);
+    const targetMaxGroups = String(slotType || '').toUpperCase() === 'FIRST_COME_FIRST_SERVE' ? requestedMaxGroups : 1;
 
     // Helper to insert a slot only if it doesn't already exist for this adviser+time
     const insertUniqueSlot = async (date: string, start: string, end: string) => {
@@ -592,10 +593,12 @@ router.post('/slots', authenticate, resolveAccountId, async (req, res) => {
       // If multiple slots (whole week), create multiple entries
       for (const date of multipleSlots as string[]) {
         if (isWholeDay) {
-          const morning = await insertUniqueSlot(date, '08:00', '12:00');
-          const afternoon = await insertUniqueSlot(date, '13:00', '17:00');
-          if (morning) createdSlots.push(morning);
-          if (afternoon) createdSlots.push(afternoon);
+          for (let hour = 8; hour < 17; hour++) {
+            const startH = String(hour).padStart(2, '0');
+            const endH = String(hour + 1).padStart(2, '0');
+            const generated = await insertUniqueSlot(date, `${startH}:00`, `${endH}:00`);
+            if (generated) createdSlots.push(generated);
+          }
         } else {
           const single = await insertUniqueSlot(date, startTime, endTime);
           if (single) createdSlots.push(single);
@@ -603,10 +606,12 @@ router.post('/slots', authenticate, resolveAccountId, async (req, res) => {
       }
     } else if (isWholeDay) {
       // Single date, whole day
-      const morning = await insertUniqueSlot(slotDate, '08:00', '12:00');
-      const afternoon = await insertUniqueSlot(slotDate, '13:00', '17:00');
-      if (morning) createdSlots.push(morning);
-      if (afternoon) createdSlots.push(afternoon);
+      for (let hour = 8; hour < 17; hour++) {
+        const startH = String(hour).padStart(2, '0');
+        const endH = String(hour + 1).padStart(2, '0');
+        const generated = await insertUniqueSlot(slotDate, `${startH}:00`, `${endH}:00`);
+        if (generated) createdSlots.push(generated);
+      }
     } else {
       // Single date, single slot
       const single = await insertUniqueSlot(slotDate, startTime, endTime);
@@ -823,7 +828,7 @@ router.put('/slots/day/:date', authenticate, resolveAccountId, async (req, res) 
       [targetDate, adviserId]
     );
 
-    // 2) Optionally add extra FCFS slots (1 hour each, 10-minute gap).
+    // 2) Optionally add extra FCFS slots (1 hour each, no gap).
     const extraCount = Number(extraGroups || 0);
     const addedSlots: any[] = [];
     if (Number.isFinite(extraCount) && extraCount > 0) {
@@ -843,10 +848,10 @@ router.put('/slots/day/:date', authenticate, resolveAccountId, async (req, res) 
       const courseId = existingRows[0].course_id;
       const baseEnd = String(existingRows[0].end_time || '17:00').slice(0, 5);
       const [hRaw, mRaw] = baseEnd.split(':');
-      const startAt = Number(hRaw) * 60 + Number(mRaw) + 10;
+      const startAt = Number(hRaw) * 60 + Number(mRaw);
 
       for (let i = 0; i < extraCount; i++) {
-        const slotStartMins = startAt + i * 70;
+        const slotStartMins = startAt + i * 60;
         const slotEndMins = slotStartMins + 60;
 
         const startH = String(Math.floor(slotStartMins / 60)).padStart(2, '0');
