@@ -42,6 +42,14 @@ const sortGroupsNaturally = (items: any[]) => {
   })
 }
 
+const getGroupPickerLabel = (group: any): string => {
+  const name = String(group?.group_name || group?.groupName || group?.name || '').trim()
+
+  if (name) return name
+
+  return 'Unnamed Group'
+}
+
 interface Booking {
   booking_id?: number
   consultation_id?: number | null
@@ -335,9 +343,11 @@ function ScheduleContent() {
       return
     }
 
-    const targetCount = formData.slotType === 'SPECIFIC_GROUP' 
-      ? formData.selectedGroups.length 
-      : (parseInt(formData.totalSlots) || groups.length)
+    const targetCount = formData.wholeDay
+      ? 9
+      : formData.slotType === 'SPECIFIC_GROUP'
+        ? formData.selectedGroups.length
+        : (parseInt(formData.totalSlots) || groups.length)
 
     if (targetCount === 0) {
       setFormError(loadingGroups ? "Still loading course details... Please wait." : "No groups found for this course or none selected.")
@@ -374,46 +384,40 @@ function ScheduleContent() {
       return (hours * 60) + minutes;
     };
 
-    // 1. Calculate time pattern settings (duration and start time)
-    let startMins = 480 // 8:00 AM default for Whole Day
-    let duration = 60    // 1 hour default for Whole Day
-
-    if (!formData.wholeDay) {
-      const sMins = parseTimeMins(formData.startTime || "08:00");
-      const eMins = parseTimeMins(formData.endTime || "09:00");
-      startMins = sMins;
-      duration = Math.max(15, eMins - sMins);
-    }
-
-    // 2. Generate the daily pattern based on target count
     const baseDayPattern: { startTime: string, endTime: string }[] = []
-    let patternMins = startMins
-    let patternCount = 0
-    const dayEndMins = 1140 // 7:00 PM cutoff
-    
-    while (patternCount < targetCount && patternMins < dayEndMins) {
-      const slotEndMins = patternMins + duration
-      
-      // Handle 12:00 PM - 1:00 PM lunch break (720 to 780 minutes)
-      const LUNCH_START = 720
-      const LUNCH_END = 780
-      
-      if (patternMins < LUNCH_END && slotEndMins > LUNCH_START) {
-        patternMins = LUNCH_END
-        continue
-      }
 
-      const h1 = String(Math.floor(patternMins / 60)).padStart(2, '0')
-      const m1 = String(patternMins % 60).padStart(2, '0')
-      const h2 = String(Math.floor((patternMins + duration) / 60)).padStart(2, '0')
-      const m2 = String((patternMins + duration) % 60).padStart(2, '0')
-      
-      baseDayPattern.push({ 
-        startTime: `${h1}:${m1}`, 
-        endTime: `${h2}:${m2}` 
-      })
-      patternCount++
-      patternMins += duration
+    if (formData.wholeDay) {
+      // Whole day means full operating window: 8:00 AM to 5:00 PM (9 one-hour slots).
+      for (let hour = 8; hour < 17; hour++) {
+        const startH = String(hour).padStart(2, '0')
+        const endH = String(hour + 1).padStart(2, '0')
+        baseDayPattern.push({
+          startTime: `${startH}:00`,
+          endTime: `${endH}:00`,
+        })
+      }
+    } else {
+      // 1. Calculate time pattern settings (duration and start time)
+      const startMins = parseTimeMins(formData.startTime || "08:00")
+      const duration = Math.max(15, parseTimeMins(formData.endTime || "09:00") - startMins)
+      let patternMins = startMins
+      let patternCount = 0
+      const dayEndMins = 1140 // 7:00 PM cutoff
+
+      while (patternCount < targetCount && patternMins < dayEndMins) {
+        const slotEndMins = patternMins + duration
+        const h1 = String(Math.floor(patternMins / 60)).padStart(2, '0')
+        const m1 = String(patternMins % 60).padStart(2, '0')
+        const h2 = String(Math.floor(slotEndMins / 60)).padStart(2, '0')
+        const m2 = String(slotEndMins % 60).padStart(2, '0')
+
+        baseDayPattern.push({
+          startTime: `${h1}:${m1}`,
+          endTime: `${h2}:${m2}`
+        })
+        patternCount++
+        patternMins += duration
+      }
     }
 
     const preview: { slotDate: string, startTime: string, endTime: string }[] = []
@@ -435,7 +439,7 @@ function ScheduleContent() {
     })
 
     const finalCount = preview.length
-    const expectedPerDay = targetCount
+    const expectedPerDay = formData.wholeDay ? 9 : targetCount
     const expectedTotal = formData.wholeWeek ? (expectedPerDay * dates.length) : expectedPerDay
 
     if (finalCount < expectedTotal) {
@@ -464,7 +468,7 @@ function ScheduleContent() {
       let payload: any = {
         courseId: parseInt(formData.courseId),
         slotType: formData.slotType,
-        maxGroups: formData.slotType === 'FIRST_COME_FIRST_SERVE' ? 1 : 1, // Enforce 1 as per instruction
+        maxGroups: formData.slotType === 'FIRST_COME_FIRST_SERVE' ? Math.max(1, parseInt(formData.maxGroups || '1', 10) || 1) : 1,
         selectedGroups: formData.slotType === 'SPECIFIC_GROUP' ? formData.selectedGroups : undefined,
       }
 
@@ -1236,7 +1240,7 @@ function ScheduleContent() {
                   className="w-4 h-4"
                 />
                 <label htmlFor="wholeDay" className="text-sm font-medium text-gray-700">
-                  Whole Day (specific groups are auto-planned with max 1 hour each + 10-minute breaks)
+                  Whole Day (auto-generates 1-hour slots from 8:00 AM to 5:00 PM)
                 </label>
               </div>
 
@@ -1320,7 +1324,7 @@ function ScheduleContent() {
                             className="w-4 h-4"
                           />
                           <label htmlFor={`group-${group.id}`} className="text-sm text-gray-700 cursor-pointer">
-                            {group.group_name || `Group ${group.id}`}
+                            {getGroupPickerLabel(group)}
                           </label>
                         </div>
                       ))}
@@ -1348,7 +1352,7 @@ function ScheduleContent() {
               )}
 
               {/* Total Slots Override */}
-              {formData.slotType === 'FIRST_COME_FIRST_SERVE' && !previewSlots.length && (
+              {formData.slotType === 'FIRST_COME_FIRST_SERVE' && !formData.wholeDay && !previewSlots.length && (
                 <div className="space-y-1">
                   <label className="block text-sm font-semibold text-gray-700">Total Slots to Generate</label>
                   <input
@@ -1711,7 +1715,7 @@ function ScheduleContent() {
                   )}
                   {editMode === 'day' && (
                     <p className="text-xs text-gray-500 mt-1">
-                      Adds extra FCFS slots for this day (1 hour each, 10-minute break between slots).
+                      Adds extra FCFS slots for this day (1 hour each).
                     </p>
                   )}
                 </div>

@@ -5,6 +5,13 @@ import { useEffect, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Cloud, CheckCircle2 } from "lucide-react"
 
+const normalizeScholarRole = (value: unknown): 'Admin' | 'Adviser' | 'Student' => {
+  const role = String(value || '').trim().toLowerCase()
+  if (role === 'admin') return 'Admin'
+  if (role === 'adviser' || role === 'advisers' || role === 'manager') return 'Adviser'
+  return 'Student'
+}
+
 function AuthCallbackContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -42,13 +49,19 @@ function AuthCallbackContent() {
         })
         .then(data => {
           const { organizations, onboarding_data, ...userData } = data
+          const normalizedScholarRole = normalizeScholarRole(data?.scholarsyncRole || data?.role)
 
           // 2. Store user data in formats expected by both modules
           const skyflowUser = { ...userData, onboarding_data };
+          const scholarProfile = {
+            ...data,
+            scholarsyncRole: normalizedScholarRole,
+            role: normalizedScholarRole,
+          }
           localStorage.setItem('user', JSON.stringify(skyflowUser))
           localStorage.setItem('organizations', JSON.stringify(organizations || []))
-          localStorage.setItem('scholar_profile', JSON.stringify(data))
-          localStorage.setItem('ss_user', JSON.stringify(data)); // For ScholarSync compatibility if needed
+          localStorage.setItem('scholar_profile', JSON.stringify(scholarProfile))
+          localStorage.setItem('ss_user', JSON.stringify(scholarProfile)); // For ScholarSync compatibility if needed
 
           // Store onboarding preferences for easy access
           if (onboarding_data) {
