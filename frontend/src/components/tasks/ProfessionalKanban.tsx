@@ -61,6 +61,7 @@ export default function ProfessionalKanban({
     const [draggedTask, setDraggedTask] = useState<Task | null>(null)
     const [isDragging, setIsDragging] = useState(false)
     const draggedTaskRef = useRef<Task | null>(null)
+    const dragStartPos = useRef<{x: number, y: number} | null>(null)
     const [dragOverColumn, setDragOverColumn] = useState<{col: string, module: string} | null>(null)
 
     // Helper: Extract numeric WBS code
@@ -91,6 +92,7 @@ export default function ProfessionalKanban({
         e.dataTransfer.setData('text/plain', task.id)
         e.dataTransfer.effectAllowed = 'move'
         draggedTaskRef.current = task
+        dragStartPos.current = { x: e.clientX, y: e.clientY }
         setIsDragging(true)
     }
 
@@ -115,6 +117,10 @@ export default function ProfessionalKanban({
         setDraggedTask(null)
         setDragOverColumn(null)
         setIsDragging(false)
+        // Small delay to prevent onClick from firing immediately after drag
+        setTimeout(() => {
+            dragStartPos.current = null
+        }, 100)
     }
 
     const toggleModule = (code: string) => {
@@ -170,11 +176,16 @@ export default function ProfessionalKanban({
                 draggable={canDrag}
                 onDragStart={(e) => handleDragStart(e, task)}
                 onDragEnd={handleDragEnd}
-                className={canDrag ? 'cursor-grab active:cursor-grabbing' : ''}
+                className={canDrag ? 'cursor-grab active:cursor-grabbing select-none' : ''}
             >
                 <ProfessionalTaskCard
                     task={task}
-                    onClick={() => onTaskClick?.(task)}
+                    onClick={() => {
+                        // Only trigger onClick if we didn't just finish dragging
+                        if (!dragStartPos.current) {
+                            onTaskClick?.(task)
+                        }
+                    }}
                     onStatusChange={onStatusChange}
                     onDelete={onDeleteTask}
                     onArchive={onArchiveTask}
@@ -260,8 +271,12 @@ export default function ProfessionalKanban({
     return (
         <>
             <style>{`
-                .is-dragging .group\/card > * {
+                .is-dragging .group\/card {
                     pointer-events: none !important;
+                    user-select: none !important;
+                }
+                .is-dragging * {
+                    cursor: grabbing !important;
                 }
             `}</style>
             <div className={`flex flex-col h-full bg-white/95 dark:bg-slate-900/80 backdrop-blur-md rounded-[2.5rem] border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-2xl shadow-black/5 dark:shadow-black/40 ${isDragging ? 'is-dragging' : ''}`}>
