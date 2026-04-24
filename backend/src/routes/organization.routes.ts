@@ -565,18 +565,45 @@ router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respo
       projectId = projectResult.rows[0].id;
     }
 
+    // Resolve parent: it may live in `tasks` OR `sheet_tasks` (WBS).
+    // tasks.parent_task_id has FK → tasks(id), so if parent is a sheet_task
+    // we must NULL out parent_task_id and derive WBS code from it instead.
+    let parentWbsCode: string | null = null;
+    let effectiveParentTaskId: string | null = parent_task_id || null;
+    if (parent_task_id) {
+      const parentInTasks = await query('SELECT wbs_code FROM tasks WHERE id = $1', [parent_task_id]);
+      if (parentInTasks.rows.length > 0) {
+        parentWbsCode = parentInTasks.rows[0].wbs_code;
+      } else {
+        const parentInSheetTasks = await query('SELECT wbs_code FROM sheet_tasks WHERE id = $1', [parent_task_id]);
+        if (parentInSheetTasks.rows.length > 0) {
+          parentWbsCode = parentInSheetTasks.rows[0].wbs_code;
+          // Cannot store FK to sheet_tasks in tasks.parent_task_id → null it
+          effectiveParentTaskId = null;
+        } else {
+          // Parent not found anywhere → treat as root
+          effectiveParentTaskId = null;
+        }
+      }
+    }
+
     // Auto-generate WBS code if not provided
     let finalWbsCode = wbs_code;
     if (!finalWbsCode) {
-      if (parent_task_id) {
-        const parentResult = await query('SELECT wbs_code FROM tasks WHERE id = $1', [parent_task_id]);
-        const parentWbs = parentResult.rows[0]?.wbs_code || '1';
-        const countResult = await query(
-          'SELECT COUNT(*) FROM tasks WHERE parent_task_id = $1 AND project_id = $2',
-          [parent_task_id, projectId]
+      if (parentWbsCode) {
+        // Count siblings across BOTH tables to produce a unique WBS code
+        const siblingsInTasks = await query(
+          `SELECT COUNT(*) FROM tasks WHERE wbs_code LIKE $1`,
+          [`${parentWbsCode}.%`]
         );
-        const siblingCount = parseInt(countResult.rows[0].count) + 1;
-        finalWbsCode = `${parentWbs}.${siblingCount}`;
+        const siblingsInSheetTasks = await query(
+          `SELECT COUNT(*) FROM sheet_tasks WHERE wbs_code LIKE $1`,
+          [`${parentWbsCode}.%`]
+        );
+        const siblingCount =
+          parseInt(siblingsInTasks.rows[0].count) +
+          parseInt(siblingsInSheetTasks.rows[0].count) + 1;
+        finalWbsCode = `${parentWbsCode}.${siblingCount}`;
       } else {
         const countResult = await query(
           'SELECT COUNT(*) FROM tasks WHERE parent_task_id IS NULL AND project_id = $1',
@@ -598,7 +625,7 @@ router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respo
       [
         projectId, team_id || null, title, description, status || 'todo', priority || 'medium',
         due_date, start_date, assigned_to, userId,
-        is_absolute || false, complexity_weight || 1, finalWbsCode, parent_task_id
+        is_absolute || false, complexity_weight || 1, finalWbsCode, effectiveParentTaskId
       ]
     );
 
