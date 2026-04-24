@@ -782,7 +782,11 @@ function BoardsContent() {
                     <TeamsView
                         teams={teamGroups}
                         userRole={getUserRole()}
-                        onTeamClick={(team) => setSelectedTeamGroup(team as any)}
+                        onTeamClick={(team) => {
+                            setSelectedTeam(team.id)
+                            setBoardView('kanban')
+                            setBoardSubView('team')
+                        }}
                         onCreateTeam={() => setShowCreateTeam(true)}
                         onShowTemplate={() => setShowSheetTemplate(true)}
                         onSyncAll={handleResync}
