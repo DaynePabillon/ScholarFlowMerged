@@ -240,6 +240,7 @@ function BoardsContent() {
     useEffect(() => {
         if (selectedOrg) {
             fetchTasks(selectedOrg.id)
+            fetchSyncedSheets(selectedOrg.id)
         }
     }, [selectedTeam])
 
@@ -310,14 +311,17 @@ function BoardsContent() {
 
     const fetchSyncedSheets = useCallback(async (orgId: string) => {
         try {
-            const response = await apiClient.get(`/organizations/${orgId}/synced-sheets`)
+            const url = selectedTeam
+                ? `/organizations/${orgId}/synced-sheets?team_id=${selectedTeam}`
+                : `/organizations/${orgId}/synced-sheets`
+            const response = await apiClient.get(url)
             if (response.data) {
                 setSyncedSheets(response.data.syncedSheets || [])
             }
         } catch (error) {
             console.error('Error fetching synced sheets:', error)
         }
-    }, [])
+    }, [selectedTeam])
 
     const fetchMembers = useCallback(async (orgId: string) => {
         try {

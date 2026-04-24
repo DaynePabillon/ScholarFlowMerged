@@ -480,6 +480,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
 router.get('/:id/synced-sheets', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const { team_id } = req.query;
     const userId = req.user!.id;
 
     // Check if user is member
@@ -492,15 +493,22 @@ router.get('/:id/synced-sheets', authenticateToken, async (req: AuthRequest, res
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get synced sheets from workspaces in this organization
+    // Team-specific storage: each team has its own WBS
+    let teamFilter = '';
+    const params: any[] = [id];
+    if (team_id && team_id !== 'all') {
+      teamFilter = 'AND ss.team_id = $2';
+      params.push(team_id);
+    }
+
     const result = await query(
       `SELECT ss.*, w.name as workspace_name,
               (SELECT COUNT(*) FROM sheet_tasks WHERE synced_sheet_id = ss.id) as task_count
        FROM synced_sheets ss
        JOIN workspaces w ON ss.workspace_id = w.id
-       WHERE w.organization_id = $1
+       WHERE w.organization_id = $1 ${teamFilter}
        ORDER BY ss.created_at DESC`,
-      [id]
+      params
     );
 
     res.json({ syncedSheets: result.rows });
