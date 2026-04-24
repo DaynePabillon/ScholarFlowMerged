@@ -63,11 +63,11 @@ export default function TeamSelector({
     }
 
     return (
-        <div className={`relative ${isOpen ? 'z-[9999]' : ''} ${className}`}>
+        <div className={`relative ${className}`}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
                 disabled={loading || teams.length === 0}
-                className="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg hover:bg-white hover:border-blue-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg hover:bg-white hover:border-blue-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed relative z-10"
             >
                 <Users className="w-4 h-4 text-blue-600" />
                 <span className="text-sm font-medium text-gray-700">
@@ -80,12 +80,12 @@ export default function TeamSelector({
                 <>
                     {/* Backdrop */}
                     <div 
-                        className="fixed inset-0 z-[9998]" 
+                        className="fixed inset-0 z-[100]" 
                         onClick={() => setIsOpen(false)}
                     />
                     
                     {/* Dropdown */}
-                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-[9999] max-h-80 overflow-y-auto">
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-[101] max-h-80 overflow-y-auto">
                         {/* All Teams option (for admin/manager only) */}
                         {(userRole === 'admin' || userRole === 'manager') && (
                             <button
