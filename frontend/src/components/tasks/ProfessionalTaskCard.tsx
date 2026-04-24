@@ -109,7 +109,7 @@ const ProfessionalTaskCard = memo(({
     return (
         <div
             onClick={onClick}
-            className="group relative bg-white/95 dark:bg-slate-900/60 backdrop-blur-md rounded-[2rem] border border-gray-100 dark:border-slate-700/50 p-6 hover:shadow-2xl hover:shadow-emerald-500/10 hover:border-emerald-500/40 transition-all duration-500 cursor-grab overflow-hidden group/card active:cursor-grabbing"
+            className="group relative bg-white/95 dark:bg-slate-900/60 backdrop-blur-md rounded-[2rem] border border-gray-100 dark:border-slate-700/50 p-6 hover:shadow-2xl hover:shadow-emerald-500/10 hover:border-emerald-500/40 transition-all duration-500 overflow-hidden group/card active:scale-[0.98] contain-content"
         >
             {/* Glossy Overlay Effect */}
             <div className="absolute inset-0 bg-gradient-to-br from-black/[0.02] dark:from-white/[0.05] to-transparent opacity-0 group-hover/card:opacity-100 transition-opacity duration-700 pointer-events-none" />

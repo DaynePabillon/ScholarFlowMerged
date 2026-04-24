@@ -59,6 +59,7 @@ export default function ProfessionalKanban({
     ]
 
     const [draggedTask, setDraggedTask] = useState<Task | null>(null)
+    const [isDragging, setIsDragging] = useState(false)
     const draggedTaskRef = useRef<Task | null>(null)
     const [dragOverColumn, setDragOverColumn] = useState<{col: string, module: string} | null>(null)
 
@@ -90,13 +91,13 @@ export default function ProfessionalKanban({
         e.dataTransfer.setData('text/plain', task.id)
         e.dataTransfer.effectAllowed = 'move'
         draggedTaskRef.current = task
-        // Don't set React state here — it triggers a re-render mid-drag that
-        // can cancel the drag operation. Browser's native drag ghost is enough.
+        setIsDragging(true)
     }
 
     const handleDrop = (e: React.DragEvent, newStatus: string) => {
         e.preventDefault()
         setDragOverColumn(null)
+        setIsDragging(false)
         const task = draggedTaskRef.current
         if (task && onStatusChange) {
             const currentStatus = (task.status || '').toLowerCase().replace(/[- ]/g, '_')
@@ -113,6 +114,7 @@ export default function ProfessionalKanban({
         draggedTaskRef.current = null
         setDraggedTask(null)
         setDragOverColumn(null)
+        setIsDragging(false)
     }
 
     const toggleModule = (code: string) => {
@@ -168,6 +170,7 @@ export default function ProfessionalKanban({
                 draggable={canDrag}
                 onDragStart={(e) => handleDragStart(e, task)}
                 onDragEnd={handleDragEnd}
+                className={canDrag ? 'cursor-grab active:cursor-grabbing' : ''}
             >
                 <ProfessionalTaskCard
                     task={task}
@@ -253,17 +256,15 @@ export default function ProfessionalKanban({
         </div>
     ));
 
-    const [lastDragOverUpdate, setLastDragOverUpdate] = useState(0);
-    const throttledSetDragOverColumn = useCallback((data: any) => {
-        const now = Date.now();
-        if (now - lastDragOverUpdate > 50 || data === null) {
-            setDragOverColumn(data);
-            setLastDragOverUpdate(now);
-        }
-    }, [lastDragOverUpdate]);
 
     return (
-        <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/80 backdrop-blur-md rounded-[2.5rem] border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-2xl shadow-black/5 dark:shadow-black/40">
+        <>
+            <style>{`
+                .is-dragging .group\/card > * {
+                    pointer-events: none !important;
+                }
+            `}</style>
+            <div className={`flex flex-col h-full bg-white/95 dark:bg-slate-900/80 backdrop-blur-md rounded-[2.5rem] border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-2xl shadow-black/5 dark:shadow-black/40 ${isDragging ? 'is-dragging' : ''}`}>
             {/* Sticky Header Row */}
             <div className="grid grid-cols-4 gap-6 p-8 bg-gray-50/80 dark:bg-slate-950/60 border-b border-gray-200 dark:border-slate-700/50 z-30 sticky top-0 backdrop-blur-md">
                 {columns.map(col => (
@@ -277,7 +278,10 @@ export default function ProfessionalKanban({
             </div>
 
             {/* Scrollable Swimlane Content */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar">
+            <div 
+                className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar"
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+            >
                 {boardData.map((moduleData) => {
                     const isCollapsed = collapsedModules.has(moduleData.code);
                     const moduleTasks = moduleGroups[moduleData.code] || [];
@@ -317,7 +321,7 @@ export default function ProfessionalKanban({
                                             onDragOver={(e: any) => {
                                                 e.preventDefault();
                                                 e.dataTransfer.dropEffect = 'move';
-                                                throttledSetDragOverColumn({ col: col.id, module: moduleData.code });
+                                                setDragOverColumn({ col: col.id, module: moduleData.code });
                                             }}
                                             onDragLeave={(e: any) => {
                                                 // Only clear drop-target state when the cursor truly
@@ -325,7 +329,7 @@ export default function ProfessionalKanban({
                                                 // child element (task cards, gradient overlay, etc.)
                                                 const relatedTarget = e.relatedTarget as Node | null;
                                                 if (relatedTarget && e.currentTarget.contains(relatedTarget)) return;
-                                                throttledSetDragOverColumn(null);
+                                                setDragOverColumn(null);
                                             }}
                                             onDrop={(e: any) => handleDrop(e, col.id)}
                                             onAddTask={onAddTask}
@@ -340,6 +344,7 @@ export default function ProfessionalKanban({
                 })}
             </div>
         </div>
+        </>
     );
 }
 
