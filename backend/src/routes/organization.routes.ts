@@ -397,10 +397,10 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
     let queryParams: any[] = [id];
     
     if (team_id && team_id !== 'all') {
-      // Filter by specific team, but also include tasks without a team assignment
-      // so unassigned tasks (e.g., legacy or sheet-synced) remain visible
-      teamFilter = `AND (t.team_id = $2 OR t.team_id IS NULL)`;
-      teamFilterSheet = `AND (COALESCE(st.team_id, ss.team_id) = $2 OR COALESCE(st.team_id, ss.team_id) IS NULL)`;
+      // Strict team filter: only show tasks belonging to the selected team.
+      // Null-team tasks are only visible when "All Teams" is selected.
+      teamFilter = `AND t.team_id = $2`;
+      teamFilterSheet = `AND COALESCE(st.team_id, ss.team_id) = $2`;
       queryParams.push(team_id);
     }
 
