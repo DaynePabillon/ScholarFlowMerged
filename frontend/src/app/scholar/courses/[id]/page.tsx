@@ -67,7 +67,10 @@ type Comment = {
     id: string;
     user_name: string;
     content: string;
-    created_at: string;
+    created_at?: string;
+    createdAt?: string;
+    updated_at?: string;
+    timestamp?: string;
 };
 
 const sanitizeAIContent = (text: string) =>
@@ -605,7 +608,13 @@ export default function CourseDetailsPage() {
     const fetchComments = async (groupId: string) => {
         try {
             const res = await apiClient.get(`/team-groups/${groupId}/comments`);
-            setComments(Array.isArray(res.data) ? res.data : []);
+            const payload = res?.data;
+            const rows = Array.isArray(payload)
+                ? payload
+                : Array.isArray(payload?.comments)
+                    ? payload.comments
+                    : [];
+            setComments(rows);
         } catch { /* ignore */ }
     };
 
@@ -616,7 +625,11 @@ export default function CourseDetailsPage() {
             const res = await apiClient.post(`/team-groups/${selectedGroup.id}/comments`, { 
                 content: newComment.trim() 
             });
-            setComments(prev => [...prev, res.data]);
+            const payload = res?.data;
+            const createdComment = payload?.comment || payload;
+            if (createdComment && typeof createdComment === 'object') {
+                setComments(prev => [...prev, createdComment]);
+            }
             setNewComment('');
         } catch { /* ignore */ }
         finally { setSubmittingComment(false); }
@@ -627,17 +640,54 @@ export default function CourseDetailsPage() {
         return name;
     };
 
+    const parseDateValue = (value: any): Date | null => {
+        if (!value) return null;
+        if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+
+        if (typeof value === 'number') {
+            const fromNumber = new Date(value);
+            return Number.isNaN(fromNumber.getTime()) ? null : fromNumber;
+        }
+
+        const raw = String(value).trim();
+        if (!raw) return null;
+
+        const direct = new Date(raw);
+        if (!Number.isNaN(direct.getTime())) return direct;
+
+        if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(raw)) {
+            const sqlLike = new Date(raw.replace(' ', 'T'));
+            if (!Number.isNaN(sqlLike.getTime())) return sqlLike;
+        }
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+            const [yRaw, mRaw, dRaw] = raw.split('-');
+            const y = Number(yRaw);
+            const m = Number(mRaw);
+            const d = Number(dRaw);
+            if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(d)) {
+                return new Date(y, m - 1, d);
+            }
+        }
+
+        return null;
+    };
+
     const formatDateLabel = (value: any) => {
-        if (!value) return 'No date';
-        const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) return String(value);
+        if (!value) return '-';
+        const parsed = parseDateValue(value);
+        if (!parsed) return String(value);
         return parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    const getCommentDateValue = (comment: Comment) => {
+        return comment.created_at || comment.createdAt || comment.updated_at || comment.timestamp || null;
     };
 
     const formatDateTimeLabel = (value: any) => {
         if (!value) return '-';
-        const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) return String(value);
+        const parsed = parseDateValue(value);
+        if (!parsed) return String(value);
         return parsed.toLocaleString();
     };
 
@@ -882,7 +932,7 @@ export default function CourseDetailsPage() {
                                                     <div key={c.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
                                                         <div className="flex items-center justify-between mb-2">
                                                             <span className="text-[11px] font-black text-blue-600 uppercase tracking-widest">{c.user_name}</span>
-                                                            <span className="text-[10px] text-gray-400 font-bold">{new Date(c.created_at).toLocaleDateString()}</span>
+                                                            <span className="text-[10px] text-gray-400 font-bold">{formatDateLabel(getCommentDateValue(c))}</span>
                                                         </div>
                                                         <p className="text-sm text-gray-700 font-medium leading-relaxed">{c.content}</p>
                                                     </div>

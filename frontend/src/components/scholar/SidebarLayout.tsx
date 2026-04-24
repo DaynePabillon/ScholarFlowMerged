@@ -66,7 +66,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 if (cachedProfile) {
                     try {
                         const cached = JSON.parse(cachedProfile);
-                                const cachedRole = String(cached.scholarsyncRole || cached.role || '');
+                    const cachedRole = normalizeScholarRole(cached.scholarsyncRole || cached.role || '');
                         setUserRole(cachedRole);
                         setIsAdmin(cachedRole === 'Admin');
                         setUserEmail(String(cached.email || decoded.email || ''));
@@ -79,10 +79,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                     // No cache yet — use JWT as temporary fallback
                     setUserEmail(decoded.email || '');
                     setUserName(decoded.name || '');
-                    setUserRole(decoded.role || '');
-                    setIsAdmin(decoded.role === 'Admin');
-                    if (decoded.role === 'Admin') setRole('admin');
-                    else if (decoded.role === 'Adviser' || decoded.role === 'Advisers') setRole('manager');
+                    const decodedRole = normalizeScholarRole(decoded.role || '');
+                    setUserRole(decodedRole);
+                    setIsAdmin(decodedRole === 'Admin');
+                    if (decodedRole === 'Admin') setRole('admin');
+                    else if (decodedRole === 'Adviser') setRole('manager');
                     else setRole('member');
                 }
 
@@ -95,7 +96,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                         // Cache the ScholarSync profile to prevent flicker on next navigation
                         localStorage.setItem('scholar_profile', JSON.stringify(profile));
                         
-                                const refreshedRole = String(profile.scholarsyncRole || profile.role || decoded.role || '');
+                            const refreshedRole = normalizeScholarRole(profile.scholarsyncRole || profile.role || decoded.role || '');
                         
                         setUserRole(refreshedRole);
                         setIsAdmin(refreshedRole === 'Admin');

@@ -32,6 +32,8 @@ interface CalendarEvent {
   location?: string
   attendees?: Array<{ email: string; displayName?: string }>
   colorId?: string
+  _isScholarSyncFallback?: boolean
+  _fallbackConsultationId?: string
 }
 
 interface EventFormData {
@@ -212,9 +214,8 @@ function getHourSegment(event: CalendarEvent, date: Date, hour: number): { start
 function isConsultationEvent(event: CalendarEvent | null): boolean {
   if (!event) return false
   const id = String(event.id || "")
-  const summary = String(event.summary || "").toLowerCase()
-  const description = String(event.description || "").toLowerCase()
-  return id.startsWith("consultation-") || summary.includes("consultation") || description.includes("consultation")
+  const fallbackId = String((event as any)?._fallbackConsultationId || '').trim()
+  return id.startsWith("consultation-") || !!fallbackId || Boolean((event as any)?._isScholarSyncFallback)
 }
 
 // ─────────────────────────────────────────────
@@ -235,6 +236,29 @@ export default function CalendarPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [calendarWarning, setCalendarWarning] = useState("")
 
+  const resolveUserRole = (value: any): string => {
+    const directRole = String(value?.scholarsyncRole || value?.role || value?.accountRole || "").trim().toLowerCase()
+    if (directRole) return directRole
+
+    try {
+      const cachedProfileStr = localStorage.getItem('scholar_profile')
+      if (cachedProfileStr) {
+        const cached = JSON.parse(cachedProfileStr)
+        const cachedRole = String(cached?.scholarsyncRole || cached?.role || cached?.accountRole || '').trim().toLowerCase()
+        if (cachedRole) return cachedRole
+      }
+    } catch {
+      // Ignore malformed cached profile and fall back to unknown role.
+    }
+
+    return ''
+  }
+
+  const canManageCalendar = (value: unknown) => {
+    const role = String(value || "").toLowerCase()
+    return role === 'admin' || role === 'adviser' || role === 'advisers' || role === 'manager'
+  }
+
   const blankForm = (): EventFormData => ({
     title: "",
     description: "",
@@ -254,7 +278,8 @@ export default function CalendarPage() {
 
     try {
       const decoded: any = jwtDecode(token)
-      setUser(decoded)
+      const normalizedRole = resolveUserRole(decoded)
+      setUser({ ...decoded, role: normalizedRole || decoded?.role })
     } catch {
       router.push("/login")
     }
@@ -291,9 +316,8 @@ export default function CalendarPage() {
 
   // ── Event CRUD ──
   const openCreate = (date?: Date) => {
-    const role = String(user?.role || "").toLowerCase()
-    const canCreate = role === "admin" || role === "adviser"
-    if (!canCreate) {
+    const role = resolveUserRole(user)
+    if (role === 'student') {
       setCalendarWarning("Only Admin and Adviser accounts can create calendar events.")
       return
     }
@@ -343,9 +367,8 @@ export default function CalendarPage() {
   }
 
   const handleSave = async () => {
-    const role = String(user?.role || "").toLowerCase()
-    const canCreate = role === "admin" || role === "adviser"
-    if (!canCreate) {
+    const role = resolveUserRole(user)
+    if (role === 'student') {
       setFormError("Only Admin and Adviser accounts can create or edit events.")
       return
     }
@@ -407,10 +430,51 @@ export default function CalendarPage() {
     setDeletingEventId(eventId)
     try {
       const token = localStorage.getItem("auth_token")
-      const res = await fetch(`${API_URL}/api/calendar/events/${eventId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      })
+
+      // Consultation slot deletion should use the consultation route,
+      // which already treats Google sync failures as non-fatal.
+      const isConsultationLike = String(eventId).startsWith('consultation-') ||
+        (selectedEvent ? isConsultationEvent(selectedEvent) : false)
+
+      let res: Response
+      if (isConsultationLike) {
+        const slotIdFromPrefix = String(eventId).startsWith('consultation-')
+          ? String(eventId).replace('consultation-', '')
+          : ''
+
+        if (slotIdFromPrefix) {
+          res = await fetch(`${API_URL}/api/consultation/slots/${slotIdFromPrefix}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        } else {
+          // For synced consultation events where eventId is Google event ID,
+          // resolve slot id from currently loaded fallback events.
+          const matchedFallback = events.find((ev: any) => {
+            const evId = String(ev?.id || '')
+            const fallbackId = String((ev as any)?._fallbackConsultationId || '')
+            return evId === String(eventId) && !!fallbackId
+          }) as any
+
+          const resolvedSlotId = String(matchedFallback?._fallbackConsultationId || '').trim()
+          if (!resolvedSlotId) {
+            setCalendarWarning('Unable to resolve consultation slot ID for deletion. Please delete this slot from the Schedule page.')
+            setDeletingEventId(null)
+            return
+          }
+
+          res = await fetch(`${API_URL}/api/consultation/slots/${resolvedSlotId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        }
+      } else {
+        res = await fetch(`${API_URL}/api/calendar/events/${eventId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      }
+
       if (res.ok) {
         setSelectedEvent(null)
         fetchEvents()
@@ -504,8 +568,9 @@ export default function CalendarPage() {
     .slice(0, 8)
 
   const selectedIsConsultation = isConsultationEvent(selectedEvent)
-  const isStudent = String(user?.role || "").toLowerCase() === "student"
-  const isCalendarManager = ["admin", "adviser"].includes(String(user?.role || "").toLowerCase())
+  const effectiveRole = resolveUserRole(user)
+  const isStudent = effectiveRole === "student"
+  const isCalendarManager = canManageCalendar(effectiveRole)
   const canModifySelectedEvent = selectedEvent ? !(isStudent && selectedIsConsultation) : false
 
   if (!user) {

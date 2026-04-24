@@ -198,6 +198,12 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
 
     const canManage = userRole === 'admin' || userRole === 'manager'
 
+    const formatCommentTime = (value: unknown) => {
+        const ts = new Date(String(value || '')).getTime()
+        if (!Number.isFinite(ts) || ts <= 0) return 'Just now'
+        return new Date(ts).toLocaleTimeString()
+    }
+
     return (
         <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 dark:bg-slate-950/60 backdrop-blur-md p-4 animate-in fade-in duration-500"
             onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
@@ -347,7 +353,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">{c.user_name}</span>
                                             <span className="text-[8px] font-bold text-gray-400 dark:text-slate-600 uppercase">
-                                                {new Date(c.created_at).toLocaleTimeString()}
+                                                {formatCommentTime(c.created_at)}
                                             </span>
                                         </div>
                                         <div className="text-[11px] font-bold text-gray-700 dark:text-slate-300 leading-relaxed uppercase tracking-wider">{c.content}</div>

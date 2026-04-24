@@ -130,19 +130,34 @@ router.get('/events', async (req, res) => {
           start: { dateTime: `${dateStr}T${normalizeTime(s.start_time)}+08:00` },
           end: { dateTime: `${dateStr}T${normalizeTime(s.end_time)}+08:00` },
           location: 'ScholarSync',
-          _isScholarSyncFallback: true
+          _isScholarSyncFallback: true,
+          _fallbackConsultationId: String(s.slot_id)
         };
       });
     } catch (err) {
       logger.warn('Failed to fetch fallback ss_consultation_slots:', err);
     }
 
-    // Merge: prioritize Google events but ensure DB ones are present if not found in Google
+    // Merge: prioritize Google events but ensure DB ones are present if not found in Google.
+    // If a Google event corresponds to a consultation slot (google_event_id match),
+    // annotate it with fallback metadata so frontend can resolve slot deletion reliably.
+    const googleById = new Map<string, any>();
+    for (const ge of eventsFromGoogle) {
+      const id = String((ge as any)?.id || '').trim();
+      if (id) googleById.set(id, ge as any);
+    }
+
     const googleIds = new Set(eventsFromGoogle.map(e => e.id));
     const mergedEvents = [...eventsFromGoogle];
     
     for (const sse of ssEvents) {
-      if (!googleIds.has(sse.id)) {
+      if (googleIds.has(sse.id)) {
+        const matched = googleById.get(String(sse.id));
+        if (matched) {
+          matched._isScholarSyncFallback = true;
+          matched._fallbackConsultationId = String(sse._fallbackConsultationId || '');
+        }
+      } else {
         mergedEvents.push(sse);
       }
     }
@@ -242,19 +257,29 @@ router.delete('/events/:eventId', async (req, res) => {
     const userId = (req as any).user.id;
     const { eventId } = req.params;
 
+    // Resolve ownership/admin once for consultation-slot deletion paths.
+    const adminRes = await query('SELECT role FROM users WHERE id = $1', [userId]);
+    const isAdmin = String(adminRes.rows[0]?.role || '').toLowerCase() === 'admin';
+
+    // Attempt to resolve Google tokens, but do not hard-fail consultation deletion when missing.
+    let resolvedAccessToken: string | null = null;
+    let resolvedRefreshToken: string | null = null;
+    try {
+      const tokens = await getUserTokens(userId, (req as any).user.email);
+      if (tokens) {
+        resolvedAccessToken = tokens.access_token;
+        resolvedRefreshToken = tokens.refresh_token;
+      }
+    } catch (tokenErr) {
+      logger.warn('Failed to resolve Google tokens for delete operation:', tokenErr);
+    }
+
     // Handle ScholarSync Consultation Slots
     if (eventId.startsWith('consultation-')) {
       const slotId = parseInt(eventId.replace('consultation-', ''), 10);
       if (isNaN(slotId)) {
         return res.status(400).json({ error: 'Invalid consultation slot ID' });
       }
-
-      // 1. Get user's tokens for potential Google sync
-      const tokens = await getUserTokens(userId, (req as any).user.email);
-      if (!tokens) {
-        return res.status(404).json({ error: 'Google connection not found.' });
-      }
-      const { access_token, refresh_token } = tokens;
 
       // 2. Find the slot to verify ownership and get Google event ID
       const slotRes = await query(
@@ -266,9 +291,8 @@ router.delete('/events/:eventId', async (req, res) => {
       );
 
       if (slotRes.rows.length === 0) {
-        // Fallback: Check if it's an admin (optional but safer)
-        const adminRes = await query('SELECT role FROM users WHERE id = $1', [userId]);
-        if (adminRes.rows[0]?.role !== 'admin') {
+        // Fallback: allow admins to delete any slot.
+        if (!isAdmin) {
           return res.status(404).json({ error: 'Consultation slot not found or you do not have permission to delete it.' });
         }
         
@@ -279,9 +303,9 @@ router.delete('/events/:eventId', async (req, res) => {
         }
         
         const gId = adminSlotRes.rows[0].google_event_id;
-        if (gId) {
+        if (gId && resolvedAccessToken && resolvedRefreshToken) {
           try {
-            await GoogleCalendarService.deleteEvent(gId, access_token, refresh_token);
+            await GoogleCalendarService.deleteEvent(gId, resolvedAccessToken, resolvedRefreshToken);
           } catch (e) {
             logger.warn(`Admin failed to delete Google event ${gId}:`, e);
           }
@@ -289,9 +313,9 @@ router.delete('/events/:eventId', async (req, res) => {
         await query('DELETE FROM ss_consultation_slots WHERE slot_id = $1', [slotId]);
       } else {
         const { google_event_id } = slotRes.rows[0];
-        if (google_event_id) {
+        if (google_event_id && resolvedAccessToken && resolvedRefreshToken) {
           try {
-            await GoogleCalendarService.deleteEvent(google_event_id, access_token, refresh_token);
+            await GoogleCalendarService.deleteEvent(google_event_id, resolvedAccessToken, resolvedRefreshToken);
           } catch (e) {
             logger.warn(`Failed to delete Google event ${google_event_id}:`, e);
           }
@@ -300,6 +324,32 @@ router.delete('/events/:eventId', async (req, res) => {
       }
 
       logger.info(`User ${userId} deleted ScholarSync consultation slot ${slotId}`);
+      return res.json({ success: true });
+    }
+
+    // Handle synced consultation slots whose visible event id is the Google event id.
+    const consultationByGoogleId = await query(
+      `SELECT s.slot_id, s.google_event_id
+       FROM ss_consultation_slots s
+       LEFT JOIN ss_account a ON s.adviser_id = a.account_id
+       WHERE s.google_event_id = $1
+         AND ($2::boolean = true OR a."accountEmail" = $3)
+       LIMIT 1`,
+      [eventId, isAdmin, (req as any).user.email]
+    );
+
+    if (consultationByGoogleId.rows.length > 0) {
+      const slot = consultationByGoogleId.rows[0];
+      if (slot.google_event_id && resolvedAccessToken && resolvedRefreshToken) {
+        try {
+          await GoogleCalendarService.deleteEvent(slot.google_event_id, resolvedAccessToken, resolvedRefreshToken);
+        } catch (e) {
+          logger.warn(`Failed to delete synced consultation Google event ${slot.google_event_id}:`, e);
+        }
+      }
+
+      await query('DELETE FROM ss_consultation_slots WHERE slot_id = $1', [slot.slot_id]);
+      logger.info(`User ${userId} deleted synced ScholarSync consultation slot ${slot.slot_id}`);
       return res.json({ success: true });
     }
 
@@ -313,9 +363,13 @@ router.delete('/events/:eventId', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const { access_token, refresh_token } = userResult.rows[0];
+    const dbAccessToken = userResult.rows[0].access_token as string | null;
+    const dbRefreshToken = userResult.rows[0].refresh_token as string | null;
+    if (!dbAccessToken || !dbRefreshToken) {
+      return res.status(404).json({ error: 'Google connection not found.' });
+    }
 
-    await GoogleCalendarService.deleteEvent(eventId, access_token, refresh_token);
+    await GoogleCalendarService.deleteEvent(eventId, dbAccessToken, dbRefreshToken);
 
     logger.info(`User ${userId} deleted calendar event ${eventId}`);
     return res.json({ success: true });
