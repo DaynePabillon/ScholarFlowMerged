@@ -33,6 +33,58 @@ interface ProfessionalKanbanProps {
     theme?: 'admin' | 'manager' | 'advisor'
 }
 
+// ============================================================
+// KanbanColumn - MUST be defined outside parent to prevent
+// remounting on every parent re-render (which breaks HTML5 drag)
+// ============================================================
+const KanbanColumn = memo(({
+    col,
+    moduleCode,
+    isOver,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onAddTask,
+    renderTask,
+    role: columnRole
+}: any) => (
+    <div
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className={`min-h-[200px] p-5 rounded-[2rem] border-2 relative overflow-hidden ${
+            isOver
+                ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500/40 shadow-2xl shadow-emerald-500/10'
+                : 'bg-gray-50/50 dark:bg-slate-800/20 border-transparent'
+        }`}
+    >
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/[0.01] dark:from-white/[0.02] to-transparent pointer-events-none" />
+
+        <div className="space-y-6 relative z-10">
+            {col.tree.map((task: any) => renderTask(task))}
+            {col.taskCount === 0 && (
+                <div className="h-32 flex flex-col items-center justify-center opacity-20 dark:opacity-10">
+                    <div className="w-12 h-12 rounded-2xl border-2 border-dashed border-gray-300 dark:border-slate-400 mb-3 rotate-45" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-400">Idle</span>
+                </div>
+            )}
+        </div>
+
+        {columnRole !== 'student' && (
+            <button
+                onClick={() => onAddTask?.(col.id)}
+                className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-colors duration-150"
+            >
+                <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
+                    <Plus className="w-3 h-3" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
+            </button>
+        )}
+    </div>
+));
+KanbanColumn.displayName = 'KanbanColumn';
+
 export default function ProfessionalKanban({
     tasks,
     onTaskClick,
@@ -93,7 +145,10 @@ export default function ProfessionalKanban({
         e.dataTransfer.effectAllowed = 'move'
         draggedTaskRef.current = task
         dragStartPos.current = { x: e.clientX, y: e.clientY }
-        setIsDragging(true)
+        // Defer state update so the browser can establish the drag operation
+        // BEFORE React re-renders. Setting state synchronously here can
+        // cancel the native drag on some browsers.
+        requestAnimationFrame(() => setIsDragging(true))
     }
 
     const handleDrop = (e: React.DragEvent, newStatus: string) => {
@@ -221,51 +276,6 @@ export default function ProfessionalKanban({
         });
     }, [sortedModuleCodes, moduleGroups, columns, buildTaskTree]);
 
-    // Refactored KanbanColumn for atomic re-renders
-    const KanbanColumn = memo(({ 
-        col, 
-        moduleCode, 
-        isOver, 
-        onDragOver, 
-        onDragLeave, 
-        onDrop, 
-        onAddTask, 
-        renderTask,
-        role: columnRole 
-    }: any) => (
-        <div 
-            onDragOver={onDragOver}
-            onDragLeave={onDragLeave}
-            onDrop={onDrop}
-            className={`min-h-[200px] p-5 rounded-[2rem] transition-all duration-500 border-2 border-transparent relative overflow-hidden ${
-                isOver ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500/40 scale-[1.02] shadow-2xl shadow-emerald-500/10 z-10' : 'bg-gray-50/50 dark:bg-slate-800/20 hover:bg-gray-100/50 dark:hover:bg-slate-800/30'
-            }`}
-        >
-            <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/[0.01] dark:from-white/[0.02] to-transparent pointer-events-none" />
-            
-            <div className="space-y-6 relative z-10">
-                {col.tree.map((task: any) => renderTask(task))}
-                {col.taskCount === 0 && (
-                    <div className="h-32 flex flex-col items-center justify-center opacity-20 dark:opacity-10 transition-all duration-700">
-                        <div className="w-12 h-12 rounded-2xl border-2 border-dashed border-gray-300 dark:border-slate-400 mb-3 rotate-45 transition-transform duration-1000" />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-400">Idle</span>
-                    </div>
-                )}
-            </div>
-            
-            {columnRole !== 'student' && (
-                <button
-                    onClick={() => onAddTask?.(col.id)}
-                    className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-all duration-300"
-                >
-                    <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
-                        <Plus className="w-3 h-3" />
-                    </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
-                </button>
-            )}
-        </div>
-    ));
 
 
     return (
@@ -336,7 +346,12 @@ export default function ProfessionalKanban({
                                             onDragOver={(e: any) => {
                                                 e.preventDefault();
                                                 e.dataTransfer.dropEffect = 'move';
-                                                setDragOverColumn({ col: col.id, module: moduleData.code });
+                                                // Only update state when the target column actually changes
+                                                // to prevent excessive re-renders during drag
+                                                setDragOverColumn(prev => {
+                                                    if (prev?.col === col.id && prev?.module === moduleData.code) return prev;
+                                                    return { col: col.id, module: moduleData.code };
+                                                });
                                             }}
                                             onDragLeave={(e: any) => {
                                                 // Only clear drop-target state when the cursor truly
