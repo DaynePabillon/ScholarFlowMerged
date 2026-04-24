@@ -657,7 +657,7 @@ function BoardsContent() {
                                 <>
                                     {/* Team Selector */}
                                     {selectedOrg && (
-                                        <div className="bg-white/80 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/5 shadow-md dark:shadow-xl">
+                                        <div className="bg-white/80 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl border border-gray-200 dark:border-white/5 shadow-md dark:shadow-xl z-[200] relative">
                                             <TeamSelector
                                                 organizationId={selectedOrg.id}
                                                 selectedTeamId={selectedTeam}
