@@ -1,7 +1,10 @@
 "use client"
 
-import React, { useRef, useState, useEffect, useMemo, useCallback, memo, DragEvent } from 'react'
-import { Plus, MoreHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
+import React, { useRef, useState, useMemo, useCallback, memo, DragEvent } from 'react'
+import { 
+    Plus, MoreHorizontal, ChevronDown, ChevronUp, AlertCircle, 
+    Users, User, Clock, CheckSquare, LayoutGrid
+} from 'lucide-react'
 import ProfessionalTaskCard from './ProfessionalTaskCard'
 
 interface Task {
@@ -12,6 +15,7 @@ interface Task {
     priority: string
     due_date?: string
     project_name?: string
+    assigned_to?: string | null
     assigned_to_name?: string
     comment_count?: number
     wbs_code?: string
@@ -30,60 +34,22 @@ interface ProfessionalKanbanProps {
     onProgressChange?: (taskId: string, progress: number) => void
     canDrag?: boolean
     role?: 'admin' | 'student' | 'manager'
-    theme?: 'admin' | 'manager' | 'advisor'
 }
 
-// ============================================================
-// KanbanColumn - MUST be defined outside parent to prevent
-// remounting on every parent re-render (which breaks HTML5 drag)
-// ============================================================
-const KanbanColumn = memo(({
-    col,
-    moduleCode,
-    isOver,
-    onDragOver,
-    onDragLeave,
-    onDrop,
-    onAddTask,
-    renderTask,
-    role: columnRole
-}: any) => (
-    <div
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        className={`min-h-[200px] p-5 rounded-[2rem] border-2 relative overflow-hidden ${
-            isOver
-                ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500/40 shadow-2xl shadow-emerald-500/10'
-                : 'bg-gray-50/50 dark:bg-slate-800/20 border-transparent'
-        }`}
-    >
-        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/[0.01] dark:from-white/[0.02] to-transparent pointer-events-none" />
+const COLUMNS = [
+    { id: 'todo', title: 'To Do', color: 'text-gray-500' },
+    { id: 'in_progress', title: 'In Progress', color: 'text-blue-500' },
+    { id: 'review', title: 'Review', color: 'text-indigo-500' },
+    { id: 'done', title: 'Completed', color: 'text-emerald-500' }
+]
 
-        <div className="space-y-6 relative z-10">
-            {col.tree.map((task: any) => renderTask(task))}
-            {col.taskCount === 0 && (
-                <div className="h-32 flex flex-col items-center justify-center opacity-20 dark:opacity-10">
-                    <div className="w-12 h-12 rounded-2xl border-2 border-dashed border-gray-300 dark:border-slate-400 mb-3 rotate-45" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-400">Idle</span>
-                </div>
-            )}
-        </div>
-
-        {columnRole !== 'student' && (
-            <button
-                onClick={() => onAddTask?.(col.id)}
-                className="w-full mt-6 group/btn flex items-center justify-center gap-3 py-3 rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/5 hover:border-emerald-500/40 hover:bg-emerald-50 dark:hover:bg-emerald-500/5 transition-colors duration-150"
-            >
-                <div className="p-1 bg-gray-100 dark:bg-white/5 rounded-lg group-hover/btn:bg-emerald-500 group-hover/btn:text-white transition-colors">
-                    <Plus className="w-3 h-3" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 dark:text-slate-500 group-hover/btn:text-emerald-500 dark:group-hover/btn:text-emerald-400">Add Task</span>
-            </button>
-        )}
-    </div>
-));
-KanbanColumn.displayName = 'KanbanColumn';
+const PRIORITY_ORDER = ['critical', 'high', 'medium', 'low']
+const PRIORITY_STYLES: any = {
+    critical: { label: 'Critical', bg: 'bg-rose-500/10', text: 'text-rose-500', border: 'border-rose-500/20', iconColor: 'text-rose-500' },
+    high: { label: 'High Priority', bg: 'bg-orange-500/10', text: 'text-orange-500', border: 'border-orange-500/20', iconColor: 'text-orange-500' },
+    medium: { label: 'Medium Priority', bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20', iconColor: 'text-blue-500' },
+    low: { label: 'Low Priority', bg: 'bg-slate-500/10', text: 'text-slate-500', border: 'border-slate-500/20', iconColor: 'text-slate-500' }
+}
 
 export default function ProfessionalKanban({
     tasks,
@@ -94,287 +60,217 @@ export default function ProfessionalKanban({
     onArchiveTask,
     onProgressChange,
     canDrag = true,
-    role = 'student',
-    theme = 'admin'
+    role = 'student'
 }: ProfessionalKanbanProps) {
-    const isManager = theme === 'manager';
-    const accentColor = isManager ? 'indigo' : 'blue';
-    const secondaryColor = isManager ? 'violet' : 'cyan';
+    const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null)
+    const [overColumnId, setOverColumnId] = useState<string | null>(null)
+    const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
 
-    const [collapsedModules, setCollapsedModules] = useState<Set<string>>(new Set());
+    const toggleSection = (sectionId: string) => {
+        setCollapsedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }))
+    }
 
-    const columns = [
-        { id: 'todo', label: 'To Do', color: 'bg-slate-400', headerBg: 'from-slate-500 to-slate-600' },
-        { id: 'in_progress', label: 'In Progress', color: `bg-${accentColor}-500`, headerBg: `from-${accentColor}-500 to-${secondaryColor}-500` },
-        { id: 'review', label: 'Review', color: 'bg-purple-500', headerBg: 'from-purple-500 to-indigo-500' },
-        { id: 'done', label: 'Done', color: 'bg-emerald-500', headerBg: 'from-emerald-500 to-teal-500' }
-    ]
+    // 1. Group by Priority -> Assignee -> Status
+    const groupedData = useMemo(() => {
+        const priorityGroups: any = {}
 
-    const [draggedTask, setDraggedTask] = useState<Task | null>(null)
-    const [isDragging, setIsDragging] = useState(false)
-    const draggedTaskRef = useRef<Task | null>(null)
-    const dragStartPos = useRef<{x: number, y: number} | null>(null)
-    const [dragOverColumn, setDragOverColumn] = useState<{col: string, module: string} | null>(null)
+        PRIORITY_ORDER.forEach(p => {
+            priorityGroups[p] = {
+                priority: p,
+                assignees: {} as any
+            }
+        })
 
-    // Helper: Extract numeric WBS code
-    const extractWbs = useCallback((code: string): string => {
-        const m = code.match(/^(\d+(?:\.\d+)*)/);
-        return m ? m[1] : code;
-    }, []);
+        tasks.forEach(task => {
+            const p = task.priority?.toLowerCase() || 'medium'
+            const priorityKey = PRIORITY_ORDER.includes(p) ? p : 'medium'
+            
+            const assigneeId = task.assigned_to || 'unassigned'
+            const assigneeName = task.assigned_to_name || 'Unassigned'
 
-    // Grouping Tasks by Module
-    const moduleGroups = useMemo(() => {
-        return tasks.reduce((acc: Record<string, Task[]>, task: Task) => {
-            const wbs = task.wbs_code ? extractWbs(task.wbs_code) : '';
-            const moduleCode = wbs.split('.')[0] || 'Uncategorized';
-            if (!acc[moduleCode]) acc[moduleCode] = [];
-            acc[moduleCode].push({ ...task, wbs_code: wbs });
-            return acc;
-        }, {});
-    }, [tasks, extractWbs]);
+            if (!priorityGroups[priorityKey].assignees[assigneeId]) {
+                priorityGroups[priorityKey].assignees[assigneeId] = {
+                    id: assigneeId,
+                    name: assigneeName,
+                    tasks: []
+                }
+            }
+            priorityGroups[priorityKey].assignees[assigneeId].tasks.push(task)
+        })
 
-    const sortedModuleCodes = useMemo(() => {
-        return Object.keys(moduleGroups).sort((a, b) => 
-            a.localeCompare(b, undefined, { numeric: true })
-        );
-    }, [moduleGroups]);
+        return priorityGroups
+    }, [tasks])
 
-    const handleDragStart = (e: DragEvent<HTMLDivElement>, task: Task) => {
+    const handleDragStart = (e: React.DragEvent, taskId: string) => {
         if (!canDrag) return
-        e.dataTransfer.setData('text/plain', task.id)
+        setDraggedTaskId(taskId)
+        e.dataTransfer.setData('taskId', taskId)
         e.dataTransfer.effectAllowed = 'move'
-        draggedTaskRef.current = task
-        dragStartPos.current = { x: e.clientX, y: e.clientY }
-        // Defer state update so the browser can establish the drag operation
-        // BEFORE React re-renders. Setting state synchronously here can
-        // cancel the native drag on some browsers.
-        requestAnimationFrame(() => setIsDragging(true))
+        
+        const target = e.target as HTMLElement
+        target.style.opacity = '0.4'
     }
 
-    const handleDrop = (e: React.DragEvent, newStatus: string) => {
+    const handleDragEnd = (e: React.DragEvent) => {
+        setDraggedTaskId(null)
+        setOverColumnId(null)
+        const target = e.target as HTMLElement
+        target.style.opacity = '1'
+    }
+
+    const handleDragOver = (e: React.DragEvent, colId: string) => {
+        if (!canDrag) return
         e.preventDefault()
-        setDragOverColumn(null)
-        setIsDragging(false)
-        const task = draggedTaskRef.current
-        if (task && onStatusChange) {
-            const currentStatus = (task.status || '').toLowerCase().replace(/[- ]/g, '_')
-            if (currentStatus !== newStatus) {
-                onStatusChange(task.id, newStatus)
-            }
+        setOverColumnId(colId)
+    }
+
+    const handleDrop = (e: React.DragEvent, colId: string) => {
+        e.preventDefault()
+        const taskId = e.dataTransfer.getData('taskId')
+        if (taskId && onStatusChange) {
+            onStatusChange(taskId, colId)
         }
-        draggedTaskRef.current = null
-        setDraggedTask(null)
+        setOverColumnId(null)
+        setDraggedTaskId(null)
     }
-
-    // Always clean up drag state, even if drop is cancelled (outside any column)
-    const handleDragEnd = () => {
-        draggedTaskRef.current = null
-        setDraggedTask(null)
-        setDragOverColumn(null)
-        setIsDragging(false)
-        // Small delay to prevent onClick from firing immediately after drag
-        setTimeout(() => {
-            dragStartPos.current = null
-        }, 100)
-    }
-
-    const toggleModule = (code: string) => {
-        const newCollapsed = new Set(collapsedModules);
-        if (newCollapsed.has(code)) newCollapsed.delete(code);
-        else newCollapsed.add(code);
-        setCollapsedModules(newCollapsed);
-    }
-
-    // Priority ordering — critical tasks bubble to the top of each column.
-    const priorityRank = (p?: string) => {
-        const v = (p || '').toLowerCase();
-        if (v === 'critical') return 0;
-        if (v === 'high') return 1;
-        if (v === 'medium') return 2;
-        if (v === 'low') return 3;
-        return 4;
-    };
-
-    const sortByPriorityThenWbs = (a: any, b: any) => {
-        const pDiff = priorityRank(a.priority) - priorityRank(b.priority);
-        if (pDiff !== 0) return pDiff;
-        return (a.wbs_code || '').localeCompare(b.wbs_code || '', undefined, { numeric: true });
-    };
-
-    const buildTaskTree = useCallback((taskList: Task[]): any[] => {
-        const nodes = taskList.map(t => ({ ...t, children: [] as any[] }));
-        const nodeMap: Record<string, any> = {};
-        nodes.forEach(n => nodeMap[n.id] = n);
-
-        const roots: any[] = [];
-        nodes.forEach(n => {
-            if (n.parent_task_id && nodeMap[n.parent_task_id]) {
-                nodeMap[n.parent_task_id].children.push(n);
-            } else {
-                roots.push(n);
-            }
-        });
-
-        // Sort children too so priority ordering is recursive
-        Object.values(nodeMap).forEach((n: any) => {
-            if (n.children && n.children.length > 0) {
-                n.children.sort(sortByPriorityThenWbs);
-            }
-        });
-
-        return roots.sort(sortByPriorityThenWbs);
-    }, []);
-
-    const renderTask = useCallback((task: any, depth: number = 0) => (
-        <div key={task.id} className="relative">
-            <div
-                draggable={canDrag}
-                onDragStart={(e) => handleDragStart(e, task)}
-                onDragEnd={handleDragEnd}
-                className={canDrag ? 'cursor-grab active:cursor-grabbing select-none' : ''}
-            >
-                <ProfessionalTaskCard
-                    task={task}
-                    onClick={() => {
-                        // Only trigger onClick if we didn't just finish dragging
-                        if (!dragStartPos.current) {
-                            onTaskClick?.(task)
-                        }
-                    }}
-                    onStatusChange={onStatusChange}
-                    onDelete={onDeleteTask}
-                    onArchive={onArchiveTask}
-                    onProgressChange={onProgressChange}
-                    role={role}
-                />
-            </div>
-            {task.children && task.children.length > 0 && (
-                <div className="mt-4 ml-6 space-y-4 border-l-2 border-gray-100 dark:border-white/5 pl-6">
-                    {task.children.map((child: any) => renderTask(child, depth + 1))}
-                </div>
-            )}
-        </div>
-    ), [canDrag, onTaskClick, onStatusChange, onDeleteTask, onArchiveTask, onProgressChange, role]);
-
-    const boardData = useMemo(() => {
-        return sortedModuleCodes.map(code => {
-            const moduleTasks = moduleGroups[code] || [];
-            const columnData = columns.map(col => {
-                const colTasks = moduleTasks.filter((t: Task) => {
-                    const nStatus = (t.status || '').toLowerCase().replace(/[- ]/g, '_');
-                    if (col.id === 'done') return nStatus === 'done' || nStatus === 'completed';
-                    return nStatus === col.id;
-                });
-                return {
-                    ...col,
-                    tree: buildTaskTree(colTasks),
-                    taskCount: colTasks.length,
-                    tasks: colTasks
-                };
-            });
-            return { code, columns: columnData };
-        });
-    }, [sortedModuleCodes, moduleGroups, columns, buildTaskTree]);
-
-
 
     return (
-        <>
-            <style>{`
-                .is-dragging .group\/card {
-                    pointer-events: none !important;
-                    user-select: none !important;
-                }
-                .is-dragging * {
-                    cursor: grabbing !important;
-                }
-            `}</style>
-            <div className={`flex flex-col h-full bg-white/95 dark:bg-slate-900/80 backdrop-blur-md rounded-[2.5rem] border border-gray-200 dark:border-slate-700/50 overflow-hidden shadow-2xl shadow-black/5 dark:shadow-black/40 ${isDragging ? 'is-dragging' : ''}`}>
-            {/* Sticky Header Row */}
-            <div className="grid grid-cols-4 gap-6 p-8 bg-gray-50/80 dark:bg-slate-950/60 border-b border-gray-200 dark:border-slate-700/50 z-30 sticky top-0 backdrop-blur-md">
-                {columns.map(col => (
-                    <div key={col.id} className="flex items-center justify-between px-3">
-                        <div className="flex items-center gap-4">
-                            <div className={`w-3 h-3 rounded-full ${col.color} shadow-sm ring-4 ring-gray-100 dark:ring-white/5`} />
-                            <h3 className="font-black text-gray-700 dark:text-slate-100 text-[10px] uppercase tracking-[0.2em]">{col.label}</h3>
-                        </div>
-                    </div>
-                ))}
-            </div>
+        <div className="w-full space-y-12">
+            {PRIORITY_ORDER.map(priority => {
+                const group = groupedData[priority]
+                const assigneeIds = Object.keys(group.assignees)
+                if (assigneeIds.length === 0) return null
 
-            {/* Scrollable Swimlane Content */}
-            <div 
-                className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar"
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
-            >
-                {boardData.map((moduleData) => {
-                    const isCollapsed = collapsedModules.has(moduleData.code);
-                    const moduleTasks = moduleGroups[moduleData.code] || [];
-                    const moduleTitleTask = moduleTasks.find(t => t.wbs_code === moduleData.code) || moduleTasks[0];
-                    
-                    return (
-                        <div key={moduleData.code} className="group/swimlane animate-in slide-in-from-bottom-4 duration-500">
-                            {/* Swimlane Header */}
-                            <div 
-                                onClick={() => toggleModule(moduleData.code)}
-                                className="flex items-center justify-between mb-8 cursor-pointer group/header"
-                            >
-                                <div className="flex items-center gap-4 bg-gradient-to-r from-emerald-500/10 dark:from-emerald-500/20 via-emerald-500/5 to-transparent pl-4 pr-10 py-2.5 rounded-2xl border border-emerald-200 dark:border-emerald-500/20 backdrop-blur-xl shadow-lg shadow-emerald-500/5">
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 tracking-[0.1em] uppercase opacity-70">
-                                            Phase {moduleData.code}
-                                        </span>
-                                        <h4 className="text-sm font-black text-gray-900 dark:text-white truncate max-w-md uppercase tracking-tight">
-                                            {moduleTitleTask.title}
-                                        </h4>
-                                    </div>
-                                    <div className={`ml-4 w-6 h-6 rounded-xl bg-gray-100 dark:bg-white/5 flex items-center justify-center border border-gray-200 dark:border-white/10 transition-all ${isCollapsed ? '' : 'rotate-90 bg-emerald-500/20 border-emerald-500/30'}`}>
-                                        <ChevronRight className={`w-4 h-4 ${isCollapsed ? 'text-gray-400 dark:text-slate-500' : 'text-emerald-500 dark:text-emerald-400'}`} />
-                                    </div>
+                const isPriorityCollapsed = collapsedSections[`p-${priority}`]
+                const style = PRIORITY_STYLES[priority]
+
+                return (
+                    <div key={priority} className="space-y-4">
+                        {/* Priority Swimlane Header */}
+                        <div 
+                            onClick={() => toggleSection(`p-${priority}`)}
+                            className={`flex items-center justify-between p-4 rounded-3xl border-2 ${style.border} ${style.bg} cursor-pointer group hover:shadow-lg transition-all duration-300`}
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-xl bg-white dark:bg-slate-900 shadow-sm ${style.iconColor}`}>
+                                    <AlertCircle className="w-5 h-5" />
                                 </div>
-                                <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/20 via-gray-200 dark:via-white/5 to-transparent" />
+                                <div>
+                                    <h3 className={`text-sm font-black uppercase tracking-widest ${style.text}`}>
+                                        {style.label}
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight opacity-70">
+                                        {assigneeIds.reduce((acc, id) => acc + group.assignees[id].tasks.length, 0)} Total Tasks
+                                    </p>
+                                </div>
                             </div>
-
-                            {!isCollapsed && (
-                                <div className="grid grid-cols-4 gap-6 items-start">
-                                    {moduleData.columns.map(col => (
-                                        <KanbanColumn
-                                            key={col.id}
-                                            col={col}
-                                            moduleCode={moduleData.code}
-                                            isOver={dragOverColumn?.col === col.id && dragOverColumn?.module === moduleData.code}
-                                            onDragOver={(e: any) => {
-                                                e.preventDefault();
-                                                e.dataTransfer.dropEffect = 'move';
-                                                // Only update state when the target column actually changes
-                                                // to prevent excessive re-renders during drag
-                                                setDragOverColumn(prev => {
-                                                    if (prev?.col === col.id && prev?.module === moduleData.code) return prev;
-                                                    return { col: col.id, module: moduleData.code };
-                                                });
-                                            }}
-                                            onDragLeave={(e: any) => {
-                                                // Only clear drop-target state when the cursor truly
-                                                // leaves the column — not when crossing into a
-                                                // child element (task cards, gradient overlay, etc.)
-                                                const relatedTarget = e.relatedTarget as Node | null;
-                                                if (relatedTarget && e.currentTarget.contains(relatedTarget)) return;
-                                                setDragOverColumn(null);
-                                            }}
-                                            onDrop={(e: any) => handleDrop(e, col.id)}
-                                            onAddTask={onAddTask}
-                                            renderTask={renderTask}
-                                            role={role}
-                                        />
+                            <div className="flex items-center gap-4">
+                                <div className="flex -space-x-2">
+                                    {assigneeIds.slice(0, 5).map(id => (
+                                        <div key={id} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-blue-500 flex items-center justify-center text-[10px] text-white font-black uppercase shadow-sm">
+                                            {group.assignees[id].name.charAt(0)}
+                                        </div>
                                     ))}
+                                    {assigneeIds.length > 5 && (
+                                        <div className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[8px] text-slate-500 font-black">
+                                            +{assigneeIds.length - 5}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                                {isPriorityCollapsed ? <ChevronDown className="w-5 h-5 opacity-40" /> : <ChevronUp className="w-5 h-5 opacity-40" />}
+                            </div>
                         </div>
-                    );
-                })}
-            </div>
-        </div>
-        </>
-    );
-}
 
+                        {!isPriorityCollapsed && (
+                            <div className="space-y-8 pl-4 border-l-2 border-dashed border-slate-200 dark:border-slate-800 ml-6">
+                                {assigneeIds.map(assigneeId => {
+                                    const assigneeGroup = group.assignees[assigneeId]
+                                    const isAssigneeCollapsed = collapsedSections[`p-${priority}-a-${assigneeId}`]
+
+                                    return (
+                                        <div key={assigneeId} className="space-y-4">
+                                            {/* Assignee Sub-Header */}
+                                            <div 
+                                                onClick={() => toggleSection(`p-${priority}-a-${assigneeId}`)}
+                                                className="flex items-center gap-3 cursor-pointer group"
+                                            >
+                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center shadow-sm border border-slate-200 dark:border-white/5">
+                                                    <User className="w-4 h-4 text-slate-500" />
+                                                </div>
+                                                <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest group-hover:text-blue-500 transition-colors">
+                                                    {assigneeGroup.name}
+                                                </span>
+                                                <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-full font-bold">
+                                                    {assigneeGroup.tasks.length}
+                                                </span>
+                                                {isAssigneeCollapsed ? <ChevronDown className="w-4 h-4 opacity-20" /> : <ChevronUp className="w-4 h-4 opacity-20" />}
+                                            </div>
+
+                                            {!isAssigneeCollapsed && (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                                    {COLUMNS.map(column => {
+                                                        const columnTasks = assigneeGroup.tasks.filter((t: any) => {
+                                                            const s = t.status?.toLowerCase().replace('-', '_')
+                                                            return s === column.id || (s === 'todo' && column.id === 'todo') || (s === 'in_progress' && column.id === 'in_progress')
+                                                        })
+
+                                                        const isOver = overColumnId === column.id
+
+                                                        return (
+                                                            <div 
+                                                                key={column.id}
+                                                                onDragOver={(e) => handleDragOver(e, column.id)}
+                                                                onDragLeave={() => setOverColumnId(null)}
+                                                                onDrop={(e) => handleDrop(e, column.id)}
+                                                                className={`flex flex-col gap-4 p-4 rounded-3xl border-2 transition-all duration-300 ${
+                                                                    isOver 
+                                                                        ? 'bg-blue-50/50 dark:bg-blue-500/5 border-blue-500/30 shadow-inner' 
+                                                                        : 'bg-transparent border-transparent'
+                                                                }`}
+                                                            >
+                                                                {/* Optional Column mini-label */}
+                                                                <div className="flex items-center justify-between px-2">
+                                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${column.color} opacity-60`}>
+                                                                        {column.title}
+                                                                    </span>
+                                                                    <span className="text-[10px] font-bold text-slate-400">
+                                                                        {columnTasks.length}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div className="space-y-4">
+                                                                    {columnTasks.map((task: any) => (
+                                                                        <div 
+                                                                            key={task.id}
+                                                                            draggable={canDrag}
+                                                                            onDragStart={(e) => handleDragStart(e, task.id)}
+                                                                            onDragEnd={handleDragEnd}
+                                                                        >
+                                                                            <ProfessionalTaskCard
+                                                                                task={task}
+                                                                                onClick={() => onTaskClick?.(task)}
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                    {columnTasks.length === 0 && (
+                                                                        <div className="h-24 flex items-center justify-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl opacity-30">
+                                                                            <Plus className="w-5 h-5 text-slate-400" />
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}

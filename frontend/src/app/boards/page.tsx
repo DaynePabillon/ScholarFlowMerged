@@ -533,6 +533,13 @@ function BoardsContent() {
         setSelectedTask(null)
     }
 
+    // Explicit handler for team card click — opens TeamDetailModal WITHOUT switching view
+    const handleTeamGroupClick = useCallback((team: any) => {
+        // Guard: ensure we stay on 'teams' view — never switch to kanban on team click
+        setBoardView('teams')
+        setSelectedTeamGroup(team as TeamGroup)
+    }, [])
+
     const getUserRole = (): 'admin' | 'manager' | 'member' => {
         return selectedOrg?.role || 'member'
     }
@@ -625,37 +632,21 @@ function BoardsContent() {
                                     Project <span className="text-blue-500">Boards</span>
                                 </h1>
                                 <p className="text-gray-500 dark:text-slate-500 font-bold text-xs uppercase tracking-[0.2em] mt-1 opacity-70">
-                                    {boardView === 'teams'
-                                        ? `Team Overview • ${teamGroups.length} Teams`
-                                        : `Task Board • ${filteredTasks.length} Tasks`}
+                                    {`Team Overview • ${teamGroups.length} Teams`}
                                 </p>
                             </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-4">
-                            {/* View Toggle */}
-                            <div className="flex bg-white/80 dark:bg-slate-900/40 backdrop-blur-xl rounded-2xl p-1.5 border border-gray-200 dark:border-white/5 shadow-inner">
-                                <button
-                                    onClick={() => setBoardView('teams')}
-                                    className={`flex items-center gap-3 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${boardView === 'teams'
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                                        : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5'
-                                        }`}
-                                >
-                                    <Users className="w-4 h-4" />
-                                    Teams
-                                </button>
-                                <button
-                                    onClick={() => setBoardView('kanban')}
-                                    className={`flex items-center gap-3 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 ${boardView === 'kanban'
-                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
-                                        : 'text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/5'
-                                        }`}
-                                >
-                                    <LayoutGrid className="w-4 h-4" />
-                                    Kanban
-                                </button>
-                             </div>
+                            {/* Quick link to Task Workspace */}
+                            <a
+                                href="/tasks"
+                                className="flex items-center gap-3 px-6 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300"
+                            >
+                                <LayoutGrid className="w-4 h-4" />
+                                Task Workspace
+                            </a>
+                        </div>
 
                             {boardView === 'kanban' && (
                                 <>
@@ -773,191 +764,19 @@ function BoardsContent() {
                                                 Select a team first
                                                 <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-[6px] border-transparent border-t-rose-600"></div>
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
                     </div>
                 </div>
 
-                {/* Conditional View: Teams or Kanban */}
-                {boardView === 'teams' ? (
-                    <TeamsView
-                        teams={teamGroups}
-                        userRole={getUserRole()}
-                        onTeamClick={(team) => {
-                            setSelectedTeam(team.id)
-                            setBoardView('kanban')
-                            setBoardSubView('team')
-                        }}
-                        onCreateTeam={() => setShowCreateTeam(true)}
-                        onShowTemplate={() => setShowSheetTemplate(true)}
-                        onSyncAll={handleResync}
-                        isResyncing={isResyncing}
-                    />
-                ) : (
-                    <div className="space-y-6">
-                        {boardSubView === 'explorer' && (getUserRole() === 'admin' || getUserRole() === 'manager') ? (
-                            <AdvisorView 
-                                selectedSheetId={selectedSheetId} 
-                                organizationId={selectedOrg?.id || ''} 
-                            />
-                        ) : boardSubView === 'advisor' ? (
-                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-100 dark:bg-indigo-900/40 border border-indigo-300 dark:border-indigo-700/50 rounded-full">
-                                            <ShieldCheck className="w-4 h-4 text-indigo-700 dark:text-indigo-400" />
-                                            <span className="text-sm font-bold text-indigo-700 dark:text-indigo-400">Advisor Board</span>
-                                            <span className="text-xs bg-indigo-500 text-white rounded-full px-2 py-0.5">
-                                                {filteredTasks.filter(t => t.is_absolute).length}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">High-integrity tasks synced from Google Sheets (Locked for students)</p>
-                                    </div>
-                                </div>
-                                <KanbanView
-                                    tasks={filteredTasks.filter(t => t.is_absolute).map(t => ({
-                                        ...t,
-                                        id: t.id.toString(),
-                                        status: normalizeStatus(t.status)
-                                    } as any))}
-                                    onTaskClick={(t: any) => handleTaskClick(t)}
-                                    onAddTask={getUserRole() !== 'member' ? () => setIsGoogleSyncModalOpen(true) : () => {}}
-                                    onDeleteTask={getUserRole() !== 'member' ? handleDeleteTask : undefined as any}
-                                    onArchiveTask={getUserRole() !== 'member' ? handleArchiveTask : undefined as any}
-                                    onStatusChange={handleStatusChange}
-                                    onProgressChange={handleProgressChange}
-                                    role={getUserRole() === 'member' ? 'student' : getUserRole() as any}
-                                    members={displayMembers}
-                                />
-                            </div>
-                        ) : (
-                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700/50 rounded-full">
-                                            <Users className="w-4 h-4 text-blue-700 dark:text-blue-400" />
-                                            <span className="text-sm font-bold text-blue-700 dark:text-blue-400">Team Board</span>
-                                            <span className="text-xs bg-blue-500 text-white rounded-full px-2 py-0.5">
-                                                {filteredTasks.filter(t => !t.is_absolute).length}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Internal tasks that team members can freely manage</p>
-                                    </div>
-                                </div>
-                                <KanbanView
-                                    tasks={filteredTasks.filter(t => !t.is_absolute).map(t => ({
-                                        ...t,
-                                        id: t.id.toString(),
-                                        status: normalizeStatus(t.status)
-                                    } as any))}
-                                    onTaskClick={(t: any) => handleTaskClick(t)}
-                                    onAddTask={() => setIsCreateModalOpen(true)}
-                                    onDeleteTask={handleDeleteTask}
-                                    onArchiveTask={handleArchiveTask}
-                                    onStatusChange={handleStatusChange}
-                                    onProgressChange={handleProgressChange}
-                                    role={getUserRole() === 'member' ? 'manager' : getUserRole() as any}
-                                    members={displayMembers}
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Bottom Tab Bar — only show in kanban view */}
-                {boardView === 'kanban' && (
-                    <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40">
-                        <div className="flex items-center gap-2 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-full shadow-xl border border-gray-200 dark:border-slate-700 px-2 py-1">
-                            <button
-                                onClick={() => {
-                                    setActiveTab('all');
-                                    setSelectedSheetId(null);
-                                }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'all'
-                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700/50'
-                                    }`}
-                            >
-                                <CheckSquare className="w-4 h-4" />
-                                All Tasks
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setActiveTab('general');
-                                    setSelectedSheetId(null);
-                                    // Auto-switch to Team Board since general tasks live there
-                                    setBoardSubView('team');
-                                }}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'general'
-                                    ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700/50'
-                                    }`}
-                            >
-                                <FolderKanban className="w-4 h-4" />
-                                General Tasks
-                                <span className="text-xs opacity-80">{generalTaskCount}</span>
-                            </button>
-                            {syncedSheets.map(sheet => (
-                                <div key={sheet.id} className="relative group/sheet">
-                                    <button
-                                        onClick={() => {
-                                            setActiveTab(sheet.sheet_name);
-                                            setSelectedSheetId(sheet.id);
-                                            // Auto-switch to Advisor Board since WBS/synced sheets are absolute tasks
-                                            setBoardSubView('advisor');
-                                        }}
-                                        className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${activeTab === sheet.sheet_name
-                                            ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-md'
-                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700/50'
-                                            }`}
-                                    >
-                                        <FileSpreadsheet className="w-4 h-4" />
-                                        {sheet.sheet_name === 'Imported via URL' ? 'Work Breakdown Structure' : sheet.sheet_name}
-                                        <span className="text-xs opacity-80">{sheet.task_count || 0}</span>
-                                    </button>
-                                    <button
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`Delete synced sheet "${sheet.sheet_name}" and all its tasks?`)) {
-                                                try {
-                                                    const token = localStorage.getItem('token');
-                                                    const res = await fetch(`${API_URL}/api/workspaces/sheets/${sheet.id}`, {
-                                                        method: 'DELETE',
-                                                        headers: { 'Authorization': `Bearer ${token}` }
-                                                    });
-                                                    if (res.ok) {
-                                                        // Immediately update local state for fast UI
-                                                        setSyncedSheets(prev => prev.filter(s => s.id !== sheet.id));
-                                                        if (selectedOrg) fetchData(selectedOrg.id);
-                                                        if (activeTab === sheet.sheet_name) {
-                                                            setActiveTab('all');
-                                                            setSelectedTeam(null);
-                                                            setSelectedSheetId(null);
-                                                        }
-                                                    }
-                                                } catch (err) {
-                                                    console.error('Delete error:', err);
-                                                }
-                                            }
-                                        }}
-                                        className="absolute -top-1 -right-1 p-1 bg-rose-500 text-white rounded-full opacity-0 group-hover/sheet:opacity-100 transition-opacity shadow-lg hover:bg-rose-600"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            ))}
-                            <button
-                                onClick={() => router.push('/workspace-sync')}
-                                className="p-2 text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-all"
-                            >
-                                <Plus className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                )}
+                {/* Teams View — Kanban has moved to /tasks */}
+                <TeamsView
+                    teams={teamGroups}
+                    userRole={getUserRole()}
+                    onTeamClick={handleTeamGroupClick}
+                    onCreateTeam={() => setShowCreateTeam(true)}
+                    onShowTemplate={() => setShowSheetTemplate(true)}
+                    onSyncAll={handleResync}
+                    isResyncing={isResyncing}
+                />
             </div>
 
             {/* Widget Picker Modal */}

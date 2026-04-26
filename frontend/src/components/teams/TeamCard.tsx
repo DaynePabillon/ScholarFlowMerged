@@ -30,7 +30,7 @@ export default function TeamCard({ team, onClick }: TeamCardProps) {
 
     return (
         <div
-            onClick={onClick}
+            onClick={(e) => { e.stopPropagation(); onClick(); }}
             className="group relative overflow-hidden cursor-pointer p-8 rounded-[2.5rem] bg-white/95 dark:bg-slate-900/60 backdrop-blur-2xl border border-gray-100 dark:border-slate-700/50 shadow-lg dark:shadow-2xl transition-all duration-700 hover:scale-[1.03] hover:border-blue-500/40 hover:shadow-blue-500/10 active:scale-[0.98] animate-in zoom-in-95"
         >
             {/* Glossy Overlay */}

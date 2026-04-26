@@ -241,6 +241,10 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                 <FolderKanban className="w-5 h-5" />
                 <span className="text-sm font-medium">Boards</span>
               </a>
+              <a href="/tasks" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+                <CheckSquare className="w-5 h-5" />
+                <span className="text-sm font-medium">Tasks</span>
+              </a>
               <a href="/team" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
                 <Users className="w-5 h-5" />
                 <span className="text-sm font-medium">Team</span>
@@ -304,6 +308,10 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                 <a href="/boards" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                   <FolderKanban className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                   <span>Boards</span>
+                </a>
+                <a href="/tasks" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-emerald-500 hover:to-teal-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                  <CheckSquare className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                  <span>Tasks</span>
                 </a>
                 <a href="/team" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                   <Users className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
