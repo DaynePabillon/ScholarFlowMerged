@@ -59,6 +59,10 @@ const createInvitationEmailHtml = (params: {
       <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
         This invitation will expire in 7 days. If you didn't expect this invitation, you can safely ignore this email.
       </p>
+
+      <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0; padding: 15px; background-color: #f1f5f9; border-left: 4px solid #0ea5e9; border-radius: 4px;">
+        <strong>Note:</strong> You are receiving this email as an invite because you have participated in our usability testing. If you believe this is a mistake, please inform the leaders of ScholarFlow, Shayne Angus (ID: 22-5035-760) or Dayne Pabillon (ID: 20-1327-654).
+      </p>
       
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
       
@@ -190,6 +194,10 @@ const createTeamImportEmailHtml = (params: {
           Open ScholarFlow
         </a>
       </div>
+
+      <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0; padding: 15px; background-color: #f1f5f9; border-left: 4px solid #2563eb; border-radius: 4px;">
+        <strong>Note:</strong> You are receiving this email as an invite because you have participated in our usability testing. If you believe this is a mistake, please inform the leaders of ScholarFlow, Shayne Angus (ID: 22-5035-760) or Dayne Pabillon (ID: 20-1327-654).
+      </p>
       
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
       
@@ -300,6 +308,10 @@ const createAdvisorImportEmailHtml = (params: {
           Open Dashboard
         </a>
       </div>
+
+      <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0; padding: 15px; background-color: #ecfdf5; border-left: 4px solid #10b981; border-radius: 4px;">
+        <strong>Note:</strong> You are receiving this email as an invite because you have participated in our usability testing. If you believe this is a mistake, please inform the leaders of ScholarFlow, Shayne Angus (ID: 22-5035-760) or Dayne Pabillon (ID: 20-1327-654).
+      </p>
       
       <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 30px 0;">
       

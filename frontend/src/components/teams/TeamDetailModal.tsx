@@ -2,7 +2,7 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-import { X, Users, Award, User, Send, Plus, Trash2, CheckCircle2, MessageSquare, BarChart3, ClipboardList } from "lucide-react"
+import { X, Users, Award, User, Send, Plus, Trash2, CheckCircle2, MessageSquare, BarChart3, ClipboardList, Mail } from "lucide-react"
 import TeamProgressCharts from "./TeamProgressCharts"
 
 interface TeamGroup {
@@ -60,6 +60,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
     const [newComment, setNewComment] = useState('')
     const [activeTab, setActiveTab] = useState<'progress' | 'discussion'>('progress')
     const [loading, setLoading] = useState(true)
+    const [isResending, setIsResending] = useState<string | null>(null)
 
     // Add member form
     const [showAddMember, setShowAddMember] = useState(false)
@@ -154,6 +155,36 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
             onTeamUpdated()
         } catch (e) {
             console.error('Error removing member:', e)
+        }
+    }
+
+    const handleResendInvite = async (member: TeamMember) => {
+        if (!member.email) return
+        setIsResending(member.id)
+        try {
+            const res = await fetch(`${API_URL}/api/scholar/resend-invite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+                body: JSON.stringify({
+                    memberEmail: member.email,
+                    memberName: member.name,
+                    courseCode: team.team_code || '',
+                    courseName: team.proposed_project || '',
+                    groupName: team.name,
+                    adviserName: team.adviser_name || ''
+                })
+            })
+            if (res.ok) {
+                alert('Invite resent successfully to ' + member.email)
+            } else {
+                const data = await res.json()
+                alert(data.error || 'Failed to resend invite.')
+            }
+        } catch (e) {
+            console.error('Error resending invite:', e)
+            alert('Failed to resend invite.')
+        } finally {
+            setIsResending(null)
         }
     }
 
@@ -331,8 +362,18 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                                                 ID: {member.student_id || 'Not provided'}
                                             </div>
                                         </div>
+                                        {canManage && member.email && (
+                                            <button 
+                                                onClick={() => handleResendInvite(member)} 
+                                                className="p-3 rounded-xl opacity-0 group-hover/member:opacity-100 hover:bg-blue-500/10 text-slate-600 hover:text-blue-500 transition-all"
+                                                title="Resend Invitation Email"
+                                                disabled={isResending === member.id}
+                                            >
+                                                {isResending === member.id ? <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <Mail size={16} />}
+                                            </button>
+                                        )}
                                         {canManage && (
-                                            <button onClick={() => handleRemoveMember(member.id)} className="p-3 rounded-xl opacity-0 group-hover/member:opacity-100 hover:bg-rose-500/10 text-slate-600 hover:text-rose-500 transition-all">
+                                            <button onClick={() => handleRemoveMember(member.id)} className="p-3 rounded-xl opacity-0 group-hover/member:opacity-100 hover:bg-rose-500/10 text-slate-600 hover:text-rose-500 transition-all" title="Remove Member">
                                                 <Trash2 size={16} />
                                             </button>
                                         )}

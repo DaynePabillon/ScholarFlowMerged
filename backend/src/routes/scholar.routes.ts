@@ -2723,6 +2723,34 @@ router.get('/consultation/prep/:bookingId', verifyInstructor, async (req: Reques
   }
 });
 
+// POST resend individual team import email
+router.post('/resend-invite', verifyInstructor, async (req: Request, res: Response) => {
+  const { memberEmail, memberName, courseCode, courseName, groupName, adviserName } = req.body;
+  if (!memberEmail) {
+    return res.status(400).json({ error: 'Missing memberEmail' });
+  }
+
+  try {
+    const result = await sendTeamImportEmail({
+      to: memberEmail,
+      studentName: memberName || memberEmail.split('@')[0],
+      courseName: courseName || '',
+      courseCode: courseCode || '',
+      groupName: groupName || '',
+      adviserName: adviserName || '',
+    });
+
+    if (result.success) {
+      return res.json({ success: true, message: `Invite resent to ${memberEmail}` });
+    } else {
+      return res.status(500).json({ error: `Failed to send email: ${result.error}` });
+    }
+  } catch (error: any) {
+    logger.error('Error resending invite:', error);
+    return res.status(500).json({ error: error.message || 'Failed to resend invite' });
+  }
+});
+
 logger.info('📚 ScholarSync academic routes registered');
 
 export default router;

@@ -210,4 +210,59 @@ router.get('/check-creator', authenticateToken, async (req: AuthRequest, res: Re
     return res.json({ isCreator: userEmail === CREATOR_EMAIL });
 });
 
+/**
+ * GET /api/reports/users
+ * Get all organization members with user names/emails (Creator only)
+ */
+router.get('/users', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const userEmail = req.user?.email;
+        if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
+
+        const result = await query(`
+            SELECT 
+                om.id as member_id,
+                u.name as user_name,
+                u.email as user_email,
+                o.name as org_name,
+                om.role,
+                om.status
+            FROM organization_members om
+            JOIN users u ON om.user_id = u.id
+            JOIN organizations o ON om.organization_id = o.id
+            ORDER BY o.name ASC, u.name ASC
+        `);
+        return res.json({ members: result.rows });
+    } catch (error) {
+        logger.error('Error fetching org members for creator:', error);
+        return res.status(500).json({ error: 'Failed to fetch members' });
+    }
+});
+
+/**
+ * PATCH /api/reports/users/:memberId/role
+ * Update an organization member's role directly (Creator only)
+ * This automatically triggers the sync to ss_account.
+ */
+router.patch('/users/:memberId/role', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const userEmail = req.user?.email;
+        if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
+
+        const { memberId } = req.params;
+        const { role } = req.body;
+        
+        if (!['admin', 'manager', 'member'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role' });
+        }
+
+        await query('UPDATE organization_members SET role = $1 WHERE id = $2', [role, memberId]);
+        
+        return res.json({ success: true, message: 'Role updated successfully' });
+    } catch (error) {
+        logger.error('Error updating member role for creator:', error);
+        return res.status(500).json({ error: 'Failed to update role' });
+    }
+});
+
 export default router;

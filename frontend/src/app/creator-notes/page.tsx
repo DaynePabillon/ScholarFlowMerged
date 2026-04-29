@@ -82,6 +82,8 @@ export default function CreatorNotesPage() {
     const [filterStatus, setFilterStatus] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [selectedReport, setSelectedReport] = useState<BugReport | null>(null);
+    const [activeTab, setActiveTab] = useState<'reports' | 'users'>('reports');
+    const [orgMembers, setOrgMembers] = useState<any[]>([]);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -120,6 +122,7 @@ export default function CreatorNotesPage() {
                 setAuthorized(true);
                 fetchReports();
                 fetchStats();
+                fetchOrgMembers();
             } else {
                 setAuthorized(false);
             }
@@ -160,6 +163,36 @@ export default function CreatorNotesPage() {
             setStats(data);
         } catch (err) {
             console.error('Failed to fetch stats:', err);
+        }
+    };
+
+    const fetchOrgMembers = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/reports/users`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            setOrgMembers(data.members || []);
+        } catch (err) {
+            console.error('Failed to fetch org members:', err);
+        }
+    };
+
+    const updateMemberRole = async (memberId: string, role: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/api/reports/users/${memberId}/role`, {
+                method: 'PATCH',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ role }),
+            });
+            fetchOrgMembers();
+        } catch (err) {
+            console.error('Failed to update role:', err);
         }
     };
 
@@ -252,9 +285,27 @@ export default function CreatorNotesPage() {
             <div className="p-6">
                 {/* Header */}
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900">Creator Notes</h1>
-                    <p className="text-gray-500 text-sm">Bug reports and feedback from users</p>
+                    <h1 className="text-2xl font-bold text-gray-900">Creator Notes & Management</h1>
+                    <p className="text-gray-500 text-sm">Manage bug reports and user access</p>
                 </div>
+
+                <div className="flex border-b border-gray-200 mb-6">
+                    <button 
+                        onClick={() => setActiveTab('reports')}
+                        className={`py-3 px-6 font-medium text-sm border-b-2 ${activeTab === 'reports' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        Bug Reports
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('users')}
+                        className={`py-3 px-6 font-medium text-sm border-b-2 ${activeTab === 'users' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        User Management
+                    </button>
+                </div>
+
+                {activeTab === 'reports' && (
+                    <>
 
                 {/* Stats Cards */}
                 {stats && (
@@ -442,7 +493,70 @@ export default function CreatorNotesPage() {
                             </div>
                         )}
                     </div>
-                </div>
+                )}
+
+                {activeTab === 'users' && (
+                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div className="p-4 border-b border-gray-100">
+                            <h2 className="font-semibold text-gray-900">Organization Members</h2>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 text-xs uppercase tracking-wider">
+                                        <th className="p-4 font-medium">User Name</th>
+                                        <th className="p-4 font-medium">Email</th>
+                                        <th className="p-4 font-medium">Organization</th>
+                                        <th className="p-4 font-medium">Status</th>
+                                        <th className="p-4 font-medium">Role</th>
+                                        <th className="p-4 font-medium text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {orgMembers.map((member) => (
+                                        <tr key={member.member_id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="p-4">
+                                                <div className="font-medium text-gray-900">{member.user_name || 'N/A'}</div>
+                                            </td>
+                                            <td className="p-4 text-gray-600 text-sm">{member.user_email || 'N/A'}</td>
+                                            <td className="p-4 text-gray-600 text-sm">{member.org_name}</td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${member.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                                                    {member.status}
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                    member.role === 'admin' ? 'bg-red-100 text-red-700' : 
+                                                    member.role === 'manager' ? 'bg-blue-100 text-blue-700' : 
+                                                    'bg-green-100 text-green-700'
+                                                }`}>
+                                                    {member.role}
+                                                </span>
+                                            </td>
+                                            <td className="p-4 text-right">
+                                                <select 
+                                                    value={member.role}
+                                                    onChange={(e) => updateMemberRole(member.member_id, e.target.value)}
+                                                    className="bg-white border border-gray-300 text-gray-700 py-1 px-2 rounded text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                                >
+                                                    <option value="member">Member</option>
+                                                    <option value="manager">Manager</option>
+                                                    <option value="admin">Admin</option>
+                                                </select>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {orgMembers.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="p-8 text-center text-gray-500">No members found</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
         </AppLayout>
     );
