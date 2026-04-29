@@ -132,7 +132,25 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
       })
       if (response.ok) {
         const data = await response.json()
-        setMembers(data.members || [])
+        const allMembers: Member[] = data.members || []
+
+        if (selectedTeam) {
+          // Fetch team detail to get team-specific members
+          const teamRes = await fetch(`${API_URL}/api/team-groups/${selectedTeam}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (teamRes.ok) {
+            const teamData = await teamRes.json()
+            const teamEmails = new Set(
+              (teamData.members || []).map((m: any) => m.email?.toLowerCase()).filter(Boolean)
+            )
+            const filtered = allMembers.filter(m => teamEmails.has(m.email?.toLowerCase()))
+            setMembers(filtered.length > 0 ? filtered : allMembers)
+            return
+          }
+        }
+
+        setMembers(allMembers)
       }
     } catch (error) {
       console.error('Error fetching members:', error)
@@ -699,8 +717,8 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                   className="w-full px-4 py-2 border border-gray-200 rounded-xl"
                 >
                   <option value="">No Parent (Root Task)</option>
-                  {tasks.filter(t => t.status !== 'archived').map(t => (
-                    <option key={t.id} value={t.id}>{t.title} ({t.wbs_code || 'No WBS'})</option>
+                  {tasks.filter(t => t.status !== 'archived' && t.wbs_code).map(t => (
+                    <option key={t.id} value={t.id}>{t.wbs_code} — {t.title}</option>
                   ))}
                 </select>
               </div>
@@ -835,8 +853,8 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-400"
                   >
                     <option value="">No Parent (Root Task)</option>
-                    {tasks.filter(t => t.status !== 'archived' && t.id !== editingTask.id).map(t => (
-                      <option key={t.id} value={t.id}>{t.title} ({t.wbs_code || 'No WBS'})</option>
+                    {tasks.filter(t => t.status !== 'archived' && t.id !== editingTask.id && t.wbs_code).map(t => (
+                      <option key={t.id} value={t.id}>{t.wbs_code} — {t.title}</option>
                     ))}
                   </select>
                 </div>
