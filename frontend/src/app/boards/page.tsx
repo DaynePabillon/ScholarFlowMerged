@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import apiClient, { API_URL } from '@/lib/api/client'
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
@@ -151,7 +151,7 @@ function BoardsContent() {
             
             if (urlToken) {
                 localStorage.setItem('token', urlToken)
-                console.log('✅ Token received from ScholarSync and stored')
+                console.log('Γ£à Token received from ScholarSync and stored')
                 // Remove token from URL for security
                 window.history.replaceState({}, '', '/boards')
             }
@@ -172,7 +172,7 @@ function BoardsContent() {
             // If we have token but no user data, fetch from backend
             if (token && !storedUser) {
                 try {
-                    console.log('📡 Fetching user data from backend via apiClient...')
+                    console.log('≡ƒôí Fetching user data from backend via apiClient...')
                     const response = await apiClient.get('/auth/me');
                     
                     if (response.data) {
@@ -187,10 +187,10 @@ function BoardsContent() {
                         
                         storedUser = JSON.stringify({ ...userData, onboarding_data })
                         storedOrgs = JSON.stringify(organizations || [])
-                        console.log('✅ User data fetched and stored successfully')
+                        console.log('Γ£à User data fetched and stored successfully')
                     }
                 } catch (error) {
-                    console.error('❌ Error fetching user data:', error)
+                    console.error('Γ¥î Error fetching user data:', error)
                     console.log('Redirecting to /')
                     router.push('/')
                     return
@@ -198,7 +198,7 @@ function BoardsContent() {
             }
 
             if (storedUser) {
-                console.log('✅ Setting user data')
+                console.log('Γ£à Setting user data')
                 setUser(JSON.parse(storedUser))
             }
             
@@ -210,24 +210,24 @@ function BoardsContent() {
                 // Auto-select organization
                 if (storedSelectedOrg) {
                     const org = JSON.parse(storedSelectedOrg)
-                    console.log('✅ Using stored organization:', org.name)
+                    console.log('Γ£à Using stored organization:', org.name)
                     setSelectedOrg(org)
                     fetchData(org.id)
                 } else if (orgs && orgs.length > 0) {
                     // Auto-select first organization if none selected
                     const firstOrg = orgs[0]
-                    console.log('✅ Auto-selected first organization:', firstOrg.name)
+                    console.log('Γ£à Auto-selected first organization:', firstOrg.name)
                     setSelectedOrg(firstOrg)
                     localStorage.setItem('selectedOrganization', JSON.stringify(firstOrg))
                     fetchData(firstOrg.id)
                 }
             } else {
-                console.log('⚠️ No organizations found')
+                console.log('ΓÜá∩╕Å No organizations found')
             }
             
             if (storedWidgets) setWidgets(JSON.parse(storedWidgets))
 
-            console.log('✅ Setting mounted to true')
+            console.log('Γ£à Setting mounted to true')
             setMounted(true)
             console.log('=== BOARDS PAGE INIT AUTH COMPLETE ===')
         }
@@ -244,7 +244,7 @@ function BoardsContent() {
         }
     }, [selectedTeam])
 
-    // No separate API call needed — teamGroups already includes members from the endpoint
+    // No separate API call needed ΓÇö teamGroups already includes members from the endpoint
 
     const fetchData = async (orgId: string) => {
         await Promise.all([
@@ -401,7 +401,7 @@ function BoardsContent() {
             if (response.status !== 200 && response.status !== 204) {
                 setTasks(previousTasks)
             }
-            // No refetch — optimistic update is authoritative. Background
+            // No refetch ΓÇö optimistic update is authoritative. Background
             // Google Sheet sync on the server won't block the UI.
         } catch (error: any) {
             console.error('Error updating status:', error)
@@ -533,9 +533,9 @@ function BoardsContent() {
         setSelectedTask(null)
     }
 
-    // Explicit handler for team card click — opens TeamDetailModal WITHOUT switching view
+    // Explicit handler for team card click ΓÇö opens TeamDetailModal WITHOUT switching view
     const handleTeamGroupClick = useCallback((team: any) => {
-        // Guard: ensure we stay on 'teams' view — never switch to kanban on team click
+        // Guard: ensure we stay on 'teams' view ΓÇö never switch to kanban on team click
         setBoardView('teams')
         setSelectedTeamGroup(team as TeamGroup)
     }, [])
@@ -632,7 +632,7 @@ function BoardsContent() {
                                     Project <span className="text-blue-500">Boards</span>
                                 </h1>
                                 <p className="text-gray-500 dark:text-slate-500 font-bold text-xs uppercase tracking-[0.2em] mt-1 opacity-70">
-                                    {`Team Overview • ${teamGroups.length} Teams`}
+                                    {`Team Overview ΓÇó ${teamGroups.length} Teams`}
                                 </p>
                             </div>
                         </div>
@@ -707,7 +707,7 @@ function BoardsContent() {
                                             <button
                                                 onClick={() => {
                                                     if (!selectedTeam) {
-                                                        alert('⚠️ Please select a specific team first!\n\nYou cannot sync to "All Teams". Select a team from the dropdown to sync tasks to that team\'s board.');
+                                                        alert('ΓÜá∩╕Å Please select a specific team first!\n\nYou cannot sync to "All Teams". Select a team from the dropdown to sync tasks to that team\'s board.');
                                                         return;
                                                     }
                                                     setIsGoogleSyncModalOpen(true);
@@ -744,7 +744,7 @@ function BoardsContent() {
                                         <button
                                             onClick={() => {
                                                 if (!selectedTeam) {
-                                                    alert('⚠️ Please select a specific team first!\n\nYou cannot add tasks to "All Teams". Select a team from the dropdown so the task belongs to that team.');
+                                                    alert('ΓÜá∩╕Å Please select a specific team first!\n\nYou cannot add tasks to "All Teams". Select a team from the dropdown so the task belongs to that team.');
                                                     return;
                                                 }
                                                 setIsCreateModalOpen(true);
@@ -767,7 +767,7 @@ function BoardsContent() {
                     </div>
                 </div>
 
-                {/* Teams View — Kanban has moved to /tasks */}
+                {/* Teams View ΓÇö Kanban has moved to /tasks */}
                 <TeamsView
                     teams={teamGroups}
                     userRole={getUserRole()}
@@ -833,9 +833,9 @@ function BoardsContent() {
                                         onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
                                         className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     >
-                                        <option value="low">🟢 Low</option>
-                                        <option value="medium">🟡 Medium</option>
-                                        <option value="high">🔴 High</option>
+                                        <option value="low">≡ƒƒó Low</option>
+                                        <option value="medium">≡ƒƒí Medium</option>
+                                        <option value="high">≡ƒö┤ High</option>
                                     </select>
                                 </div>
                                 <div>
@@ -1033,7 +1033,7 @@ function BoardsContent() {
                                 )}
                                 {selectedTask.is_absolute && (
                                     <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg col-span-2">
-                                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">🔒 Absolute Task — Members cannot modify this task</span>
+                                        <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">≡ƒöÆ Absolute Task ΓÇö Members cannot modify this task</span>
                                     </div>
                                 )}
                                 {selectedTask.sheet_name && (
