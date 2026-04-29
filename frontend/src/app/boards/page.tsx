@@ -589,7 +589,7 @@ function BoardsContent() {
             teamEmails.has((m as any).email?.toLowerCase())
         )
 
-        return filtered.length > 0 ? filtered : members
+        return filtered
     }, [selectedTeam, teamGroups, members])
 
     const generalTaskCount = useMemo(() => {
@@ -763,9 +763,9 @@ function BoardsContent() {
                                     className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 >
                                     <option value="">None (Root Task)</option>
-                                    {tasks.filter(t => t.wbs_code).map((t) => (
+                                    {tasks.filter(t => (t as any).source_type === 'sheet').map((t) => (
                                         <option key={t.id} value={t.id}>
-                                            {t.wbs_code} — {t.title}
+                                            {t.wbs_code ? `${t.wbs_code} — ` : ''}{t.title}
                                         </option>
                                     ))}
                                 </select>

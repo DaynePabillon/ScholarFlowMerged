@@ -135,7 +135,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
               (teamData.members || []).map((m: any) => m.email?.toLowerCase()).filter(Boolean)
             )
             const filtered = allMembers.filter(m => teamEmails.has(m.email?.toLowerCase()))
-            setMembers(filtered.length > 0 ? filtered : allMembers)
+            setMembers(filtered)
             return
           }
         }
@@ -777,8 +777,8 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                   className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                 >
                   <option value="">No Parent (Root Task)</option>
-                  {tasks.filter(t => t.status !== 'archived' && t.wbs_code).map(t => (
-                    <option key={t.id} value={t.id}>{t.wbs_code} — {t.title}</option>
+                  {tasks.filter(t => t.status !== 'archived' && (t as any).source_type === 'sheet').map(t => (
+                    <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.title}</option>
                   ))}
                 </select>
               </div>
@@ -913,8 +913,8 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                     className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
                   >
                     <option value="">No Parent (Root Task)</option>
-                    {tasks.filter(t => t.status !== 'archived' && t.id !== editingTask.id && t.wbs_code).map(t => (
-                      <option key={t.id} value={t.id}>{t.wbs_code} — {t.title}</option>
+                    {tasks.filter(t => t.status !== 'archived' && t.id !== editingTask.id && (t as any).source_type === 'sheet').map(t => (
+                      <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.title}</option>
                     ))}
                   </select>
                 </div>
