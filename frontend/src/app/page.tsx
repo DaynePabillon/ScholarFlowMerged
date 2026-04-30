@@ -4,6 +4,7 @@ import { Cloud, GraduationCap, ArrowRight, Sparkles, BookOpen, LayoutDashboard, 
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, useEffect, Suspense } from "react"
 import { apiClient, API_URL } from "@/lib/api/client"
+import InteractiveGuide from "@/components/onboarding/InteractiveGuide"
 
 function RootPortalContent() {
   const router = useRouter()
@@ -197,13 +198,15 @@ function RootPortalContent() {
 
 export default function RootPortal() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-      </div>
-    }>
-      <RootPortalContent />
-    </Suspense>
+    <>
+      <Suspense fallback={
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+        </div>
+      }>
+        <RootPortalContent />
+      </Suspense>
+      <InteractiveGuide />
+    </>
   )
 }
-

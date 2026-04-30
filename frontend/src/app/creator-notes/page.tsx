@@ -493,7 +493,9 @@ export default function CreatorNotesPage() {
                             </div>
                         )}
                     </div>
-                )}
+                </div>
+                </>
+            )}
 
                 {activeTab === 'users' && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

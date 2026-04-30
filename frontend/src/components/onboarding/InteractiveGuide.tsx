@@ -132,6 +132,45 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     title: "Team Members",
     text: "This page shows all members of your organization or team. You can see their roles, contact information, and current assignments. Managers can also invite new members or update existing member permissions here.",
     image: "/mascot-thinking.png"
+  },
+  // PM Calendar
+  '/calendar': {
+    title: "Project Calendar",
+    text: "This is your Project Calendar! View all team events, meetings, and deadlines in one place. It syncs with Google Calendar so your schedules stay up to date automatically.",
+    image: "/mascot.png"
+  },
+  // PM Drive
+  '/drive': {
+    title: "Google Drive",
+    text: "This is the Drive integration! Access your team's shared Google Drive files directly from here. Browse folders, view documents, and stay organized without leaving ScholarFlow.",
+    image: "/mascot-thinking.png"
+  },
+  // PM Sheets (Manager/Admin only)
+  '/sheets': {
+    title: "Google Sheets",
+    text: "This is the Sheets integration for managers and admins! Import your Work Breakdown Structure (WBS) from Google Sheets to automatically generate tasks with proper hierarchy and assignments.",
+    image: "/mascot-thinking.png",
+    roles: ['adviser', 'admin', 'manager']
+  },
+  // PM Analytics (Manager/Admin only)
+  '/analytics': {
+    title: "Project Analytics",
+    text: "This is the Analytics dashboard! View detailed charts and metrics about your team's performance, task completion rates, sprint velocity, and project health. Use these insights to make data-driven decisions.",
+    image: "/mascot.png",
+    roles: ['adviser', 'admin', 'manager']
+  },
+  // PM Settings (Manager/Admin only)
+  '/settings': {
+    title: "Organization Settings",
+    text: "This is the Settings page where managers and admins can configure organization details, manage team preferences, and customize the workspace to fit your project needs.",
+    image: "/mascot-thinking.png",
+    roles: ['adviser', 'admin', 'manager']
+  },
+  // Academic Calendar (generic fallback)
+  '/scholar/calendar': {
+    title: "Academic Calendar",
+    text: "This is the Academic Calendar! View important academic events, deadlines, and consultation schedules all in one place. Stay on top of key dates throughout the semester.",
+    image: "/mascot-thinking.png"
   }
 };
 
@@ -260,6 +299,21 @@ function getGuideKey(pathname: string, role: UserRole): string | null {
   return null;
 }
 
+function loadOnboardingState(): OnboardingState {
+  if (typeof window === 'undefined') return { hasSeenWelcome: false, visitedPages: [] };
+  try {
+    const saved = localStorage.getItem('scholarflow_onboarding');
+    if (saved) return JSON.parse(saved);
+  } catch (_e) { /* ignore */ }
+  return { hasSeenWelcome: false, visitedPages: [] };
+}
+
+function saveOnboardingState(state: OnboardingState) {
+  try {
+    localStorage.setItem('scholarflow_onboarding', JSON.stringify(state));
+  } catch (_e) { /* ignore */ }
+}
+
 export default function InteractiveGuide() {
   const pathname = usePathname();
   const [isVisible, setIsVisible] = useState(false);
@@ -268,63 +322,47 @@ export default function InteractiveGuide() {
   const [displayedText, setDisplayedText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('member');
-  const [onboardingState, setOnboardingState] = useState<OnboardingState>({
-    hasSeenWelcome: false,
-    visitedPages: []
-  });
+  const [loaded, setLoaded] = useState(false);
 
-  // Load onboarding state and user role on mount
+  // Load user role on mount and mark as loaded
   useEffect(() => {
-    const saved = localStorage.getItem('scholarflow_onboarding');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setOnboardingState(parsed);
-      } catch { }
-    }
     setUserRole(getEffectiveRole());
+    setLoaded(true);
   }, []);
 
-  // Save onboarding state when it changes
+  // Handle route changes - only after localStorage is ready
   useEffect(() => {
-    localStorage.setItem('scholarflow_onboarding', JSON.stringify(onboardingState));
-  }, [onboardingState]);
+    if (!pathname || !loaded) return;
 
-  // Handle route changes and show context-aware guides
-  useEffect(() => {
-    if (!pathname) return;
-    
     const role = getEffectiveRole();
     setUserRole(role);
-    
-    // Check if we should show a guide for this page
+
+    // Always read fresh from localStorage to avoid stale state
+    const state = loadOnboardingState();
+
     const guideKey = getGuideKey(pathname, role);
-    
-    if (guideKey) {
-      const guide = ALL_PAGE_GUIDES[guideKey];
-      
-      // Check if this is the welcome message (portal home) and user hasn't seen it
-      if (guideKey === '/' && !onboardingState.hasSeenWelcome) {
-        setCurrentStep(guide);
-        setIsVisible(true);
-        setIsMinimized(false);
-        setOnboardingState(prev => ({ ...prev, hasSeenWelcome: true }));
-        return;
-      }
-      
-      // For other pages, check if user has already visited this page
-      const normalizedPath = pathname;
-      if (!onboardingState.visitedPages.includes(normalizedPath)) {
-        setCurrentStep(guide);
-        setIsVisible(true);
-        setIsMinimized(false);
-        setOnboardingState(prev => ({
-          ...prev,
-          visitedPages: [...prev.visitedPages, normalizedPath]
-        }));
-      }
+    if (!guideKey) return;
+
+    const guide = ALL_PAGE_GUIDES[guideKey];
+
+    if (guideKey === '/') {
+      if (state.hasSeenWelcome) return;
+      const next = { ...state, hasSeenWelcome: true };
+      saveOnboardingState(next);
+      setCurrentStep(guide);
+      setIsVisible(true);
+      setIsMinimized(false);
+      return;
     }
-  }, [pathname, onboardingState.hasSeenWelcome, onboardingState.visitedPages]);
+
+    if (state.visitedPages.includes(pathname)) return;
+
+    const next = { ...state, visitedPages: [...state.visitedPages, pathname] };
+    saveOnboardingState(next);
+    setCurrentStep(guide);
+    setIsVisible(true);
+    setIsMinimized(false);
+  }, [pathname, loaded]);
 
   // Typewriter effect
   useEffect(() => {
