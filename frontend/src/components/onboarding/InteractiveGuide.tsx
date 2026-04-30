@@ -26,39 +26,17 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     text: `Hello, I am ${MASCOT_NAME} and I am here to guide you throughout this whole site, but I will not be restrictive as I will give you freedom to choose wherever, so click what interests you the most!`,
     image: "/mascot.png"
   },
-  // Academic Portal Welcome
+  // Academic Dashboard - shown to all, message varies by role
   '/scholar/dashboard': {
     title: "Welcome to Academic Portal!",
     text: "This is your Academic Dashboard! Here you can see AI-powered insights about your courses, track consultation logs, and get personalized recommendations for your academic journey.",
     image: "/mascot.png"
   },
-  // Academic Dashboard - Student specific
-  '/scholar/dashboard/student': {
-    title: "Your Academic Dashboard",
-    text: "Welcome to your Academic Dashboard! Here you can see all your enrolled courses, view AI-powered insights about your group's progress, and track upcoming consultation schedules. The insights section shows personalized recommendations for your capstone journey.",
-    image: "/mascot.png",
-    roles: ['student', 'member']
-  },
-  // Academic Dashboard - Adviser/Admin specific  
-  '/scholar/dashboard/adviser': {
-    title: "Adviser Dashboard",
-    text: "Welcome to the Adviser Dashboard! Here you can monitor all your assigned groups, track their consultation progress, and view AI-generated insights about group performance. You'll also see risk alerts for groups that may need additional support.",
-    image: "/mascot.png",
-    roles: ['adviser', 'admin', 'manager']
-  },
-  // Courses - Student
-  '/scholar/courses/student': {
-    title: "Your Courses",
-    text: "This is the Courses page! Here you can see all your enrolled courses. Each course card shows important details like course code and section. If you need to join a new course, click 'Enroll' and enter the course key provided by your adviser.",
-    image: "/mascot-thinking.png",
-    roles: ['student', 'member']
-  },
-  // Courses - Adviser/Admin
-  '/scholar/courses/adviser': {
-    title: "Course Management",
-    text: "This is the Courses management page! Here you can view all courses in the system. As an adviser, you can see which courses have groups without advisers assigned. Admins can also create new courses and generate enrollment keys for students.",
-    image: "/mascot-thinking.png",
-    roles: ['adviser', 'admin', 'manager']
+  // Courses - shown to all, same URL /scholar/courses
+  '/scholar/courses': {
+    title: "Courses",
+    text: "This is the Courses page! Here you can browse and manage courses. Students can enroll using a course key, while advisers and admins can view all courses, check group assignments, and generate enrollment keys.",
+    image: "/mascot-thinking.png"
   },
   // Schedule - Student (Consultation Schedule/Booking)
   '/scholar/booking': {
@@ -74,19 +52,11 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     image: "/mascot.png",
     roles: ['adviser', 'admin', 'manager']
   },
-  // Calendar - Student
-  '/scholar/calendar/student': {
+  // Calendar - single real route
+  '/scholar/calendar': {
     title: "Academic Calendar",
-    text: "This calendar shows all important academic events, deadlines, and scheduled consultations. You can view events but cannot edit them - that's for admins and advisers. Check this regularly to stay on top of important dates!",
-    image: "/mascot-thinking.png",
-    roles: ['student', 'member']
-  },
-  // Calendar - Adviser/Admin
-  '/scholar/calendar/adviser': {
-    title: "Manage Academic Calendar",
-    text: "This is the Academic Calendar where you can create and manage events for your students. Add important deadlines, consultation periods, and milestone dates. Students will see these events in their read-only view.",
-    image: "/mascot-thinking.png",
-    roles: ['adviser', 'admin', 'manager']
+    text: "This is the Academic Calendar! View important academic events, deadlines, and consultation schedules. Admins and advisers can create and edit events, while students have a read-only view to stay on top of key dates.",
+    image: "/mascot-thinking.png"
   },
   // Workspace Sync - Admin only
   '/scholar/workspace-sync': {
@@ -100,20 +70,6 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     title: "Welcome to Project Management!",
     text: "Welcome to the Project Management workspace! This is where you manage your capstone or research projects. You can track tasks, collaborate with team members, and monitor project progress using our Kanban boards and AI-powered insights.",
     image: "/mascot.png"
-  },
-  // PM Dashboard - Member/Student
-  '/dashboard/member': {
-    title: "Your Project Dashboard",
-    text: "This is your Project Dashboard! Here you can see all your assigned tasks, track upcoming deadlines, and view team progress. The AI Insights section provides personalized recommendations to help you stay on track with your project milestones.",
-    image: "/mascot.png",
-    roles: ['student', 'member']
-  },
-  // PM Dashboard - Manager/Adviser
-  '/dashboard/manager': {
-    title: "Project Management Dashboard",
-    text: "This is your Project Management Dashboard! As a manager or adviser, you can oversee multiple teams, track their progress across various projects, and use AI insights to identify teams that may need support or intervention.",
-    image: "/mascot.png",
-    roles: ['adviser', 'admin', 'manager']
   },
   // Boards
   '/boards': {
@@ -166,12 +122,6 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     image: "/mascot-thinking.png",
     roles: ['adviser', 'admin', 'manager']
   },
-  // Academic Calendar (generic fallback)
-  '/scholar/calendar': {
-    title: "Academic Calendar",
-    text: "This is the Academic Calendar! View important academic events, deadlines, and consultation schedules all in one place. Stay on top of key dates throughout the semester.",
-    image: "/mascot-thinking.png"
-  }
 };
 
 // Admin panel pages
