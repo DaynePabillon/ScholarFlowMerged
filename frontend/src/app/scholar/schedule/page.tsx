@@ -260,9 +260,21 @@ function ScheduleContent() {
     setLoading(true)
     try {
       const token = localStorage.getItem("auth_token")
-      const res = await fetch(`${API_URL}/api/consultation/slots/adviser/${user.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const normalizedRole = String(user?.role || '').toLowerCase()
+
+      // Admins/managers should see all slots (role-aware /slots/me returns full list for admins).
+      // Advisers should see only their own slots. Use /slots/me for admins, /slots/adviser/:id for advisers.
+      let res: Response
+      if (normalizedRole === 'admin' || normalizedRole === 'manager') {
+        res = await fetch(`${API_URL}/api/consultation/slots/me?futureOnly=true`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      } else {
+        res = await fetch(`${API_URL}/api/consultation/slots/adviser/${user.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      }
+
       if (!res.ok) throw new Error()
       const data = await res.json()
       const sortedSlots = [...(data.slots || [])].sort((a: ConsultationSlot, b: ConsultationSlot) => {

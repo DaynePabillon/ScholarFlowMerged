@@ -282,7 +282,7 @@ router.delete('/accounts/:id', verifyAdmin, async (req: Request, res: Response) 
 // Dashboard aggregate: Admin Data Integrity
 router.get('/dashboard/admin-data-integrity', verifyAdmin, async (_req: Request, res: Response) => {
   try {
-    const [coursesRes, accountsRes, groupsRes, consultationsRes] = await Promise.all([
+    const [coursesRes, accountsRes, groupsRes, consultationsRes, consultationCountRes, journalCountRes] = await Promise.all([
       pool.query(`SELECT id, "courseName", "courseCode", "courseSection" FROM ss_courses ORDER BY id DESC`),
       pool.query(`SELECT account_id, "accountName", "accountEmail", "accountRole" FROM ss_account ORDER BY "accountName"`),
       pool.query(
@@ -304,7 +304,9 @@ router.get('/dashboard/admin-data-integrity', verifyAdmin, async (_req: Request,
         `SELECT DISTINCT "courseID", LOWER(TRIM(COALESCE("groupName", ''))) AS group_key
          FROM ss_consultation
          WHERE COALESCE(TRIM("groupName"), '') <> ''`
-      )
+      ),
+      pool.query(`SELECT COUNT(*)::int AS total FROM ss_consultation`),
+      pool.query(`SELECT COUNT(*)::int AS total FROM member_journals`)
     ]);
 
     const courses = coursesRes.rows;
@@ -400,7 +402,9 @@ router.get('/dashboard/admin-data-integrity', verifyAdmin, async (_req: Request,
       accounts,
       roleBreakdown,
       summary,
-      issues
+      issues,
+      consultationLogs: Number(consultationCountRes.rows[0]?.total || 0),
+      journalEntries: Number(journalCountRes.rows[0]?.total || 0)
     });
   } catch (error: any) {
     return res.status(500).json({ error: error.message || 'Failed to load admin dashboard integrity data.' });
@@ -1096,13 +1100,26 @@ router.get('/courses/:id/group-members', async (req: Request, res: Response) => 
       );
       groups = rows;
     } else {
-      const { rows } = await pool.query(
-        `SELECT id, name as "groupName", team_number, adviser_name as adviser, proposed_project,
-                consultation_dates, comments, grade, course_id as "courseID"
-         FROM team_groups WHERE course_id = $1 ORDER BY team_number`,
-        [req.params.id]
-      );
-      groups = rows;
+      // If the requester is an adviser, only return groups assigned to that adviser
+      if (account && (account.accountRole === 'Adviser' || account.accountRole === 'Advisers')) {
+        const adviserEmail = String(account.accountEmail || '').toLowerCase().trim();
+        const adviserName = String(account.accountName || '').toLowerCase().trim();
+        const { rows } = await pool.query(
+          `SELECT id, name as "groupName", team_number, adviser_name as adviser, proposed_project,
+                  consultation_dates, comments, grade, course_id as "courseID"
+           FROM team_groups WHERE course_id = $1 AND (LOWER(COALESCE(adviser_name, '')) = $2 OR LOWER(COALESCE(adviser_name, '')) = $3) ORDER BY team_number`,
+          [req.params.id, adviserEmail, adviserName]
+        );
+        groups = rows;
+      } else {
+        const { rows } = await pool.query(
+          `SELECT id, name as "groupName", team_number, adviser_name as adviser, proposed_project,
+                  consultation_dates, comments, grade, course_id as "courseID"
+           FROM team_groups WHERE course_id = $1 ORDER BY team_number`,
+          [req.params.id]
+        );
+        groups = rows;
+      }
     }
 
     const enriched = await Promise.all(groups.map(async (g: any) => {
@@ -1140,8 +1157,17 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
       [courseId]
     );
 
+    // Enrich groups with members (like /group-members endpoint)
+    const enrichedGroups = await Promise.all(allGroups.map(async (g: any) => {
+      const { rows: members } = await pool.query(
+        `SELECT member_number, name, email, is_leader FROM team_group_members WHERE team_group_id = $1 ORDER BY member_number`,
+        [g.id]
+      );
+      return { ...g, groupMembers: members.length, members };
+    }));
+
     if (role === 'Admin') {
-      return res.json({ teams: allGroups, userRole: 'admin', viewType: 'all' });
+      return res.json({ teams: enrichedGroups, userRole: 'admin', viewType: 'all' });
     } else if (role === 'Adviser' || role === 'Advisers') {
       const adviserEmail = String(account.accountEmail || '').toLowerCase().trim();
       const adviserName = String(account.accountName || '').toLowerCase().trim();
@@ -1153,13 +1179,18 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
         [courseId, adviserEmail, adviserName]
       );
       if (accessRes.rows[0]?.allowed) {
-        return res.json({ teams: allGroups, userRole: 'adviser', viewType: 'advised' });
+        // Return only groups that match the adviser (server-side filter)
+        const adviserGroups = enrichedGroups.filter((g: any) => {
+          const adv = String(g.adviser || '').toLowerCase().trim();
+          return adv === adviserEmail || adv === adviserName;
+        });
+        return res.json({ teams: adviserGroups, userRole: 'adviser', viewType: 'advised' });
       }
       return res.json({ teams: [], userRole: 'adviser', viewType: 'none' });
     } else {
       const studentGroup = account.accountGroup;
       if (studentGroup) {
-        const myTeam = allGroups.filter((g: any) => g.groupName === studentGroup);
+        const myTeam = enrichedGroups.filter((g: any) => g.groupName === studentGroup);
         return res.json({ teams: myTeam, userRole: 'student', viewType: 'own' });
       }
       return res.json({ teams: [], userRole: 'student', viewType: 'none' });
@@ -1660,6 +1691,7 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     const accessToken = await getAccessToken(token);
     let records: any[] = [];
     let sheetTitle = 'Imported Sheet';
+    let importerName = String(user.name || user.email || '').trim() || 'Imported by';
 
     // Helper: find the actual header row (scans until it finds a row with a cell === 'TEAM CODE' or 'GROUP')
     const findHeaderRow = (rows: any[][]): { headers: string[]; dataRows: any[][] } | null => {
@@ -1851,6 +1883,12 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     try {
       await client.query('BEGIN');
 
+      const importerRes = await client.query(
+        'SELECT "accountName" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+        [user.email]
+      );
+      importerName = String(importerRes.rows[0]?.accountName || importerName).trim() || importerName;
+
       // Sync Adviser roles in ss_account
       for (const advEmail of adviserEmails) {
         await client.query(
@@ -1921,15 +1959,19 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
               [detectedCourseAdviser, courseId]
             );
           }
+          await client.query(
+            'UPDATE ss_courses SET "courseImportedBy" = $1 WHERE id = $2',
+            [importerName, courseId]
+          );
         } else {
           const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
           const suffix = Array.from({ length: 4 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
           const uniqueKey = `${parsed.courseKey.substring(0, 16)}-${suffix}`;
 
           const newCourse = await client.query(
-            `INSERT INTO ss_courses ("courseName", "courseCode", "courseSection", "courseTerm", "courseKey", "courseAmount", "courseAdviser")
-             VALUES ($1, $2, \'\', $3, $4, 0, $5) RETURNING id`,
-            [parsed.courseName, parsed.courseCode, parsed.courseTerm, uniqueKey, detectedCourseAdviser || user.email || null]
+            `INSERT INTO ss_courses ("courseName", "courseCode", "courseSection", "courseTerm", "courseKey", "courseAmount", "courseAdviser", "courseImportedBy")
+             VALUES ($1, $2, \'\', $3, $4, 0, $5, $6) RETURNING id`,
+            [parsed.courseName, parsed.courseCode, parsed.courseTerm, uniqueKey, detectedCourseAdviser || user.email || null, importerName]
           );
           courseId = newCourse.rows[0].id;
         }

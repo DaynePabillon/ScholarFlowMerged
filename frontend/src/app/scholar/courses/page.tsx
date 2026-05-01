@@ -27,6 +27,7 @@ type Course = {
     courseAmount: number;
     courseSection: string;
     courseAdviser: string;
+    courseImportedBy?: string;
     courseTerm: string;
 };
 
@@ -231,7 +232,7 @@ export default function CoursesPage() {
                                                     <Users className="w-4 h-4" />
                                                     <span>{course.courseAmount || 0} students</span>
                                                 </div>
-                                                <span className="text-xs text-gray-400 uppercase font-medium tracking-wider">{course.courseAdviser?.split('@')[0]}</span>
+                                                <span className="text-xs text-gray-400 uppercase font-medium tracking-wider">{course.courseImportedBy || course.courseAdviser?.split('@')[0]}</span>
                                             </div>
                                         </Link>
                                     ))}
