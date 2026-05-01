@@ -7,7 +7,7 @@ import { useTheme } from "@/contexts/ThemeContext"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import BugReportModal from "@/components/reports/BugReportModal"
 import ThemeToggle from "@/components/shared/ThemeToggle"
-import InteractiveGuide from "@/components/onboarding/InteractiveGuide"
+import InteractiveGuide, { RateUsButton } from "@/components/onboarding/InteractiveGuide"
 
 interface Organization {
   id: string
@@ -387,6 +387,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
 
       {/* RPG-Style Interactive Guide */}
       <InteractiveGuide />
+      <RateUsButton />
 
       {/* Bug Report Modal */}
       <BugReportModal isOpen={showBugReport} onClose={() => setShowBugReport(false)} />

@@ -25,7 +25,7 @@ import ThemeToggle from './shared/ThemeToggle';
 import { useTheme } from '@/contexts/scholar/ThemeContext';
 import apiClient from '@/lib/api/client';
 import BugReportModal from '@/components/reports/BugReportModal';
-import InteractiveGuide from '@/components/onboarding/InteractiveGuide';
+import InteractiveGuide, { RateUsButton } from '@/components/onboarding/InteractiveGuide';
 
 const normalizeScholarRole = (value: unknown): string => {
     const role = String(value || '').trim()
@@ -414,6 +414,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             {/* Context-Aware Tutorial Guide */}
             <InteractiveGuide />
+            <RateUsButton />
         </div>
     );
 }

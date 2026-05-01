@@ -169,22 +169,29 @@ const ALL_PAGE_GUIDES: Record<string, GuideStep> = {
   ...ADVISER_PAGES
 };
 
-// Google Form URL for rating
+// Google Form URL for rating — replace with your actual form link
 const RATING_FORM_URL = 'https://forms.gle/yourFormIdHere';
 
-// Minimum pages per role that count as "tour complete"
-const COMPLETION_SETS: Record<string, string[]> = {
-  student: ['/', '/scholar/dashboard', '/scholar/courses', '/scholar/booking', '/scholar/calendar'],
-  member:  ['/', '/scholar/dashboard', '/scholar/courses', '/scholar/booking', '/scholar/calendar'],
-  adviser: ['/', '/scholar/dashboard', '/scholar/courses', '/scholar/schedule', '/scholar/calendar'],
-  admin:   ['/', '/scholar/dashboard', '/scholar/courses', '/scholar/schedule', '/scholar/calendar'],
-  manager: ['/', '/dashboard', '/boards', '/tasks', '/team'],
-};
+// ── Rate Us Button ─────────────────────────────────────────────────────────────
+export function RateUsButton() {
+  return (
+    <a
+      href={RATING_FORM_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed bottom-24 right-6 z-[9998] flex items-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-emerald-500/25 transition-all hover:scale-105 active:scale-95"
+      title="Rate ScholarFlow"
+    >
+      <Star className="w-4 h-4 fill-white" />
+      Rate Us
+    </a>
+  );
+}
+// ───────────────────────────────────────────────────────────────────────────────
 
 interface OnboardingState {
   hasSeenWelcome: boolean;
   visitedPages: string[];
-  hasSeenCompletion: boolean;
   lastRole?: string;
 }
 
@@ -263,15 +270,12 @@ function getGuideKey(pathname: string, role: UserRole): string | null {
 }
 
 function loadOnboardingState(): OnboardingState {
-  if (typeof window === 'undefined') return { hasSeenWelcome: false, visitedPages: [], hasSeenCompletion: false };
+  if (typeof window === 'undefined') return { hasSeenWelcome: false, visitedPages: [] };
   try {
     const saved = localStorage.getItem('scholarflow_onboarding');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return { hasSeenCompletion: false, ...parsed };
-    }
+    if (saved) return JSON.parse(saved);
   } catch (_e) { /* ignore */ }
-  return { hasSeenWelcome: false, visitedPages: [], hasSeenCompletion: false };
+  return { hasSeenWelcome: false, visitedPages: [] };
 }
 
 function saveOnboardingState(state: OnboardingState) {
@@ -289,7 +293,6 @@ export default function InteractiveGuide() {
   const [isTyping, setIsTyping] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>('member');
   const [loaded, setLoaded] = useState(false);
-  const [showCompletion, setShowCompletion] = useState(false);
 
   // Load user role on mount and mark as loaded
   useEffect(() => {
@@ -322,44 +325,13 @@ export default function InteractiveGuide() {
       return;
     }
 
-    const alreadyVisited = state.visitedPages.includes(pathname);
+    if (state.visitedPages.includes(pathname)) return;
 
-    if (!alreadyVisited) {
-      const next = { ...state, visitedPages: [...state.visitedPages, pathname] };
-      saveOnboardingState(next);
-      setCurrentStep(guide);
-      setIsVisible(true);
-      setIsMinimized(false);
-
-      // Check completion after adding this page
-      if (!next.hasSeenCompletion) {
-        const required = COMPLETION_SETS[role] || COMPLETION_SETS['member'];
-        const allDone = required.every(p => next.visitedPages.includes(p));
-        if (allDone) {
-          // Delay completion popup so guide dismissal doesn't clash
-          setTimeout(() => {
-            const fresh = loadOnboardingState();
-            if (!fresh.hasSeenCompletion) {
-              saveOnboardingState({ ...fresh, hasSeenCompletion: true });
-              setShowCompletion(true);
-            }
-          }, 800);
-        }
-      }
-    } else if (!state.hasSeenCompletion) {
-      // Already visited all pages — check completion on revisit too
-      const required = COMPLETION_SETS[role] || COMPLETION_SETS['member'];
-      const allDone = required.every(p => state.visitedPages.includes(p));
-      if (allDone) {
-        setTimeout(() => {
-          const fresh = loadOnboardingState();
-          if (!fresh.hasSeenCompletion) {
-            saveOnboardingState({ ...fresh, hasSeenCompletion: true });
-            setShowCompletion(true);
-          }
-        }, 400);
-      }
-    }
+    const next = { ...state, visitedPages: [...state.visitedPages, pathname] };
+    saveOnboardingState(next);
+    setCurrentStep(guide);
+    setIsVisible(true);
+    setIsMinimized(false);
   }, [pathname, loaded]);
 
   // Typewriter effect
@@ -406,60 +378,6 @@ export default function InteractiveGuide() {
       setIsTyping(false);
     }
   };
-
-  // Completion celebration popup (bottom-right)
-  if (showCompletion) {
-    return (
-      <div className="fixed bottom-6 right-6 z-[9999] max-w-sm animate-in slide-in-from-bottom-8 duration-500">
-        <div className="bg-white dark:bg-slate-900 border-2 border-emerald-500/40 rounded-3xl p-6 shadow-2xl">
-          <div className="flex justify-between items-start mb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-emerald-500/10 rounded-2xl">
-                <Star className="w-5 h-5 text-emerald-500 fill-emerald-500" />
-              </div>
-              <h3 className="font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest text-xs">
-                Tour Complete!
-              </h3>
-            </div>
-            <button onClick={() => setShowCompletion(false)} className="text-gray-400 hover:text-rose-500 transition-colors">
-              <X size={16} />
-            </button>
-          </div>
-
-          <div className="flex items-end gap-4">
-            <div className="relative w-20 h-28 flex-shrink-0">
-              <Image
-                src="/mascot-happy.png"
-                alt={`${MASCOT_NAME} celebrating`}
-                fill
-                className="object-contain drop-shadow-xl"
-              />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
-                You've explored everything ScholarFlow has to offer! We'd love to hear what you think — it only takes a minute.
-              </p>
-              <a
-                href={RATING_FORM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
-              >
-                <Star size={14} className="fill-white" />
-                Rate ScholarFlow
-              </a>
-              <button
-                onClick={() => setShowCompletion(false)}
-                className="mt-2 w-full text-center text-[10px] font-bold text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 uppercase tracking-widest transition-colors"
-              >
-                Maybe later
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Don't render if no current step or not visible
   if (!isVisible && !isMinimized) return null;
