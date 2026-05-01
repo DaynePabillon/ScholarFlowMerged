@@ -537,10 +537,29 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
 router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
   try {
     const user: any = (req as any).user;
-    const role = String(user?.role || '').trim().toLowerCase();
+    let role = String(user?.role || '').trim().toLowerCase();
     const futureOnly = String(req.query.futureOnly || '').toLowerCase() === 'true';
     const groupName = String(req.query.groupName || '').trim() || null;
     const courseId = req.query.courseId ? Number(req.query.courseId) : null;
+
+    // Normalize role aliases: ScholarFlow uses 'member', ScholarSync uses 'student'
+    if (role === 'member') role = 'student';
+
+    // If role is unrecognized (e.g. plain SkyFlow token), look up ss_account for the real academic role
+    if (role !== 'student' && role !== 'adviser' && role !== 'advisers' && role !== 'admin') {
+      const userEmail = String(user?.email || '').trim();
+      if (userEmail) {
+        const accRoleRes = await pool.query(
+          'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+          [userEmail]
+        );
+        const dbRole = String(accRoleRes.rows[0]?.accountRole || '').trim().toLowerCase();
+        if (dbRole === 'student') role = 'student';
+        else if (dbRole === 'adviser' || dbRole === 'advisers') role = 'adviser';
+        else if (dbRole === 'admin') role = 'admin';
+        else role = 'student'; // default to student for academic portal users
+      }
+    }
 
     if (role === 'adviser' || role === 'advisers') {
       // Resolve numeric account_id from user email

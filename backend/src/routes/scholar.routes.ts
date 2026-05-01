@@ -1165,11 +1165,14 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
     const user: any = jwt.verify(token, process.env.JWT_SECRET || "default-secret-key");
     const courseId = req.params.id;
 
-    const accRes = await pool.query('SELECT "accountRole", "accountEmail", "accountGroup", "accountName" FROM ss_account WHERE "accountEmail" = $1 LIMIT 1', [user.email]);
+    const accRes = await pool.query('SELECT "accountRole", "accountEmail", "accountGroup", "accountName" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1', [user.email]);
     const account = accRes.rows[0];
-    if (!account) return res.status(404).json({ error: 'Account not found' });
 
-    const role = account.accountRole;
+    // Determine role: fall back to JWT role for users without ss_account
+    const jwtRole = String(user.role || '').trim().toLowerCase();
+    const rawRole = String(account?.accountRole || '').trim();
+    const role = rawRole || (jwtRole === 'admin' ? 'Admin' : 'Student');
+
     const { rows: allGroups } = await pool.query(
       'SELECT id, name as "groupName", team_number, adviser_name as adviser, proposed_project, consultation_dates, comments, grade, course_id as "courseID" FROM team_groups WHERE course_id = $1 ORDER BY team_number',
       [courseId]
@@ -1187,8 +1190,8 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
     if (role === 'Admin') {
       return res.json({ teams: enrichedGroups, userRole: 'admin', viewType: 'all' });
     } else if (role === 'Adviser' || role === 'Advisers') {
-      const adviserEmail = String(account.accountEmail || '').toLowerCase().trim();
-      const adviserName = String(account.accountName || '').toLowerCase().trim();
+      const adviserEmail = String(account?.accountEmail || user.email || '').toLowerCase().trim();
+      const adviserName = String(account?.accountName || user.name || '').toLowerCase().trim();
       const accessRes = await pool.query(
         `SELECT EXISTS (
            SELECT 1 FROM ss_courses c LEFT JOIN team_groups tg ON tg.course_id = c.id
@@ -1197,7 +1200,6 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
         [courseId, adviserEmail, adviserName]
       );
       if (accessRes.rows[0]?.allowed) {
-        // Return only groups that match the adviser (server-side filter)
         const adviserGroups = enrichedGroups.filter((g: any) => {
           const adv = String(g.adviser || '').toLowerCase().trim();
           return adv === adviserEmail || adv === adviserName;
@@ -1206,11 +1208,31 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
       }
       return res.json({ teams: [], userRole: 'adviser', viewType: 'none' });
     } else {
-      const studentGroup = account.accountGroup;
-      if (studentGroup) {
-        const myTeam = enrichedGroups.filter((g: any) => g.groupName === studentGroup);
+      const studentEmail = String(user.email || '').toLowerCase().trim();
+
+      // PRIMARY: look up student's groups by email in team_group_members scoped to THIS course
+      const { rows: memberGroups } = await pool.query(
+        `SELECT tg.id FROM team_group_members tgm
+         JOIN team_groups tg ON tg.id = tgm.team_group_id
+         WHERE LOWER(tgm.email) = $1 AND tg.course_id = $2`,
+        [studentEmail, courseId]
+      );
+      const memberGroupIds = new Set(memberGroups.map((r: any) => String(r.id)));
+
+      if (memberGroupIds.size > 0) {
+        const myTeams = enrichedGroups.filter((g: any) => memberGroupIds.has(String(g.id)));
+        return res.json({ teams: myTeams, userRole: 'student', viewType: 'own' });
+      }
+
+      // FALLBACK: use accountGroup name scoped to this course (prevents cross-class sharing)
+      const studentGroupName = account?.accountGroup;
+      if (studentGroupName) {
+        const myTeam = enrichedGroups.filter(
+          (g: any) => g.groupName === studentGroupName && String(g.courseID) === String(courseId)
+        );
         return res.json({ teams: myTeam, userRole: 'student', viewType: 'own' });
       }
+
       return res.json({ teams: [], userRole: 'student', viewType: 'none' });
     }
   } catch (err) {
