@@ -144,6 +144,158 @@ export default function DashboardPage() {
   const router = useRouter();
 
   useEffect(() => {
+    let isMounted = true;
+
+    const loadSupplementalData = async (effectiveRole: 'Admin' | 'Adviser' | 'Student', me: any, fetchedCourses: Course[]) => {
+      const parseRiskGroups = (items: Array<{ groupName: string; courseCode: string; concern: string; action: string; status: string }>) => {
+        return items
+          .filter((item) => {
+            const concern = item.concern.toLowerCase();
+            return item.status !== 'resolved' || concern.includes('blocker') || concern.includes('delay') || concern.includes('risk');
+          })
+          .slice(0, 6)
+          .map((item) => ({
+            groupName: item.groupName,
+            courseCode: item.courseCode,
+            reason: item.concern || item.action || 'Follow-up required.'
+          }));
+      };
+
+      const parseFollowUps = (items: Array<{ groupName: string; courseCode: string; concern: string; action: string; status: string }>) => {
+        return items
+          .filter((item) => item.action || item.concern)
+          .slice(0, 8)
+          .map((item) => ({
+            groupName: item.groupName,
+            courseCode: item.courseCode,
+            action: item.action,
+            concern: item.concern
+          }));
+      };
+
+      const buildActionItems = (items: Array<{ action: string; concern: string }>) => {
+        return items.flatMap((item) => parseActionItems(item.action)).slice(0, 10);
+      };
+
+      if (effectiveRole === 'Admin') {
+        try {
+          const [integrityRes, readinessRes, availabilityRes, followupsRes, slotsRes] = await Promise.all([
+            apiClient.get('/dashboard/admin-data-integrity'),
+            apiClient.get('/dashboard/semester-readiness'),
+            apiClient.get('/dashboard/adviser-availability'),
+            apiClient.get('/dashboard/adviser-followups'),
+            apiClient.get(`/consultation/slots/adviser/${me.id}`)
+          ]);
+
+          if (!isMounted) return;
+
+          const integrityAccounts = Array.isArray(integrityRes.data?.accounts) ? integrityRes.data.accounts : [];
+          const integrityCourses = Array.isArray(integrityRes.data?.courses) ? integrityRes.data.courses : [];
+          const integrityIssues = Array.isArray(integrityRes.data?.issues)
+            ? integrityRes.data.issues.map((issue: any) => String(issue.detail || issue.title || '').trim()).filter(Boolean)
+            : [];
+          const followUpItems = Array.isArray(followupsRes.data?.items) ? followupsRes.data.items : [];
+          const normalizedFollowUps = followUpItems.map((item: any) => ({
+            groupName: String(item.groupName || 'Unnamed Group'),
+            courseCode: String(item.courseCode || 'Course'),
+            concern: String(item.concern || '').trim(),
+            action: String(item.action || '').trim(),
+            status: String(item.status || '').trim().toLowerCase()
+          }));
+          const now = Date.now();
+          const slots = Array.isArray(slotsRes.data?.slots) ? slotsRes.data.slots : [];
+          const upcomingSlots = slots.filter((slot: any) => new Date(slot.slot_date || slot.slot_date_only || 0).getTime() >= now).length;
+
+          setAccounts(integrityAccounts);
+          setCourses(integrityCourses);
+          setReadiness({
+            selectedTerm: String(readinessRes.data?.selectedTerm || ''),
+            readinessScore: Number(readinessRes.data?.summary?.readinessScore || 0),
+            coursesWithoutGroups: Array.isArray(readinessRes.data?.checklist?.coursesWithoutGroups) ? readinessRes.data.checklist.coursesWithoutGroups.length : 0,
+            groupsWithoutAdviser: Array.isArray(readinessRes.data?.checklist?.groupsWithoutAdviser) ? readinessRes.data.checklist.groupsWithoutAdviser.length : 0,
+            groupsWithoutMembers: Array.isArray(readinessRes.data?.checklist?.groupsWithoutMembers) ? readinessRes.data.checklist.groupsWithoutMembers.length : 0,
+            groupsWithoutConsultation: Array.isArray(readinessRes.data?.checklist?.groupsWithoutConsultation) ? readinessRes.data.checklist.groupsWithoutConsultation.length : 0
+          });
+          setAvailability({
+            selectedTerm: String(availabilityRes.data?.selectedTerm || ''),
+            totalAdvisers: Number(availabilityRes.data?.summary?.totalAdvisers || 0),
+            assignedAdvisers: Number(availabilityRes.data?.summary?.assignedAdvisers || 0),
+            availableAdvisers: Number(availabilityRes.data?.summary?.availableAdvisers || 0),
+            totalGroupsInTerm: Number(availabilityRes.data?.summary?.totalGroupsInTerm || 0),
+            unassignedGroupsInTerm: Number(availabilityRes.data?.summary?.unassignedGroupsInTerm || 0)
+          });
+
+          const riskGroups = parseRiskGroups(normalizedFollowUps);
+          const followUps = parseFollowUps(normalizedFollowUps);
+          const actionItems = buildActionItems(normalizedFollowUps);
+
+          setInsights({
+            totalGroups: Number(readinessRes.data?.summary?.groupsInTerm || 0),
+            consultationLogs: Number(integrityRes.data?.consultationLogs || 0),
+            groupWithoutConsultation: Array.isArray(readinessRes.data?.checklist?.groupsWithoutConsultation) ? readinessRes.data.checklist.groupsWithoutConsultation.length : 0,
+            journalEntries: Number(integrityRes.data?.journalEntries || 0),
+            upcomingSlots,
+            riskGroups,
+            followUps,
+            actionItems,
+            dataIntegrityIssues: integrityIssues.length > 0 ? integrityIssues : [
+              ...(Number(readinessRes.data?.checklist?.groupsWithoutAdviser?.length || 0) > 0 ? [`${Number(readinessRes.data?.checklist?.groupsWithoutAdviser.length || 0)} group(s) missing assigned adviser.`] : []),
+              ...(Number(readinessRes.data?.checklist?.coursesWithoutGroups?.length || 0) > 0 ? [`${Number(readinessRes.data?.checklist?.coursesWithoutGroups.length || 0)} course(s) have no groups.`] : [])
+            ]
+          });
+
+          return;
+        } catch (err) {
+          console.error('Failed to fetch admin scholar dashboard data:', err);
+        }
+      }
+
+      if (effectiveRole === 'Adviser') {
+        try {
+          const [followupsRes, slotsRes] = await Promise.all([
+            apiClient.get('/dashboard/adviser-followups'),
+            apiClient.get(`/consultation/slots/adviser/${me.id}`)
+          ]);
+
+          if (!isMounted) return;
+
+          const items = Array.isArray(followupsRes.data?.items) ? followupsRes.data.items : [];
+          const normalizedItems = items.map((item: any) => ({
+            groupName: String(item.groupName || 'Unnamed Group'),
+            courseCode: String(item.courseCode || 'Course'),
+            concern: String(item.concern || '').trim(),
+            action: String(item.action || '').trim(),
+            status: String(item.status || '').trim().toLowerCase()
+          }));
+          const now = Date.now();
+          const slots = Array.isArray(slotsRes.data?.slots) ? slotsRes.data.slots : [];
+          const upcomingSlots = slots.filter((slot: any) => new Date(slot.slot_date || slot.slot_date_only || 0).getTime() >= now).length;
+
+          setInsights({
+            totalGroups: normalizedItems.length,
+            consultationLogs: normalizedItems.length,
+            groupWithoutConsultation: normalizedItems.filter((item) => item.concern.toLowerCase().includes('no consultation logs')).length,
+            journalEntries: normalizedItems.filter((item) => item.action.length > 0).length,
+            upcomingSlots,
+            riskGroups: parseRiskGroups(normalizedItems),
+            followUps: parseFollowUps(normalizedItems),
+            actionItems: buildActionItems(normalizedItems),
+            dataIntegrityIssues: normalizedItems.filter((item) => item.concern.toLowerCase().includes('no consultation logs')).map((item) => `${item.groupName} has no consultation logs yet.`)
+          });
+        } catch (err) {
+          console.error('Failed to fetch adviser dashboard data:', err);
+        }
+        return;
+      }
+
+      if (effectiveRole === 'Student') {
+        if (isMounted) {
+          setInsights(emptyInsights);
+        }
+        return;
+      }
+    };
+
     const checkAuth = async () => {
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
       if (!token) {
@@ -165,186 +317,31 @@ export default function DashboardPage() {
         const me = meRes.data || {};
         const effectiveRole = normalizeRole(me.scholarsyncRole || me.role);
 
+        if (!isMounted) {
+          return;
+        }
+
         setCourses(fetchedCourses);
         setUser({ ...me, role: effectiveRole, scholarsyncRole: effectiveRole });
         localStorage.setItem('scholar_profile', JSON.stringify({ ...me, role: effectiveRole, scholarsyncRole: effectiveRole }));
 
-        let fetchedAccounts: any[] = [];
-        if (effectiveRole === 'Admin') {
-          try {
-            const accountsRes = await apiClient.get('/accounts');
-            fetchedAccounts = Array.isArray(accountsRes.data) ? accountsRes.data : [];
-            setAccounts(fetchedAccounts);
-          } catch {
-            setAccounts([]);
-          }
 
-          try {
-            const [readinessRes, availabilityRes] = await Promise.all([
-              apiClient.get('/dashboard/semester-readiness'),
-              apiClient.get('/dashboard/adviser-availability')
-            ]);
-
-            setReadiness({
-              selectedTerm: String(readinessRes.data?.selectedTerm || ''),
-              readinessScore: Number(readinessRes.data?.summary?.readinessScore || 0),
-              coursesWithoutGroups: Array.isArray(readinessRes.data?.checklist?.coursesWithoutGroups) ? readinessRes.data.checklist.coursesWithoutGroups.length : 0,
-              groupsWithoutAdviser: Array.isArray(readinessRes.data?.checklist?.groupsWithoutAdviser) ? readinessRes.data.checklist.groupsWithoutAdviser.length : 0,
-              groupsWithoutMembers: Array.isArray(readinessRes.data?.checklist?.groupsWithoutMembers) ? readinessRes.data.checklist.groupsWithoutMembers.length : 0,
-              groupsWithoutConsultation: Array.isArray(readinessRes.data?.checklist?.groupsWithoutConsultation) ? readinessRes.data.checklist.groupsWithoutConsultation.length : 0
-            });
-
-            setAvailability({
-              selectedTerm: String(availabilityRes.data?.selectedTerm || ''),
-              totalAdvisers: Number(availabilityRes.data?.summary?.totalAdvisers || 0),
-              assignedAdvisers: Number(availabilityRes.data?.summary?.assignedAdvisers || 0),
-              availableAdvisers: Number(availabilityRes.data?.summary?.availableAdvisers || 0),
-              totalGroupsInTerm: Number(availabilityRes.data?.summary?.totalGroupsInTerm || 0),
-              unassignedGroupsInTerm: Number(availabilityRes.data?.summary?.unassignedGroupsInTerm || 0)
-            });
-          } catch {
-            setReadiness(emptyReadiness);
-            setAvailability(emptyAvailability);
-          }
-        }
-
-        const groupFetches = await Promise.allSettled(
-          fetchedCourses.map(async (course) => {
-            const [groupsRes, consultationsRes] = await Promise.all([
-              apiClient.get(`/courses/${course.id}/group-members`),
-              apiClient.get(`/courses/${course.id}/consultations`)
-            ]);
-
-            const groupsRaw = Array.isArray(groupsRes.data) ? groupsRes.data : [];
-            const groups: Group[] = groupsRaw.map((group: any) => ({
-              id: String(group.id),
-              groupName: String(group.groupName || 'Unnamed Group'),
-              adviser: String(group.adviser || ''),
-              members: Array.isArray(group.members) ? group.members : [],
-              courseId: course.id,
-              courseCode: String(course.courseCode || 'Course')
-            }));
-
-            const consultations = Array.isArray(consultationsRes.data) ? consultationsRes.data : [];
-            return { course, groups, consultations };
-          })
-        );
-
-        const merged = groupFetches
-          .filter((entry): entry is PromiseFulfilledResult<any> => entry.status === 'fulfilled')
-          .map((entry) => entry.value);
-
-        const allGroups: Group[] = merged.flatMap((entry) => entry.groups || []);
-        const groupsWithoutAdviser = allGroups.filter((group) => !String(group.adviser || '').trim()).length;
-        const coursesWithoutGroups = merged.filter((entry) => (entry.groups || []).length === 0).length;
-
-        const maxGroupsForDeepScan = effectiveRole === 'Admin' ? 24 : 12;
-        const deepGroups = allGroups.slice(0, maxGroupsForDeepScan);
-
-        const logsByGroup = await Promise.allSettled(
-          deepGroups.map(async (group) => {
-            const [logsRes, journalsRes] = await Promise.all([
-              apiClient.get(`/consultation/group/${group.id}/logs`),
-              apiClient.get(`/member-journals/course/${group.courseId}/group/${group.id}`)
-            ]);
-
-            const logs: ConsultationLog[] = Array.isArray(logsRes.data?.logs) ? logsRes.data.logs : [];
-            const journals = Array.isArray(journalsRes.data?.journals) ? journalsRes.data.journals : [];
-            return { group, logs, journals };
-          })
-        );
-
-        const logEntries = logsByGroup
-          .filter((entry): entry is PromiseFulfilledResult<any> => entry.status === 'fulfilled')
-          .map((entry) => entry.value);
-
-        const logsTotal = logEntries.reduce((sum, entry) => sum + entry.logs.length, 0);
-        const journalsTotal = logEntries.reduce((sum, entry) => sum + entry.journals.length, 0);
-        const groupsWithoutConsultation = logEntries.filter((entry) => entry.logs.length === 0).length;
-
-        const riskGroups = logEntries
-          .map((entry) => {
-            const latestLog: ConsultationLog | undefined = [...entry.logs].sort((a, b) => getTimestamp(b) - getTimestamp(a))[0];
-            if (!latestLog) return null;
-
-            const concern = String(latestLog.conConcerns || '').toLowerCase();
-            const participation = latestLog.participation_data || {};
-            const lowParticipationCount = Object.values(participation).filter((value) => String(value).toLowerCase() === 'low').length;
-
-            if (concern.includes('blocker') || concern.includes('delay') || concern.includes('risk') || lowParticipationCount >= 2) {
-              return {
-                groupName: entry.group.groupName,
-                courseCode: entry.group.courseCode,
-                reason: concern ? latestLog.conConcerns || 'Participation flagged as low' : 'Participation flagged as low'
-              };
-            }
-
-            return null;
-          })
-          .filter(Boolean)
-          .slice(0, 6) as Array<{ groupName: string; courseCode: string; reason: string }>;
-
-        const followUps = logEntries
-          .flatMap((entry) =>
-            entry.logs.map((log: ConsultationLog) => ({
-              groupName: entry.group.groupName,
-              courseCode: entry.group.courseCode,
-              action: String(log.conAction || '').trim(),
-              concern: String(log.conConcerns || '').trim(),
-              ts: getTimestamp(log)
-            }))
-          )
-          .filter((item) => item.action || item.concern)
-          .sort((a, b) => b.ts - a.ts)
-          .slice(0, 8)
-          .map(({ ts, ...rest }) => rest);
-
-        const actionItems = followUps
-          .flatMap((item) => parseActionItems(item.action))
-          .slice(0, 10);
-
-        let upcomingSlots = 0;
-        if (effectiveRole === 'Adviser' || effectiveRole === 'Admin') {
-          try {
-            const slotsRes = await apiClient.get(`/consultation/slots/adviser/${me.id}`);
-            const slots = Array.isArray(slotsRes.data?.slots) ? slotsRes.data.slots : [];
-            const now = Date.now();
-            upcomingSlots = slots.filter((slot: any) => new Date(slot.slot_date || slot.slot_date_only || 0).getTime() >= now).length;
-          } catch {
-            upcomingSlots = 0;
-          }
-        }
-
-        const dataIntegrityIssues: string[] = [];
-        if (groupsWithoutAdviser > 0) dataIntegrityIssues.push(`${groupsWithoutAdviser} group(s) missing assigned adviser.`);
-        if (coursesWithoutGroups > 0) dataIntegrityIssues.push(`${coursesWithoutGroups} course(s) have no groups.`);
-        if (effectiveRole === 'Admin' && fetchedAccounts.length > 0) {
-          const invalidRoles = fetchedAccounts.filter((acc) => {
-            const role = normalizeRole(acc?.accountRole || acc?.role || 'Student');
-            return !['Admin', 'Adviser', 'Student'].includes(role);
-          }).length;
-          if (invalidRoles > 0) dataIntegrityIssues.push(`${invalidRoles} account(s) have invalid role values.`);
-        }
-
-        setInsights({
-          totalGroups: allGroups.length,
-          consultationLogs: logsTotal,
-          groupWithoutConsultation: groupsWithoutConsultation,
-          journalEntries: journalsTotal,
-          upcomingSlots,
-          riskGroups,
-          followUps,
-          actionItems,
-          dataIntegrityIssues
-        });
+        setLoading(false);
+        void loadSupplementalData(effectiveRole, me, fetchedCourses);
       } catch (err) {
         console.error('Failed to fetch scholar dashboard data:', err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     checkAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
   if (!user || loading) {

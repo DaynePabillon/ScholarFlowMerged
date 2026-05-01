@@ -202,23 +202,23 @@ export default function BookingPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem("auth_token")
-      const responses = await Promise.all(
-        courseIds.map(async (courseId) => {
-          const resolvedGroupName = String(groupNameOverride || userGroup?.groupName || '').trim()
-          const resolvedGroupId = Number(groupId ?? userGroup?.bookingGroupId ?? userGroup?.smallgroupID)
-          const groupFilter = resolvedGroupName ? `&groupName=${encodeURIComponent(resolvedGroupName)}` : ''
-          const groupIdFilter = Number.isFinite(resolvedGroupId) ? `&groupId=${resolvedGroupId}` : ''
-          const res = await fetch(`${API_URL}/api/consultation/slots/${courseId}?futureOnly=true${groupFilter}${groupIdFilter}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          })
+      const resolvedGroupName = String(groupNameOverride || userGroup?.groupName || '').trim()
+      const resolvedGroupId = Number(groupId ?? userGroup?.bookingGroupId ?? userGroup?.smallgroupID)
+      const groupFilter = resolvedGroupName ? `&groupName=${encodeURIComponent(resolvedGroupName)}` : ''
 
-          if (!res.ok) return [] as ConsultationSlot[]
-          const data = await res.json()
-          return (data.slots || []) as ConsultationSlot[]
-        })
-      )
+      // Use role-aware single request to reduce fan-out: /slots/me
+      // If only one course is relevant, include courseId to narrow results.
+      const singleCourseId = courseIds.length === 1 ? courseIds[0] : null
+      const courseQuery = singleCourseId ? `&courseId=${encodeURIComponent(singleCourseId)}` : ''
+      const res = await fetch(`${API_URL}/api/consultation/slots/me?futureOnly=true${groupFilter}${courseQuery}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
 
-      const merged = responses.flat()
+      const merged: ConsultationSlot[] = []
+      if (res.ok) {
+        const data = await res.json()
+        merged.push(...(data.slots || []))
+      }
       const dedupedMap = new Map<number, ConsultationSlot>()
       merged.forEach((slot) => dedupedMap.set(slot.slot_id, slot))
       const allSlots = Array.from(dedupedMap.values()).sort((a, b) => {

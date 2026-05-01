@@ -31,6 +31,7 @@ import {
     Folder,
     FileText
 } from 'lucide-react';
+import { belongsToGroup } from '@/lib/adviserUtils';
 
 type Course = {
     id: number;
@@ -239,8 +240,12 @@ export default function CourseDetailsPage() {
 
     const fetchGroups = async () => {
         try {
-            const res = await apiClient.get(`/courses/${courseId}/group-members`);
-            setGroups(Array.isArray(res.data) ? res.data : []);
+            const res = await apiClient.get(`/courses/${courseId}/teams`);
+            // backend returns { teams, userRole, viewType }
+            const data = res.data;
+            if (data && Array.isArray(data.teams)) setGroups(data.teams);
+            else if (Array.isArray(data)) setGroups(data);
+            else setGroups([]);
         } catch { /* empty */ }
         finally { setLoading(false); }
     };
@@ -781,30 +786,135 @@ export default function CourseDetailsPage() {
                         <p className="font-medium text-gray-500">No groups yet</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {groups.map((group) => (
-                            <div
-                                key={group.id}
-                                onClick={() => openGroup(group)}
-                                className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
-                            >
-                                <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
-                                    TEAM {String(group?.team_number || 0).padStart(2, '0')}
-                                </div>
-                                <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group?.groupName || 'Unnamed Group'}</div>
-                                <div className="flex flex-col gap-2.5">
-                                    <div className="flex items-center gap-2">
-                                        <Award size={14} className="text-amber-500" />
-                                        <span className="text-sm text-slate-600 truncate">{group?.adviser || 'No Adviser'}</span>
+                    <>
+                        {/** Determine which groups belong to current adviser/user */}
+                        {(() => {
+                            const belongsTo = (g: Group) => belongsToGroup(String(g?.adviser || ''), user);
+
+                            const adviserGroups = groups.filter((g) => belongsTo(g));
+                            const otherGroups = groups.filter((g) => !belongsTo(g));
+
+                            // Adviser-only view: show only their groups
+                            if (effectiveScholarRole === 'Adviser') {
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                        {adviserGroups.map((group) => (
+                                            <div
+                                                key={group.id}
+                                                onClick={() => openGroup(group)}
+                                                className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                            >
+                                                <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
+                                                    TEAM {String(group?.team_number || 0).padStart(2, '0')}
+                                                </div>
+                                                <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group?.groupName || 'Unnamed Group'}</div>
+                                                <div className="flex flex-col gap-2.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <Award size={14} className="text-amber-500" />
+                                                        <span className="text-sm text-slate-600 truncate">{group?.adviser || 'No Adviser'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Users size={14} className="text-cyan-600" />
+                                                        <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <Users size={14} className="text-cyan-600" />
-                                        <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
+                                );
+                            }
+
+                            // Admin view: show adviser groups first, others below with a separator
+                            if (isAdmin) {
+                                return (
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                            {adviserGroups.map((group) => (
+                                                <div
+                                                    key={group.id}
+                                                    onClick={() => openGroup(group)}
+                                                    className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                                >
+                                                    <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
+                                                        TEAM {String(group?.team_number || 0).padStart(2, '0')}
+                                                    </div>
+                                                    <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group?.groupName || 'Unnamed Group'}</div>
+                                                    <div className="flex flex-col gap-2.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <Award size={14} className="text-amber-500" />
+                                                            <span className="text-sm text-slate-600 truncate">{group?.adviser || 'No Adviser'}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <Users size={14} className="text-cyan-600" />
+                                                            <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {otherGroups.length > 0 && (
+                                            <>
+                                                <div className="w-full mt-2 mb-2 border-t border-gray-200" />
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                                    {otherGroups.map((group) => (
+                                                        <div
+                                                            key={group.id}
+                                                            onClick={() => openGroup(group)}
+                                                            className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                                        >
+                                                            <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
+                                                                TEAM {String(group?.team_number || 0).padStart(2, '0')}
+                                                            </div>
+                                                            <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group?.groupName || 'Unnamed Group'}</div>
+                                                            <div className="flex flex-col gap-2.5">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Award size={14} className="text-amber-500" />
+                                                                    <span className="text-sm text-slate-600 truncate">{group?.adviser || 'No Adviser'}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <Users size={14} className="text-cyan-600" />
+                                                                    <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
+                                );
+                            }
+
+                            // Default (non-adviser, non-admin): show all groups
+                            return (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                    {groups.map((group) => (
+                                        <div
+                                            key={group.id}
+                                            onClick={() => openGroup(group)}
+                                            className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                        >
+                                            <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
+                                                TEAM {String(group?.team_number || 0).padStart(2, '0')}
+                                            </div>
+                                            <div className="text-lg font-bold text-slate-800 mb-4 truncate">{group?.groupName || 'Unnamed Group'}</div>
+                                            <div className="flex flex-col gap-2.5">
+                                                <div className="flex items-center gap-2">
+                                                    <Award size={14} className="text-amber-500" />
+                                                    <span className="text-sm text-slate-600 truncate">{group?.adviser || 'No Adviser'}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Users size={14} className="text-cyan-600" />
+                                                    <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            );
+                        })()}
+                    </>
                 )}
             </div>
 
@@ -880,7 +990,7 @@ export default function CourseDetailsPage() {
                                                 onClick={() => setActiveModalTab(tab as any)}
                                                 className={`px-6 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all border ${activeModalTab === tab ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/[0.05] border-blue-100' : 'text-gray-600 border-transparent hover:text-gray-800 hover:bg-white/80 hover:border-gray-200'}`}
                                             >
-                                                {tab === 'ai' ? 'AI Tools' : tab === 'consultations' ? 'Consultation History' : tab}
+                                                {tab === 'ai' ? 'Insights' : tab === 'consultations' ? 'Consultation History' : tab}
                                             </button>
                                         );
                                     })}

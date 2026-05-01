@@ -532,6 +532,112 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
   }
 });
 
+// GET slots for the current user (role-aware). Students get slots only from their assigned advisers;
+// advisers get their own slots; admins get all slots (optionally filtered by courseId/group).
+router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
+  try {
+    const user: any = (req as any).user;
+    const role = String(user?.role || '').trim().toLowerCase();
+    const futureOnly = String(req.query.futureOnly || '').toLowerCase() === 'true';
+    const groupName = String(req.query.groupName || '').trim() || null;
+    const courseId = req.query.courseId ? Number(req.query.courseId) : null;
+
+    if (role === 'adviser' || role === 'advisers') {
+      // Resolve numeric account_id from user email
+      const accRes = await pool.query('SELECT account_id FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1', [String(user.email || '').trim()]);
+      const adviserId = accRes.rows[0]?.account_id;
+      if (!adviserId) return res.json({ slots: [] });
+
+      const { rows } = await pool.query(
+        `SELECT s.*, s.slot_date::text as slot_date_only, a."accountName" as adviser_name, a."accountEmail" as adviser_email,
+                sg."groupName" as reserved_group_name,
+                COALESCE(b.current_groups, 0)::int as current_groups
+         FROM ss_consultation_slots s
+         LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
+         LEFT JOIN ss_group sg ON sg."groupName" = s.allowed_group_id
+         LEFT JOIN (
+           SELECT slot_id, COUNT(*)::int as current_groups
+           FROM ss_consultation_bookings
+           WHERE status = 'BOOKED'
+           GROUP BY slot_id
+         ) b ON b.slot_id = s.slot_id
+         WHERE s.adviser_id = $1
+           AND ($2::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
+           AND ($3::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR LOWER(COALESCE(sg."groupName", '')) = LOWER($3::text))
+         ORDER BY s.slot_date, s.start_time`,
+        [adviserId, futureOnly, groupName]
+      );
+      return res.json({ slots: rows });
+    }
+
+    if (role === 'student') {
+      // Determine student's enrolled courses and assigned advisers across them
+      const requesterEmail = String(user?.email || '').trim().toLowerCase();
+      const targetCourseId = courseId;
+
+      const assigned = await resolveStudentAssignedAdvisers(Number(targetCourseId) || 0, requesterEmail, null);
+      const assignedAdviserKeys = assigned.adviserKeys;
+      const assignedAdviserAccountIds = assigned.adviserAccountIds;
+
+      // Fetch slots across courses filtered by assigned advisers
+      const { rows } = await pool.query(
+        `SELECT s.*, s.slot_date::text as slot_date_only, a."accountName" as adviser_name, a."accountEmail" as adviser_email,
+                sg."groupName" as reserved_group_name, COALESCE(b.current_groups, 0)::int as current_groups
+         FROM ss_consultation_slots s
+         LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
+         LEFT JOIN ss_group sg ON sg."smallgroupID" = s.allowed_group_id
+         LEFT JOIN (
+           SELECT slot_id, COUNT(*)::int as current_groups
+           FROM ss_consultation_bookings
+           WHERE status = 'BOOKED'
+           GROUP BY slot_id
+         ) b ON b.slot_id = s.slot_id
+         WHERE ($1::int IS NULL OR s.course_id = $1)
+           AND ($2::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
+           AND ($3::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR LOWER(COALESCE(sg."groupName", '')) = LOWER($3::text))
+           AND (
+             (
+               COALESCE(array_length($4::text[], 1), 0) = 0
+               AND COALESCE(array_length($5::text[], 1), 0) = 0
+             )
+             OR CAST(s.adviser_id AS text) = ANY($4::text[])
+             OR LOWER(TRIM(a."accountEmail")) = ANY($5::text[])
+             OR LOWER(TRIM(a."accountName")) = ANY($5::text[])
+           )
+         ORDER BY s.slot_date, s.start_time`,
+        [targetCourseId || null, futureOnly, groupName, assignedAdviserAccountIds, assignedAdviserKeys]
+      );
+
+      return res.json({ slots: rows });
+    }
+
+    // Admins - return all (optionally filtered)
+    const { rows: adminRows } = await pool.query(
+      `SELECT s.*, s.slot_date::text as slot_date_only, a."accountName" as adviser_name, a."accountEmail" as adviser_email,
+              sg."groupName" as reserved_group_name, COALESCE(b.current_groups, 0)::int as current_groups
+       FROM ss_consultation_slots s
+       LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
+       LEFT JOIN ss_group sg ON sg."smallgroupID" = s.allowed_group_id
+       LEFT JOIN (
+         SELECT slot_id, COUNT(*)::int as current_groups
+         FROM ss_consultation_bookings
+         WHERE status = 'BOOKED'
+         GROUP BY slot_id
+       ) b ON b.slot_id = s.slot_id
+       WHERE ($1::int IS NULL OR s.course_id = $1)
+         AND ($2::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
+         AND ($3::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR LOWER(COALESCE(sg."groupName", '')) = LOWER($3::text))
+       ORDER BY s.slot_date, s.start_time`,
+      [courseId || null, futureOnly, groupName]
+    );
+
+    return res.json({ slots: adminRows });
+  } catch (err: any) {
+    console.error('Error fetching /slots/me:', err);
+    return res.status(500).json({ error: 'Failed to fetch slots for user' });
+  }
+});
+
 // POST create consultation slot(s)
 router.post('/slots', authenticate, resolveAccountId, async (req, res) => {
   try {
