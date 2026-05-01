@@ -1815,16 +1815,19 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
     for (const row of records) {
       const teamCode = findCol(row, 'TEAM CODE', 'Team Code', 'teamcode', 'group', 'Group', 'GROUP');
-      const email = findCol(row, 'EMAIL', 'Email', 'email');
+      const email = findCol(row, 'EMAIL @gmail', 'EMAIL @cit', 'EMAIL @', 'EMAIL', 'Email', 'email');
       const fullName = findCol(row, 'FIRSTNAME', 'First Name', 'Full name', 'Full Name', 'Name', 'LASTNAME', 'Lastname');
       const lastName = findCol(row, 'LASTNAME', 'Lastname', 'Last Name');
       const firstName = findCol(row, 'FIRSTNAME', 'Firstname', 'First Name');
+      const studentId = findCol(row, 'STUDENT ID', 'Student ID', 'student_id', 'ID');
       const memberNum = parseInt(findCol(row, 'MEMBER #', 'Member #', 'member', 'Member') || '0', 10);
       const adviserEmail = findCol(row, 'ADVISER Email', 'ADVISER EMAIL', 'Adviser Email', 'Advisor Email', 'advisor email');
       const adviser = findCol(row, 'ADVISER', 'Adviser', 'advisor', 'Advisor');
       const proposedProject = findCol(row, 'PROPOSED PROJECT', 'Proposed Project', 'Project', 'project');
 
-      if (!teamCode || !email) continue;
+      if (!teamCode) continue;
+      // Use student ID as email fallback if email column is empty
+      const resolvedEmail = email || (studentId ? `${studentId}@scholarflow.local` : '');
 
       const parsed = parseTeamCode(teamCode);
       if (!parsed) continue;
@@ -1834,7 +1837,7 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
         courseMap[key] = { parsed, groups: {} };
       }
 
-      const displayName = fullName || (firstName && lastName ? `${firstName} ${lastName}` : email.split('@')[0]);
+      const displayName = fullName || (firstName && lastName ? `${firstName} ${lastName}` : resolvedEmail.split('@')[0]);
 
       const currentCourse = courseMap[key]!;
       if (!currentCourse.groups[parsed.groupName]) {
@@ -1843,7 +1846,7 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
 
       const currentGroup = currentCourse.groups[parsed.groupName]!;
       currentGroup.members.push({
-        email,
+        email: resolvedEmail,
         fullName: displayName,
         memberNum: memberNum || (currentGroup.members.length + 1)
       });
