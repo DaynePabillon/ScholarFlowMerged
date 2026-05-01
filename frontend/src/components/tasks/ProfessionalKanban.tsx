@@ -1,9 +1,8 @@
 "use client"
 
-import React, { useRef, useState, useMemo, useCallback, memo, DragEvent } from 'react'
+import { useState, useMemo } from 'react'
 import { 
-    Plus, MoreHorizontal, ChevronDown, ChevronUp, AlertCircle, 
-    Users, User, Clock, CheckSquare, LayoutGrid
+    Plus, ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react'
 import ProfessionalTaskCard from './ProfessionalTaskCard'
 
@@ -70,32 +69,18 @@ export default function ProfessionalKanban({
         setCollapsedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }))
     }
 
-    // 1. Group by Priority -> Assignee -> Status
+    // Group by Priority -> tasks (flat, no assignee sub-grouping)
     const groupedData = useMemo(() => {
         const priorityGroups: any = {}
 
         PRIORITY_ORDER.forEach(p => {
-            priorityGroups[p] = {
-                priority: p,
-                assignees: {} as any
-            }
+            priorityGroups[p] = { priority: p, tasks: [] as any[] }
         })
 
         tasks.forEach(task => {
             const p = task.priority?.toLowerCase() || 'medium'
             const priorityKey = PRIORITY_ORDER.includes(p) ? p : 'medium'
-            
-            const assigneeId = task.assigned_to || 'unassigned'
-            const assigneeName = task.assigned_to_name || 'Unassigned'
-
-            if (!priorityGroups[priorityKey].assignees[assigneeId]) {
-                priorityGroups[priorityKey].assignees[assigneeId] = {
-                    id: assigneeId,
-                    name: assigneeName,
-                    tasks: []
-                }
-            }
-            priorityGroups[priorityKey].assignees[assigneeId].tasks.push(task)
+            priorityGroups[priorityKey].tasks.push(task)
         })
 
         return priorityGroups
@@ -138,8 +123,7 @@ export default function ProfessionalKanban({
         <div className="w-full space-y-12">
             {PRIORITY_ORDER.map(priority => {
                 const group = groupedData[priority]
-                const assigneeIds = Object.keys(group.assignees)
-                if (assigneeIds.length === 0) return null
+                if (group.tasks.length === 0) return null
 
                 const isPriorityCollapsed = collapsedSections[`p-${priority}`]
                 const style = PRIORITY_STYLES[priority]
@@ -147,7 +131,7 @@ export default function ProfessionalKanban({
                 return (
                     <div key={priority} className="space-y-4">
                         {/* Priority Swimlane Header */}
-                        <div 
+                        <div
                             onClick={() => toggleSection(`p-${priority}`)}
                             className={`flex items-center justify-between p-4 rounded-3xl border-2 ${style.border} ${style.bg} cursor-pointer group hover:shadow-lg transition-all duration-300`}
                         >
@@ -160,109 +144,65 @@ export default function ProfessionalKanban({
                                         {style.label}
                                     </h3>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight opacity-70">
-                                        {assigneeIds.reduce((acc, id) => acc + group.assignees[id].tasks.length, 0)} Total Tasks
+                                        {group.tasks.length} Total Tasks
                                     </p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4">
-                                <div className="flex -space-x-2">
-                                    {assigneeIds.slice(0, 5).map(id => (
-                                        <div key={id} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-blue-500 flex items-center justify-center text-[10px] text-white font-black uppercase shadow-sm">
-                                            {group.assignees[id].name.charAt(0)}
-                                        </div>
-                                    ))}
-                                    {assigneeIds.length > 5 && (
-                                        <div className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-[8px] text-slate-500 font-black">
-                                            +{assigneeIds.length - 5}
-                                        </div>
-                                    )}
-                                </div>
                                 {isPriorityCollapsed ? <ChevronDown className="w-5 h-5 opacity-40" /> : <ChevronUp className="w-5 h-5 opacity-40" />}
                             </div>
                         </div>
 
                         {!isPriorityCollapsed && (
-                            <div className="space-y-8 pl-4 border-l-2 border-dashed border-slate-200 dark:border-slate-800 ml-6">
-                                {assigneeIds.map(assigneeId => {
-                                    const assigneeGroup = group.assignees[assigneeId]
-                                    const isAssigneeCollapsed = collapsedSections[`p-${priority}-a-${assigneeId}`]
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 pt-2">
+                                {COLUMNS.map(column => {
+                                    const columnTasks = group.tasks.filter((t: any) => {
+                                        const s = t.status?.toLowerCase().replace('-', '_')
+                                        return s === column.id
+                                    })
+                                    const isOver = overColumnId === `${priority}-${column.id}`
 
                                     return (
-                                        <div key={assigneeId} className="space-y-4">
-                                            {/* Assignee Sub-Header */}
-                                            <div 
-                                                onClick={() => toggleSection(`p-${priority}-a-${assigneeId}`)}
-                                                className="flex items-center gap-3 cursor-pointer group"
-                                            >
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center shadow-sm border border-slate-200 dark:border-white/5">
-                                                    <User className="w-4 h-4 text-slate-500" />
-                                                </div>
-                                                <span className="text-xs font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest group-hover:text-blue-500 transition-colors">
-                                                    {assigneeGroup.name}
+                                        <div
+                                            key={column.id}
+                                            onDragOver={(e) => handleDragOver(e, `${priority}-${column.id}`)}
+                                            onDragLeave={() => setOverColumnId(null)}
+                                            onDrop={(e) => handleDrop(e, column.id)}
+                                            className={`flex flex-col gap-4 p-4 rounded-3xl border-2 transition-all duration-300 ${
+                                                isOver
+                                                    ? 'bg-blue-50/50 dark:bg-blue-500/5 border-blue-500/30 shadow-inner'
+                                                    : 'bg-transparent border-transparent'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between px-2">
+                                                <span className={`text-[10px] font-black uppercase tracking-widest ${column.color} opacity-60`}>
+                                                    {column.title}
                                                 </span>
-                                                <span className="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-full font-bold">
-                                                    {assigneeGroup.tasks.length}
+                                                <span className="text-[10px] font-bold text-slate-400">
+                                                    {columnTasks.length}
                                                 </span>
-                                                {isAssigneeCollapsed ? <ChevronDown className="w-4 h-4 opacity-20" /> : <ChevronUp className="w-4 h-4 opacity-20" />}
                                             </div>
 
-                                            {!isAssigneeCollapsed && (
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                                    {COLUMNS.map(column => {
-                                                        const columnTasks = assigneeGroup.tasks.filter((t: any) => {
-                                                            const s = t.status?.toLowerCase().replace('-', '_')
-                                                            return s === column.id || (s === 'todo' && column.id === 'todo') || (s === 'in_progress' && column.id === 'in_progress')
-                                                        })
-
-                                                        const isOver = overColumnId === column.id
-
-                                                        return (
-                                                            <div 
-                                                                key={column.id}
-                                                                onDragOver={(e) => handleDragOver(e, column.id)}
-                                                                onDragLeave={() => setOverColumnId(null)}
-                                                                onDrop={(e) => handleDrop(e, column.id)}
-                                                                className={`flex flex-col gap-4 p-4 rounded-3xl border-2 transition-all duration-300 ${
-                                                                    isOver 
-                                                                        ? 'bg-blue-50/50 dark:bg-blue-500/5 border-blue-500/30 shadow-inner' 
-                                                                        : 'bg-transparent border-transparent'
-                                                                }`}
-                                                            >
-                                                                {/* Optional Column mini-label */}
-                                                                <div className="flex items-center justify-between px-2">
-                                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${column.color} opacity-60`}>
-                                                                        {column.title}
-                                                                    </span>
-                                                                    <span className="text-[10px] font-bold text-slate-400">
-                                                                        {columnTasks.length}
-                                                                    </span>
-                                                                </div>
-
-                                                                <div className="space-y-4">
-                                                                    {columnTasks.map((task: any) => (
-                                                                        <div 
-                                                                            key={task.id}
-                                                                            draggable={canDrag}
-                                                                            onDragStart={(e) => handleDragStart(e, task.id)}
-                                                                            onDragEnd={handleDragEnd}
-                                                                        >
-                                                                            <ProfessionalTaskCard
-                                                                                task={task}
-                                                                                onClick={() => onTaskClick?.(task)}
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                    {columnTasks.length === 0 && (
-                                                                        <div className="h-24 flex items-center justify-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl opacity-30">
-                                                                            <Plus className="w-5 h-5 text-slate-400" />
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            )}
+                                            <div className="space-y-4">
+                                                {columnTasks.map((task: any) => (
+                                                    <div
+                                                        key={task.id}
+                                                        draggable={canDrag}
+                                                        onDragStart={(e) => handleDragStart(e, task.id)}
+                                                        onDragEnd={handleDragEnd}
+                                                    >
+                                                        <ProfessionalTaskCard
+                                                            task={task}
+                                                            onClick={() => onTaskClick?.(task)}
+                                                        />
+                                                    </div>
+                                                ))}
+                                                {columnTasks.length === 0 && (
+                                                    <div className="h-24 flex items-center justify-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl opacity-30">
+                                                        <Plus className="w-5 h-5 text-slate-400" />
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )
                                 })}

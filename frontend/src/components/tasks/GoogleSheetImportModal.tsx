@@ -204,8 +204,8 @@ export default function GoogleSheetImportModal({
                             <FileText className="w-6 h-6 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Sync Google Sheet</h2>
-                            <p className="text-sm font-medium text-gray-500 dark:text-slate-400">Import your standardized WBS to the Kanban board</p>
+                            <h2 className="text-2xl font-black text-gray-900 dark:text-white uppercase tracking-tight">Sync WBS</h2>
+                            <p className="text-sm font-medium text-gray-500 dark:text-slate-400">Import your Work Breakdown Structure to the Advisor Board</p>
                         </div>
                     </div>
                     <button onClick={handleClose} className="p-2.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition-all hover:rotate-90 duration-300 group">
@@ -218,6 +218,20 @@ export default function GoogleSheetImportModal({
                     
                     {step === 'select' && (
                         <div className="space-y-8">
+                            {/* Sky Guide Banner */}
+                            <div className="flex gap-4 p-5 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-500/10 dark:to-teal-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl">
+                                <div className="text-2xl select-none">🎓</div>
+                                <div>
+                                    <p className="text-xs font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400 mb-1">How this works</p>
+                                    <ol className="text-xs font-medium text-emerald-800 dark:text-emerald-300/80 space-y-1 leading-relaxed list-decimal list-inside">
+                                        <li>Your student team builds their WBS in <span className="font-bold">Google Sheets</span></li>
+                                        <li>They set sharing to <span className="font-bold underline">"Anyone with the link"</span> (Viewer)</li>
+                                        <li>They copy and send you the link</li>
+                                        <li>Paste it below — tasks auto-populate the <span className="font-bold">Advisor Board</span></li>
+                                        <li>Tasks are <span className="font-bold text-rose-600 dark:text-rose-400">locked</span> — team drags progress only, cannot delete</li>
+                                    </ol>
+                                </div>
+                            </div>
                             {/* Sync Mode Toggle */}
                             <div className="flex p-1 bg-gray-100 dark:bg-slate-800/50 rounded-2xl">
                                 <button

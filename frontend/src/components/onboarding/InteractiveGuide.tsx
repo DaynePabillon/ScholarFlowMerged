@@ -80,8 +80,15 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
   // Tasks
   '/tasks': {
     title: "Task Management",
-    text: "This is the Task Management workspace! Use the Kanban board to create tasks, assign them to team members, and track progress from 'To Do' to 'Done'. You can drag and drop tasks between columns to update their status.",
+    text: "This is the Task Management workspace! There are two boards here: the Advisor Board contains locked WBS tasks synced from Google Sheets — team members can ONLY drag them to update progress, never delete them. The Team Board is for internal tasks your team creates freely. Use the priority swimlanes to stay organized and drag cards between columns to update status.",
     image: "/mascot.png"
+  },
+  // Sheets / Sync WBS
+  '/sheets': {
+    title: "Sync WBS",
+    text: "This is where advisers sync a Work Breakdown Structure! The student team creates their WBS in Google Sheets, makes the link shareable, and gives it to you. Paste the link here and ScholarFlow will automatically generate all the tasks in the Advisor Board. Once synced, tasks are locked — the team can only drag their progress.",
+    image: "/mascot-thinking.png",
+    roles: ['adviser', 'admin', 'manager']
   },
   // Team
   '/team': {
@@ -100,13 +107,6 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     title: "Google Drive",
     text: "This is the Drive integration! Access your team's shared Google Drive files directly from here. Browse folders, view documents, and stay organized without leaving ScholarFlow.",
     image: "/mascot-thinking.png"
-  },
-  // PM Sheets (Manager/Admin only)
-  '/sheets': {
-    title: "Google Sheets",
-    text: "This is the Sheets integration for managers and admins! Import your Work Breakdown Structure (WBS) from Google Sheets to automatically generate tasks with proper hierarchy and assignments.",
-    image: "/mascot-thinking.png",
-    roles: ['adviser', 'admin', 'manager']
   },
   // PM Analytics (Manager/Admin only)
   '/analytics': {
