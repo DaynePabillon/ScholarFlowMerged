@@ -1036,6 +1036,24 @@ async function runMigrations(): Promise<void> {
         );
         CREATE INDEX IF NOT EXISTS idx_ai_feedback_team ON ai_classification_feedback(team_group_id);
       `
+    },
+    {
+      name: '033_ss_group_course_scope',
+      sql: `
+        -- Add course_id to ss_group so groups with the same name in different courses are isolated
+        ALTER TABLE public.ss_group ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES ss_courses(id) ON DELETE SET NULL;
+
+        -- Drop the old global unique constraint on groupName (if still present)
+        DO $$ BEGIN
+          ALTER TABLE public.ss_group DROP CONSTRAINT IF EXISTS "ss_group_groupName_key";
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+
+        -- Add scoped unique index: groupName + course_id (only when course_id is not null)
+        CREATE UNIQUE INDEX IF NOT EXISTS ss_group_groupname_courseid_key
+          ON public.ss_group ("groupName", course_id)
+          WHERE course_id IS NOT NULL;
+      `
     }
   ];
 

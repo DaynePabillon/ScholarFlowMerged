@@ -476,6 +476,12 @@ function BoardsContent() {
                     await apiClient.post(`/workspaces/${ws.id}/sync`)
                 }
             }
+            // Also resync Academic side: re-import all connected Google Sheets (no emails)
+            try {
+                await apiClient.post('/resync-sheets')
+            } catch (scholarErr) {
+                console.warn('Academic resync skipped (no sheets connected or insufficient role):', scholarErr)
+            }
             // Refresh tasks after sync
             await fetchData(selectedOrg.id)
         } catch (error) {

@@ -968,10 +968,28 @@ router.get('/courses', async (req: Request, res: Response) => {
     }
 
     if (userAcademicRole === 'Student') {
-      if (!account) return res.json([]);
-      const enrollRes = await pool.query('SELECT course_id FROM ss_enrollments WHERE account_id = $1', [account.account_id]);
-      const enrolledCourseIds = enrollRes.rows.map((e: any) => e.course_id);
+      const studentEmail = String(user.email || '').toLowerCase().trim();
+      let enrolledCourseIds: number[] = [];
+
+      if (account) {
+        const enrollRes = await pool.query('SELECT course_id FROM ss_enrollments WHERE account_id = $1', [account.account_id]);
+        enrolledCourseIds = enrollRes.rows.map((e: any) => Number(e.course_id));
+      }
+
+      // Fallback: if no ss_account or no enrollments, look up via team_group_members (WBS-imported students)
+      if (enrolledCourseIds.length === 0 && studentEmail) {
+        const memberRes = await pool.query(
+          `SELECT DISTINCT tg.course_id
+           FROM team_group_members tgm
+           JOIN team_groups tg ON tg.id = tgm.team_group_id
+           WHERE LOWER(tgm.email) = $1`,
+          [studentEmail]
+        );
+        enrolledCourseIds = memberRes.rows.map((r: any) => Number(r.course_id));
+      }
+
       if (enrolledCourseIds.length === 0) return res.json([]);
+
       const { rows } = await pool.query(
         `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
          FROM ss_courses c
@@ -1408,13 +1426,20 @@ router.get('/group/by-member/:email', verifyToken, async (req: Request, res: Res
 
     const leaderEmail = String(members.find((m: any) => m.is_leader)?.email || members[0]?.email || '').trim().toLowerCase();
 
-    let ssGroup = await pool.query('SELECT * FROM ss_group WHERE "groupName" = $1 LIMIT 1', [membership.groupName]);
+    // Scope ss_group lookup by course_id to prevent cross-class group name collisions
+    let ssGroup = await pool.query(
+      `SELECT * FROM ss_group WHERE "groupName" = $1 AND (course_id = $2 OR course_id IS NULL) ORDER BY course_id NULLS LAST LIMIT 1`,
+      [membership.groupName, membership.courseID]
+    );
     if (ssGroup.rows.length === 0) {
       ssGroup = await pool.query(
-        `INSERT INTO ss_group ("groupName", member1, "roleOne", member2, "roleTwo", member3, "roleThree", member4, "roleFour", member5, "roleFive")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-        [membership.groupName, members[0]?.email || null, leaderEmail || null, members[1]?.email || null, null, members[2]?.email || null, null, members[3]?.email || null, null, members[4]?.email || null, null]
+        `INSERT INTO ss_group ("groupName", course_id, member1, "roleOne", member2, "roleTwo", member3, "roleThree", member4, "roleFour", member5, "roleFive")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+        [membership.groupName, membership.courseID || null, members[0]?.email || null, leaderEmail || null, members[1]?.email || null, null, members[2]?.email || null, null, members[3]?.email || null, null, members[4]?.email || null, null]
       );
+    } else if (!ssGroup.rows[0].course_id && membership.courseID) {
+      // Backfill course_id on legacy rows that don't have it
+      await pool.query(`UPDATE ss_group SET course_id = $1 WHERE "smallgroupID" = $2`, [membership.courseID, ssGroup.rows[0].smallgroupID]);
     }
 
     const legacyGroup = ssGroup.rows[0];
@@ -1438,8 +1463,43 @@ router.get('/group/by-member/:email', verifyToken, async (req: Request, res: Res
   }
 });
 
+// GET /my-groups — returns all groups the logged-in student belongs to (by email in team_group_members)
+router.get('/my-groups', verifyToken, async (req: Request, res: Response) => {
+  try {
+    const user: any = (req as any).user || jwt.verify(
+      (req.headers.authorization || '').split(' ')[1] || '',
+      process.env.JWT_SECRET || 'default-secret-key'
+    );
+    const email = String(user?.email || '').toLowerCase().trim();
+    if (!email) return res.status(400).json({ error: 'Missing email' });
+
+    const { rows } = await pool.query(
+      `SELECT
+         tg.id AS "groupId",
+         tg.name AS "groupName",
+         tg.team_number AS "teamNumber",
+         tg.adviser_name AS "adviserName",
+         tg.course_id AS "courseId",
+         c."courseCode",
+         c."courseName",
+         c."courseSection",
+         tgm.is_leader AS "isLeader"
+       FROM team_group_members tgm
+       JOIN team_groups tg ON tg.id = tgm.team_group_id
+       JOIN ss_courses c ON c.id = tg.course_id
+       WHERE LOWER(tgm.email) = $1
+       ORDER BY c.id, tg.team_number`,
+      [email]
+    );
+
+    return res.json({ groups: rows });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch groups' });
+  }
+});
+
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// TEAM GROUP COMMENTS (ScholarSync â€” prefixed to avoid conflict with SkyFlow's /team-groups/:id/comments)
+// TEAM GROUP COMMENTS (ScholarSync — prefixed to avoid conflict with SkyFlow's /team-groups/:id/comments)
 // Both use the same team_comments table, but different route paths for each frontend.
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.get('/scholar/team-groups/:id/comments', async (req: Request, res: Response) => {
@@ -2324,6 +2384,171 @@ router.post('/import-from-sheet', async (req: Request, res: Response) => {
     }
     logger.error('Import from sheet error:', error);
     return res.status(500).json({ error: error?.message || 'Import failed.' });
+  }
+});
+
+// POST /resync-sheets — re-imports all connected sheets for all courses (no emails)
+router.post('/resync-sheets', verifyInstructor, async (req: Request, res: Response) => {
+  try {
+    const { rows: sheets } = await pool.query(
+      `SELECT sc.id, sc."courseID", sc."sheetId", sc."sheetName", c."courseCode", c."courseName", c."courseSection", c."courseTerm"
+       FROM ss_connected_sheets sc
+       JOIN ss_courses c ON c.id = sc."courseID"
+       ORDER BY sc."courseID"`
+    );
+
+    if (sheets.length === 0) {
+      return res.json({ success: true, message: 'No connected sheets found.', synced: 0 });
+    }
+
+    const summaries: any[] = [];
+    let totalErrors = 0;
+
+    for (const sheet of sheets) {
+      const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheet.sheetId}/export?format=csv`;
+      try {
+        const csvRes = await axios.get(sheetUrl, { responseType: 'text', validateStatus: () => true });
+        if (csvRes.status !== 200) {
+          summaries.push({ sheetId: sheet.sheetId, courseCode: sheet.courseCode, error: `Sheet not accessible (HTTP ${csvRes.status})` });
+          totalErrors++;
+          continue;
+        }
+
+        const rawRows: string[][] = csvRes.data.split('\n').map((line: string) =>
+          line.split(',').map((cell: string) => cell.trim().replace(/^"|"$/g, ''))
+        );
+
+        const found = (() => {
+          for (let i = 0; i < rawRows.length; i++) {
+            const row = rawRows[i] ?? [];
+            const hasTeamCode = row.some((cell: any) => {
+              if (cell === null || cell === undefined) return false;
+              const v = cell.toString().trim().toUpperCase();
+              return ['TEAM CODE', 'TEAMCODE', 'GROUP', 'GROUP NAME'].includes(v);
+            });
+            if (hasTeamCode) return { headers: row.map((h: any) => (h || '').toString().trim()), dataRows: rawRows.slice(i + 1) };
+          }
+          return null;
+        })();
+
+        if (!found) {
+          summaries.push({ sheetId: sheet.sheetId, courseCode: sheet.courseCode, error: 'No header row found' });
+          totalErrors++;
+          continue;
+        }
+
+        const { headers, dataRows } = found;
+        const findCol = (names: string[]) => {
+          const idx = headers.findIndex((h: string) => names.some(n => h.trim().toUpperCase().includes(n.toUpperCase())));
+          return idx >= 0 ? idx : -1;
+        };
+        const tcIdx = findCol(['TEAM CODE', 'TEAMCODE', 'GROUP NAME', 'GROUP']);
+        const nameIdx = findCol(['NAME', 'STUDENT NAME', 'FULL NAME']);
+        const emailIdx = findCol(['EMAIL', 'GMAIL', 'EMAIL ADDRESS']);
+        const adviserIdx = findCol(['ADVISER', 'ADVISOR', 'FACULTY']);
+
+        if (tcIdx < 0) {
+          summaries.push({ sheetId: sheet.sheetId, courseCode: sheet.courseCode, error: 'TEAM CODE column not found' });
+          totalErrors++;
+          continue;
+        }
+
+        const courseId = Number(sheet.courseID);
+        const groups: Record<string, { members: { name: string; email: string; studentId: string }[]; adviser: string }> = {};
+
+        for (const row of dataRows) {
+          const teamCode = String(row[tcIdx] || '').trim();
+          if (!teamCode) continue;
+          const rawName = nameIdx >= 0 ? String(row[nameIdx] || '').trim() : '';
+          const rawEmail = emailIdx >= 0 ? String(row[emailIdx] || '').trim() : '';
+          const adviser = adviserIdx >= 0 ? String(row[adviserIdx] || '').trim() : '';
+          if (!rawName && !rawEmail) continue;
+
+          const studentId = rawEmail.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+          const email = rawEmail || `${studentId || rawName.replace(/\s+/g, '.').toLowerCase()}@student.placeholder`;
+
+          if (!groups[teamCode]) groups[teamCode] = { members: [], adviser };
+          groups[teamCode].members.push({ name: rawName, email, studentId });
+          if (adviser && !groups[teamCode].adviser) groups[teamCode].adviser = adviser;
+        }
+
+        const client = await (pool as any).connect();
+        let groupCount = 0;
+        let memberCount = 0;
+        try {
+          await client.query('BEGIN');
+          for (const [groupName, groupData] of Object.entries(groups)) {
+            const { rows: tgRows } = await client.query(
+              `INSERT INTO team_groups (name, course_id, adviser_name)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (name, course_id) DO UPDATE SET adviser_name = EXCLUDED.adviser_name
+               RETURNING id`,
+              [groupName, courseId, groupData.adviser || null]
+            );
+            const teamGroupId = tgRows[0]?.id;
+            if (!teamGroupId) continue;
+            groupCount++;
+
+            for (let mi = 0; mi < groupData.members.length; mi++) {
+              const member = groupData.members[mi];
+              const isLeader = mi === 0;
+              await client.query(
+                `INSERT INTO team_group_members (team_group_id, name, email, member_number, is_leader)
+                 VALUES ($1, $2, $3, $4, $5)
+                 ON CONFLICT (team_group_id, email) DO UPDATE SET name = EXCLUDED.name, member_number = EXCLUDED.member_number, is_leader = EXCLUDED.is_leader`,
+                [teamGroupId, member.name, member.email, mi + 1, isLeader]
+              );
+              memberCount++;
+
+              // Upsert ss_account for the student (no email sent)
+              await client.query(
+                `INSERT INTO ss_account ("accountName", "accountEmail", "accountRole", "accountGroup")
+                 VALUES ($1, $2, 'Student', $3)
+                 ON CONFLICT ("accountEmail") DO UPDATE SET "accountGroup" = EXCLUDED."accountGroup"`,
+                [member.name || member.email.split('@')[0], member.email, groupName]
+              );
+
+              // Enroll the student in the course
+              const accRes = await client.query('SELECT account_id FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1', [member.email]);
+              if (accRes.rows[0]) {
+                await client.query(
+                  `INSERT INTO ss_enrollments (account_id, course_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+                  [accRes.rows[0].account_id, courseId]
+                );
+              }
+            }
+          }
+
+          await client.query(
+            `UPDATE ss_connected_sheets SET "groupCount" = $1 WHERE id = $2`,
+            [groupCount, sheet.id]
+          );
+
+          await client.query('COMMIT');
+          summaries.push({ sheetId: sheet.sheetId, courseCode: sheet.courseCode, groupCount, memberCount });
+        } catch (innerErr: any) {
+          await client.query('ROLLBACK');
+          summaries.push({ sheetId: sheet.sheetId, courseCode: sheet.courseCode, error: innerErr.message });
+          totalErrors++;
+        } finally {
+          client.release();
+        }
+      } catch (sheetErr: any) {
+        summaries.push({ sheetId: sheet.sheetId, courseCode: sheet.courseCode, error: sheetErr.message });
+        totalErrors++;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Re-synced ${sheets.length - totalErrors} of ${sheets.length} sheet(s). ${totalErrors > 0 ? `${totalErrors} error(s).` : ''}`,
+      synced: sheets.length - totalErrors,
+      errors: totalErrors,
+      details: summaries,
+    });
+  } catch (err: any) {
+    logger.error('Resync sheets error:', err);
+    return res.status(500).json({ error: err.message || 'Resync failed.' });
   }
 });
 
