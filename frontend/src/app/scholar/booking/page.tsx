@@ -231,7 +231,6 @@ export default function BookingPage() {
       setSelectedCourse(courseIds[0] || '')
 
       const effectiveGroupId = groupId ?? userGroup?.bookingGroupId ?? userGroup?.smallgroupID
-      const resolvedGroupName = String(groupNameOverride || userGroup?.groupName || '').trim()
       if (Number.isFinite(Number(effectiveGroupId))) {
         await fetchGroupBookings(Number(effectiveGroupId), resolvedGroupName || undefined)
       }
