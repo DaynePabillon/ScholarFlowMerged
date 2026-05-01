@@ -573,7 +573,7 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
                 COALESCE(b.current_groups, 0)::int as current_groups
          FROM ss_consultation_slots s
          LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
-         LEFT JOIN ss_group sg ON sg."groupName" = s.allowed_group_id
+         LEFT JOIN ss_group sg ON sg."smallgroupID" = s.allowed_group_id
          LEFT JOIN (
            SELECT slot_id, COUNT(*)::int as current_groups
            FROM ss_consultation_bookings
@@ -663,10 +663,14 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
         assignedAdviserKeys = rawKeys;
       }
 
-      // Build course filter: slots must belong to one of the student's courses
+      // Build course filter: slots must belong to one of the student's courses (or have no course set)
       const courseFilter = effectiveCourseIds.length > 0
         ? `AND (s.course_id = ANY($5::int[]) OR s.course_id IS NULL)`
         : '';
+
+      // When no adviser can be resolved (e.g. team_groups not yet imported),
+      // fall back to showing FIRST_COME_FIRST_SERVE open slots so students see something.
+      const hasAdviserFilter = assignedAdviserAccountIds.length > 0 || assignedAdviserKeys.length > 0;
 
       // Fetch slots: visible to student if they're in an enrolled course and
       // either no adviser filter applies (open slots) or slot belongs to their assigned adviser
@@ -688,7 +692,9 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
          WHERE ($1::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
            AND ($2::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR s.allowed_group_id IS NULL OR LOWER(COALESCE(sg."groupName", '')) = LOWER($2::text))
            AND (
-             COALESCE(array_length($3::text[], 1), 0) = 0
+             -- If no adviser resolved, show open FCFS slots; otherwise filter to assigned adviser's slots
+             (${hasAdviserFilter ? 'false' : 'true'} AND s.slot_type = 'FIRST_COME_FIRST_SERVE')
+             OR COALESCE(array_length($3::text[], 1), 0) = 0
              OR CAST(s.adviser_id AS text) = ANY($3::text[])
              OR LOWER(TRIM(a."accountEmail")) = ANY($4::text[])
              OR LOWER(TRIM(a."accountName")) = ANY($4::text[])

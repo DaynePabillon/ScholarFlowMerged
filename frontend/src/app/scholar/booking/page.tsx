@@ -128,7 +128,10 @@ export default function BookingPage() {
       const token = localStorage.getItem("auth_token")
       const enrolledCourseIds = await fetchStudentCourseIds()
 
-      const res = await fetch(`${API_URL}/api/group/by-member/${email}`, {
+      // Pass the first enrolled courseId so the backend scopes the group lookup
+      // to that course — prevents "Group 8 in Course A" colliding with "Group 8 in Course B"
+      const courseScope = enrolledCourseIds.length === 1 ? `?courseId=${encodeURIComponent(enrolledCourseIds[0])}` : ''
+      const res = await fetch(`${API_URL}/api/group/by-member/${email}${courseScope}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       
@@ -149,14 +152,16 @@ export default function BookingPage() {
           new Set([normalizedGroupCourseId, ...enrolledCourseIds].filter(Boolean))
         )
 
+        const primaryCourseId = normalizedGroupCourseId || (enrolledCourseIds.length === 1 ? enrolledCourseIds[0] : null)
         await fetchSlotsForCourses(
           candidateCourseIds,
           data.group?.bookingGroupId || data.group?.smallgroupID,
-          data.group?.groupName
+          data.group?.groupName,
+          primaryCourseId
         )
       } else {
         // If group lookup fails, still show available course slots for visibility.
-        await fetchSlotsForCourses(enrolledCourseIds)
+        await fetchSlotsForCourses(enrolledCourseIds, null, undefined, enrolledCourseIds[0] ?? null)
       }
     } catch (err) {
       console.error('Failed to fetch user group:', err)
@@ -192,13 +197,9 @@ export default function BookingPage() {
   const fetchSlotsForCourses = async (
     courseIds: string[],
     groupId?: number | null,
-    groupNameOverride?: string
+    groupNameOverride?: string,
+    primaryCourseId?: string | null
   ) => {
-    if (!courseIds.length) {
-      setSlots([])
-      return
-    }
-
     setLoading(true)
     try {
       const token = localStorage.getItem("auth_token")
@@ -206,10 +207,10 @@ export default function BookingPage() {
       const resolvedGroupId = Number(groupId ?? userGroup?.bookingGroupId ?? userGroup?.smallgroupID)
       const groupFilter = resolvedGroupName ? `&groupName=${encodeURIComponent(resolvedGroupName)}` : ''
 
-      // Use role-aware single request to reduce fan-out: /slots/me
-      // If only one course is relevant, include courseId to narrow results.
-      const singleCourseId = courseIds.length === 1 ? courseIds[0] : null
-      const courseQuery = singleCourseId ? `&courseId=${encodeURIComponent(singleCourseId)}` : ''
+      // Prefer primaryCourseId (the group's own course) for scoping to prevent cross-course slot bleed.
+      // Fall back to single-course list, then no filter (backend resolves via ss_enrollments).
+      const scopedCourseId = primaryCourseId ?? (courseIds.length === 1 ? courseIds[0] : null)
+      const courseQuery = scopedCourseId ? `&courseId=${encodeURIComponent(scopedCourseId)}` : ''
       const res = await fetch(`${API_URL}/api/consultation/slots/me?futureOnly=true${groupFilter}${courseQuery}`, {
         headers: { Authorization: `Bearer ${token}` },
       })

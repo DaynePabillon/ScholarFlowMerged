@@ -192,6 +192,13 @@ router.post('/complete-profile', async (req: Request, res: Response) => {
     );
     const newUser = insertRes.rows[0];
 
+    // Bridge: link user_id FK if a SkyFlow users row exists for this email
+    await pool.query(
+      `UPDATE ss_account SET user_id = (SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1)
+       WHERE "accountEmail" = $1 AND user_id IS NULL`,
+      [email]
+    );
+
     const sessionToken = jwt.sign(
       { id: newUser.account_id, email: newUser.accountEmail, role: newUser.accountRole, name: newUser.accountName },
       process.env.JWT_SECRET || "default-secret-key",
@@ -264,6 +271,18 @@ router.put('/accounts/:id/role', verifyAdmin, async (req: Request, res: Response
       'UPDATE ss_account SET "accountRole" = $1 WHERE account_id = $2 RETURNING *',
       [role, accountId]
     );
+    if (!rows[0]) return res.status(404).json({ error: 'Account not found' });
+
+    // Cascade: sync the role change to organization_members via user_id bridge
+    const userId = rows[0].user_id;
+    if (userId) {
+      const orgRole = role === 'Admin' ? 'admin' : (role === 'Advisers' || role === 'Adviser') ? 'manager' : 'member';
+      await pool.query(
+        `UPDATE organization_members SET role = $1 WHERE user_id = $2 AND status = 'active'`,
+        [orgRole, userId]
+      );
+    }
+
     res.json(rows[0]);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -1429,11 +1448,20 @@ router.get('/group/by-member/:email', verifyToken, async (req: Request, res: Res
     const rawEmail = String(req.params.email || '').trim().toLowerCase();
     if (!rawEmail) return res.status(400).json({ error: 'Missing member email' });
 
+    // Accept optional courseId query param to scope result to a specific course
+    const scopeCourseId = req.query.courseId ? Number(req.query.courseId) : null;
+
+    const membershipQuery = scopeCourseId
+      ? `SELECT tgm.team_group_id, tgm.member_number, tgm.is_leader, tg.name as "groupName", tg.course_id as "courseID"
+         FROM team_group_members tgm JOIN team_groups tg ON tg.id = tgm.team_group_id
+         WHERE LOWER(tgm.email) = $1 AND tg.course_id = $2 ORDER BY tg.team_number LIMIT 1`
+      : `SELECT tgm.team_group_id, tgm.member_number, tgm.is_leader, tg.name as "groupName", tg.course_id as "courseID"
+         FROM team_group_members tgm JOIN team_groups tg ON tg.id = tgm.team_group_id
+         WHERE LOWER(tgm.email) = $1 ORDER BY tg.team_number LIMIT 1`;
+
     const { rows: membershipRows } = await pool.query(
-      `SELECT tgm.team_group_id, tgm.member_number, tgm.is_leader, tg.name as "groupName", tg.course_id as "courseID"
-       FROM team_group_members tgm JOIN team_groups tg ON tg.id = tgm.team_group_id
-       WHERE LOWER(tgm.email) = $1 ORDER BY tg.team_number LIMIT 1`,
-      [rawEmail]
+      membershipQuery,
+      scopeCourseId ? [rawEmail, scopeCourseId] : [rawEmail]
     );
 
     if (membershipRows.length === 0) {
