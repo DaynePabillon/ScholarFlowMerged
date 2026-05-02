@@ -480,7 +480,8 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
            OR LOWER(COALESCE(sg."groupName", '')) = LOWER($3::text)
          )
          AND (
-           (
+           s.slot_type = 'FIRST_COME_FIRST_SERVE'
+           OR (
              COALESCE(array_length($4::text[], 1), 0) = 0
              AND COALESCE(array_length($5::text[], 1), 0) = 0
            )
@@ -692,8 +693,7 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
          WHERE ($1::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
            AND ($2::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR s.allowed_group_id IS NULL OR LOWER(COALESCE(sg."groupName", '')) = LOWER($2::text))
            AND (
-             -- If no adviser resolved, show open FCFS slots; otherwise filter to assigned adviser's slots
-             (${hasAdviserFilter ? 'false' : 'true'} AND s.slot_type = 'FIRST_COME_FIRST_SERVE')
+             s.slot_type = 'FIRST_COME_FIRST_SERVE'
              OR COALESCE(array_length($3::text[], 1), 0) = 0
              OR CAST(s.adviser_id AS text) = ANY($3::text[])
              OR LOWER(TRIM(a."accountEmail")) = ANY($4::text[])

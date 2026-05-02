@@ -2613,9 +2613,10 @@ router.get('/consultation/group/:groupId/logs', async (req: Request, res: Respon
     if (!rawGroupId) return res.status(400).json({ error: 'Missing group id.' });
 
     let groupName = '';
+    let courseId: number | null = null;
 
     const teamGroupRes = await pool.query(
-      `SELECT name
+      `SELECT name, course_id
        FROM team_groups
        WHERE CAST(id AS text) = $1
        LIMIT 1`,
@@ -2624,23 +2625,25 @@ router.get('/consultation/group/:groupId/logs', async (req: Request, res: Respon
 
     if (teamGroupRes.rows.length > 0) {
       groupName = String(teamGroupRes.rows[0].name || '').trim();
+      courseId = Number(teamGroupRes.rows[0].course_id) || null;
     } else if (/^\d+$/.test(rawGroupId)) {
       const legacyGroupRes = await pool.query(
-        `SELECT "groupName"
+        `SELECT "groupName", "courseID"
          FROM ss_group
          WHERE "smallgroupID" = $1
          LIMIT 1`,
         [Number(rawGroupId)]
       );
       groupName = String(legacyGroupRes.rows[0]?.groupName || '').trim();
+      courseId = Number(legacyGroupRes.rows[0]?.courseID) || null;
     }
 
     if (!groupName) {
       return res.json({ logs: [] });
     }
 
-    const { rows } = await pool.query(
-      `SELECT
+    let queryStr = `
+      SELECT
          c.*,
          s.slot_date::text as slot_date,
          s.start_time,
@@ -2650,9 +2653,17 @@ router.get('/consultation/group/:groupId/logs', async (req: Request, res: Respon
        LEFT JOIN ss_consultation_slots s ON s.slot_id = c.slot_id
        LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
        WHERE LOWER(TRIM(COALESCE(c."groupName", ''))) = LOWER($1)
-       ORDER BY COALESCE(c.submitted_at, c.updated_at, c.created_at) DESC, c."conID" DESC`,
-      [groupName]
-    );
+    `;
+    const queryParams: any[] = [groupName];
+
+    if (courseId) {
+      queryStr += ` AND c."courseID" = $2`;
+      queryParams.push(courseId);
+    }
+
+    queryStr += ` ORDER BY COALESCE(c.submitted_at, c.updated_at, c.created_at) DESC, c."conID" DESC`;
+
+    const { rows } = await pool.query(queryStr, queryParams);
 
     return res.json({ logs: rows });
   } catch (error: any) {
@@ -2813,8 +2824,8 @@ router.get('/consultation/prep/:bookingId', verifyInstructor, async (req: Reques
     const journals = journalsRes.rows;
 
     // Get recent consultation logs (last 5) for this group
-    const consultationLogsRes = await pool.query(
-      `SELECT
+    let consultationLogsQuery = `
+      SELECT
          c."conID",
          c."conDate" as consultation_date,
          c."conSum" as summary,
@@ -2830,10 +2841,15 @@ router.get('/consultation/prep/:bookingId', verifyInstructor, async (req: Reques
          c.created_at
        FROM ss_consultation c
        WHERE LOWER(TRIM(COALESCE(c."groupName", ''))) = LOWER($1)
-       ORDER BY COALESCE(c.submitted_at, c.created_at) DESC
-       LIMIT 5`,
-      [String(groupName || '').trim().toLowerCase()]
-    );
+    `;
+    const clParams: any[] = [String(groupName || '').trim().toLowerCase()];
+    if (courseId) {
+      consultationLogsQuery += ` AND c."courseID" = $2`;
+      clParams.push(courseId);
+    }
+    consultationLogsQuery += ` ORDER BY COALESCE(c.submitted_at, c.created_at) DESC LIMIT 5`;
+
+    const consultationLogsRes = await pool.query(consultationLogsQuery, clParams);
 
     const consultationLogs = consultationLogsRes.rows;
 
