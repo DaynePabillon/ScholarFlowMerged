@@ -407,6 +407,22 @@ router.get('/slots/:courseId(\\d+)', authenticate, async (req, res) => {
     let assignedAdviserKeys: string[] = [];
     let assignedAdviserAccountIds: string[] = [];
     if (requesterRole === 'student') {
+      // Verification: Ensure student is enrolled in the course they are requesting slots for
+      const { rows: enrollCheck } = await pool.query(
+        `SELECT 1 FROM team_group_members tgm
+         JOIN team_groups tg ON tg.id = tgm.team_group_id
+         WHERE tg.course_id = $1 AND LOWER(tgm.email) = $2
+         UNION
+         SELECT 1 FROM ss_enrollments e
+         JOIN ss_account a ON a.account_id = e.account_id
+         WHERE e.course_id = $1 AND LOWER(a."accountEmail") = $2`,
+        [Number(courseId), requesterEmail]
+      );
+
+      if (enrollCheck.length === 0) {
+        return res.status(403).json({ error: 'You are not enrolled in this course.' });
+      }
+
       const assignedAdvisers = await resolveStudentAssignedAdvisers(
         Number(courseId),
         requesterEmail,
@@ -618,10 +634,24 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
         }
       }
 
-      // If a specific courseId was requested, scope to that; otherwise use all student courses
-      const effectiveCourseIds = courseId
-        ? [Number(courseId)]
-        : studentCourseIds;
+      // If a specific courseId was requested, scope to that ONLY if the student is actually enrolled in it.
+      let effectiveCourseIds: number[] = [];
+      if (courseId) {
+        const requestedId = Number(courseId);
+        if (studentCourseIds.includes(requestedId)) {
+          effectiveCourseIds = [requestedId];
+        } else {
+          // If the student is trying to access a course they are not enrolled in, return nothing.
+          return res.json({ slots: [] });
+        }
+      } else {
+        effectiveCourseIds = studentCourseIds;
+      }
+
+      // If the student is not enrolled in any courses at all, return nothing immediately.
+      if (effectiveCourseIds.length === 0) {
+        return res.json({ slots: [] });
+      }
 
       // Resolve advisers across all student courses from team_groups
       let assignedAdviserKeys: string[] = [];
