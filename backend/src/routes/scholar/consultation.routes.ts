@@ -394,7 +394,7 @@ router.get('/slots/adviser/:adviserId', authenticate, async (req, res) => {
 });
 
 // GET slots for a course (student-facing booking list)
-router.get('/slots/:courseId', authenticate, async (req, res) => {
+router.get('/slots/:courseId(\\d+)', authenticate, async (req, res) => {
   try {
     const { courseId } = req.params;
     const user: any = req.user;
