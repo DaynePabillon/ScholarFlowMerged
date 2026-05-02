@@ -162,6 +162,13 @@ const ADVISER_PAGES: Record<string, GuideStep> = {
   }
 };
 
+// Feedback reminder guide — shown after a user has explored the app
+const FEEDBACK_GUIDE: GuideStep = {
+  title: "You're all set! ⭐",
+  text: `Looks like you've explored ScholarFlow! If you enjoyed using it, please tap the green ★ Rate Us button at the bottom-right to leave a quick rating — it means a lot! And if you spot any bugs or have suggestions, the blue 🐛 button right below Rate Us is your direct line to us. We read every report!`,
+  image: "/mascot-happy.png"
+};
+
 // Combine all page guides
 const ALL_PAGE_GUIDES: Record<string, GuideStep> = {
   ...PAGE_GUIDES,
@@ -309,6 +316,18 @@ export default function InteractiveGuide() {
 
     // Always read fresh from localStorage to avoid stale state
     const state = loadOnboardingState();
+
+    // After visiting 4+ pages, show the Rate Us / Bug Report tip once
+    const feedbackKey = '__feedback_tip_shown';
+    const hasSeenFeedback = state.visitedPages.includes(feedbackKey);
+    if (!hasSeenFeedback && state.visitedPages.length >= 4) {
+      const next = { ...state, visitedPages: [...state.visitedPages, feedbackKey] };
+      saveOnboardingState(next);
+      setCurrentStep(FEEDBACK_GUIDE);
+      setIsVisible(true);
+      setIsMinimized(false);
+      return;
+    }
 
     const guideKey = getGuideKey(pathname, role);
     if (!guideKey) return;
