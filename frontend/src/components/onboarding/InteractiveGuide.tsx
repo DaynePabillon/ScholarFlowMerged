@@ -177,7 +177,7 @@ const ALL_PAGE_GUIDES: Record<string, GuideStep> = {
 };
 
 // Google Form URL for rating — replace with your actual form link
-const RATING_FORM_URL = 'https://forms.gle/yourFormIdHere';
+const RATING_FORM_URL = 'https://forms.gle/xGsY2AYWBLzm8YLx6';
 
 // ── Rate Us Button ─────────────────────────────────────────────────────────────
 export function RateUsButton() {
