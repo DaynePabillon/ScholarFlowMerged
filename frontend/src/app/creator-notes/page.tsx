@@ -17,7 +17,11 @@ import {
     Trash2,
     Filter,
     AlertTriangle,
-    Shield
+    Shield,
+    Megaphone,
+    Plus,
+    ToggleLeft,
+    ToggleRight
 } from 'lucide-react';
 
 interface BugReport {
@@ -82,8 +86,15 @@ export default function CreatorNotesPage() {
     const [filterStatus, setFilterStatus] = useState('');
     const [filterCategory, setFilterCategory] = useState('');
     const [selectedReport, setSelectedReport] = useState<BugReport | null>(null);
-    const [activeTab, setActiveTab] = useState<'reports' | 'users'>('reports');
+    const [activeTab, setActiveTab] = useState<'reports' | 'users' | 'announcements'>('reports');
     const [orgMembers, setOrgMembers] = useState<any[]>([]);
+
+    // Announcement state
+    const [announcements, setAnnouncements] = useState<any[]>([]);
+    const [annMessage, setAnnMessage] = useState('');
+    const [annType, setAnnType] = useState('info');
+    const [annExpiry, setAnnExpiry] = useState('');
+    const [annPosting, setAnnPosting] = useState(false);
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -110,6 +121,67 @@ export default function CreatorNotesPage() {
         checkAuthorization();
     }, [mounted, router]);
 
+    const fetchAnnouncements = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/reports/announcements/all`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const data = await res.json();
+            setAnnouncements(data.announcements || []);
+        } catch (err) {
+            console.error('Failed to fetch announcements:', err);
+        }
+    };
+
+    const postAnnouncement = async () => {
+        if (!annMessage.trim()) return;
+        setAnnPosting(true);
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/api/reports/announcements`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: annMessage, type: annType, expires_at: annExpiry || null }),
+            });
+            setAnnMessage('');
+            setAnnExpiry('');
+            await fetchAnnouncements();
+        } catch (err) {
+            console.error('Failed to post announcement:', err);
+        } finally {
+            setAnnPosting(false);
+        }
+    };
+
+    const toggleAnnouncement = async (id: string, is_active: boolean) => {
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/api/reports/announcements/${id}`, {
+                method: 'PATCH',
+                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ is_active }),
+            });
+            await fetchAnnouncements();
+        } catch (err) {
+            console.error('Failed to toggle announcement:', err);
+        }
+    };
+
+    const deleteAnnouncement = async (id: string) => {
+        if (!confirm('Delete this announcement?')) return;
+        try {
+            const token = localStorage.getItem('token');
+            await fetch(`${API_URL}/api/reports/announcements/${id}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            await fetchAnnouncements();
+        } catch (err) {
+            console.error('Failed to delete announcement:', err);
+        }
+    };
+
     const checkAuthorization = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -123,6 +195,7 @@ export default function CreatorNotesPage() {
                 fetchReports();
                 fetchStats();
                 fetchOrgMembers();
+                fetchAnnouncements();
             } else {
                 setAuthorized(false);
             }
@@ -301,6 +374,13 @@ export default function CreatorNotesPage() {
                         className={`py-3 px-6 font-medium text-sm border-b-2 ${activeTab === 'users' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
                         User Management
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('announcements')}
+                        className={`py-3 px-6 font-medium text-sm border-b-2 flex items-center gap-2 ${activeTab === 'announcements' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        <Megaphone className="w-4 h-4" />
+                        Announcements
                     </button>
                 </div>
 
@@ -496,6 +576,108 @@ export default function CreatorNotesPage() {
                 </div>
                 </>
             )}
+
+                {activeTab === 'announcements' && (
+                    <div className="space-y-6">
+                        {/* Compose */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                            <h2 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <Plus className="w-4 h-4" /> New Announcement
+                            </h2>
+                            <div className="space-y-4">
+                                <textarea
+                                    value={annMessage}
+                                    onChange={(e) => setAnnMessage(e.target.value)}
+                                    placeholder="Type your announcement message here..."
+                                    rows={3}
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                                />
+                                <div className="flex gap-3 flex-wrap">
+                                    <select
+                                        value={annType}
+                                        onChange={(e) => setAnnType(e.target.value)}
+                                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="info">ℹ️ Info</option>
+                                        <option value="warning">⚠️ Warning</option>
+                                        <option value="success">✅ Success</option>
+                                        <option value="maintenance">🔧 Maintenance</option>
+                                    </select>
+                                    <div className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-500">Expires:</label>
+                                        <input
+                                            type="datetime-local"
+                                            value={annExpiry}
+                                            onChange={(e) => setAnnExpiry(e.target.value)}
+                                            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={postAnnouncement}
+                                        disabled={annPosting || !annMessage.trim()}
+                                        className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                    >
+                                        <Megaphone className="w-4 h-4" />
+                                        {annPosting ? 'Publishing...' : 'Publish Live'}
+                                    </button>
+                                </div>
+                                <p className="text-xs text-gray-400">Publishing a new announcement will automatically deactivate any currently active one.</p>
+                            </div>
+                        </div>
+
+                        {/* History */}
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="p-4 border-b border-gray-100">
+                                <h2 className="font-semibold text-gray-900">All Announcements ({announcements.length})</h2>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                                {announcements.length === 0 ? (
+                                    <div className="p-8 text-center text-gray-400">
+                                        <Megaphone className="w-10 h-10 mx-auto mb-2 text-gray-200" />
+                                        <p>No announcements yet</p>
+                                    </div>
+                                ) : announcements.map((ann) => (
+                                    <div key={ann.id} className={`p-4 flex items-start gap-4 ${ann.is_active ? 'bg-blue-50' : ''}`}>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className={`px-2 py-0.5 rounded text-xs font-semibold uppercase ${
+                                                    ann.type === 'warning' ? 'bg-amber-100 text-amber-700' :
+                                                    ann.type === 'success' ? 'bg-green-100 text-green-700' :
+                                                    ann.type === 'maintenance' ? 'bg-slate-100 text-slate-700' :
+                                                    'bg-blue-100 text-blue-700'
+                                                }`}>{ann.type}</span>
+                                                {ann.is_active && <span className="px-2 py-0.5 bg-green-500 text-white text-xs font-bold rounded uppercase">LIVE</span>}
+                                            </div>
+                                            <p className="text-sm text-gray-800">{ann.message}</p>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(ann.created_at).toLocaleString()}
+                                                {ann.expires_at && ` · Expires ${new Date(ann.expires_at).toLocaleString()}`}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                            <button
+                                                onClick={() => toggleAnnouncement(ann.id, !ann.is_active)}
+                                                className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                                                title={ann.is_active ? 'Deactivate' : 'Activate'}
+                                            >
+                                                {ann.is_active
+                                                    ? <ToggleRight className="w-5 h-5 text-green-500" />
+                                                    : <ToggleLeft className="w-5 h-5 text-gray-400" />}
+                                            </button>
+                                            <button
+                                                onClick={() => deleteAnnouncement(ann.id)}
+                                                className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {activeTab === 'users' && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

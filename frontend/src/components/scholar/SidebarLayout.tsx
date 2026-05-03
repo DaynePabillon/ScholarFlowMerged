@@ -26,6 +26,7 @@ import { useTheme } from '@/contexts/scholar/ThemeContext';
 import apiClient from '@/lib/api/client';
 import BugReportModal from '@/components/reports/BugReportModal';
 import InteractiveGuide, { RateUsButton } from '@/components/onboarding/InteractiveGuide';
+import AnnouncementBanner from '@/components/announcements/AnnouncementBanner';
 
 const normalizeScholarRole = (value: unknown): string => {
     const role = String(value || '').trim()
@@ -198,6 +199,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
     return (
         <div className="min-h-screen relative overflow-hidden font-sans transition-colors duration-300" style={{ backgroundColor: 'var(--color-background)' }}>
+            <AnnouncementBanner />
             {/* Animated Background Elements (SkyFlow Style) */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/30 rounded-full blur-3xl animate-float-slow"></div>

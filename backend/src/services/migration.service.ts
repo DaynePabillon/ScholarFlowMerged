@@ -1183,6 +1183,21 @@ async function runMigrations(): Promise<void> {
             END
           );
       `
+    },
+    {
+      name: '041_create_announcements',
+      sql: `
+        CREATE TABLE IF NOT EXISTS announcements (
+          id          SERIAL PRIMARY KEY,
+          message     TEXT        NOT NULL,
+          type        VARCHAR(20) NOT NULL DEFAULT 'info',
+          is_active   BOOLEAN     NOT NULL DEFAULT true,
+          expires_at  TIMESTAMPTZ,
+          created_by  TEXT        NOT NULL,
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `
     }
   ];
 

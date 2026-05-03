@@ -265,4 +265,133 @@ router.patch('/users/:memberId/role', authenticateToken, async (req: AuthRequest
     }
 });
 
+// ── ANNOUNCEMENTS ──────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/reports/announcement
+ * Returns the currently active announcement (any authenticated user)
+ */
+router.get('/announcement', authenticateToken, async (_req: AuthRequest, res: Response) => {
+    try {
+        const result = await query(
+            `SELECT * FROM announcements
+             WHERE is_active = true
+               AND (expires_at IS NULL OR expires_at > NOW())
+             ORDER BY created_at DESC
+             LIMIT 1`
+        );
+        return res.json({ announcement: result.rows[0] || null });
+    } catch (error) {
+        logger.error('Error fetching announcement:', error);
+        return res.status(500).json({ error: 'Failed to fetch announcement' });
+    }
+});
+
+/**
+ * GET /api/reports/announcements/all
+ * Returns all announcements (creator only)
+ */
+router.get('/announcements/all', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const userEmail = req.user?.email;
+        if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
+
+        const result = await query(`SELECT * FROM announcements ORDER BY created_at DESC`);
+        return res.json({ announcements: result.rows });
+    } catch (error) {
+        logger.error('Error fetching all announcements:', error);
+        return res.status(500).json({ error: 'Failed to fetch announcements' });
+    }
+});
+
+/**
+ * POST /api/reports/announcements
+ * Create a new announcement (creator only)
+ */
+router.post('/announcements', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const userEmail = req.user?.email;
+        if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
+
+        const { message, type, expires_at } = req.body;
+        if (!message) return res.status(400).json({ error: 'Message is required' });
+
+        const validTypes = ['info', 'warning', 'success', 'maintenance'];
+        const announcementType = validTypes.includes(type) ? type : 'info';
+
+        // Deactivate all existing active announcements first (only one active at a time)
+        await query(`UPDATE announcements SET is_active = false`);
+
+        const result = await query(
+            `INSERT INTO announcements (message, type, is_active, expires_at, created_by)
+             VALUES ($1, $2, true, $3, $4) RETURNING *`,
+            [message, announcementType, expires_at || null, userEmail]
+        );
+
+        logger.info(`Announcement created by ${userEmail}: ${message.slice(0, 60)}`);
+        return res.status(201).json({ announcement: result.rows[0] });
+    } catch (error) {
+        logger.error('Error creating announcement:', error);
+        return res.status(500).json({ error: 'Failed to create announcement' });
+    }
+});
+
+/**
+ * PATCH /api/reports/announcements/:id
+ * Update / toggle active status (creator only)
+ */
+router.patch('/announcements/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const userEmail = req.user?.email;
+        if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
+
+        const { id } = req.params;
+        const { message, type, is_active, expires_at } = req.body;
+
+        const updates: string[] = [];
+        const values: any[] = [];
+        let i = 1;
+
+        if (message !== undefined) { updates.push(`message = $${i++}`); values.push(message); }
+        if (type !== undefined)    { updates.push(`type = $${i++}`);    values.push(type); }
+        if (is_active !== undefined) {
+            // If activating this one, deactivate all others first
+            if (is_active) await query(`UPDATE announcements SET is_active = false`);
+            updates.push(`is_active = $${i++}`);
+            values.push(is_active);
+        }
+        if (expires_at !== undefined) { updates.push(`expires_at = $${i++}`); values.push(expires_at || null); }
+        updates.push(`updated_at = NOW()`);
+        values.push(id);
+
+        const result = await query(
+            `UPDATE announcements SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
+            values
+        );
+        if (!result.rows[0]) return res.status(404).json({ error: 'Announcement not found' });
+
+        return res.json({ announcement: result.rows[0] });
+    } catch (error) {
+        logger.error('Error updating announcement:', error);
+        return res.status(500).json({ error: 'Failed to update announcement' });
+    }
+});
+
+/**
+ * DELETE /api/reports/announcements/:id
+ * Delete an announcement (creator only)
+ */
+router.delete('/announcements/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const userEmail = req.user?.email;
+        if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
+
+        await query('DELETE FROM announcements WHERE id = $1', [req.params.id]);
+        return res.json({ success: true });
+    } catch (error) {
+        logger.error('Error deleting announcement:', error);
+        return res.status(500).json({ error: 'Failed to delete announcement' });
+    }
+});
+
 export default router;
