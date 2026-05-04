@@ -317,6 +317,13 @@ export default function InteractiveGuide() {
     const guideKey = getGuideKey(pathname, role);
     if (!guideKey) return;
 
+    // Portal home only shows once ever
+    if (guideKey === '/') {
+      const state = loadOnboardingState();
+      if (state.hasSeenWelcome) return;
+      saveOnboardingState({ ...state, hasSeenWelcome: true });
+    }
+
     const guide = ALL_PAGE_GUIDES[guideKey];
     setCurrentStep(guide);
     setIsVisible(true);
