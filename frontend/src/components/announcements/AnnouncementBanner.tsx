@@ -36,6 +36,9 @@ export default function AnnouncementBanner() {
     const token = localStorage.getItem('auth_token') || localStorage.getItem('token')
     if (!token) return
 
+    const dismissedId = sessionStorage.getItem('dismissed_announcement')
+
+    // Initial fetch so the banner shows immediately on mount
     fetch(`${API_URL}/api/reports/announcement`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -43,14 +46,30 @@ export default function AnnouncementBanner() {
       .then((data) => {
         if (data?.announcement) {
           const ann = data.announcement as Announcement
-          // Check if user already dismissed this specific announcement id
-          const dismissedId = sessionStorage.getItem('dismissed_announcement')
-          if (String(ann.id) !== dismissedId) {
-            setAnnouncement(ann)
-          }
+          if (String(ann.id) !== dismissedId) setAnnouncement(ann)
         }
       })
       .catch(() => {})
+
+    // SSE stream for live updates
+    const es = new EventSource(`${API_URL}/api/sse/announcements?token=${token}`)
+    es.addEventListener('announcement', (e) => {
+      try {
+        const ann: Announcement | null = JSON.parse((e as MessageEvent).data)
+        if (!ann) {
+          setAnnouncement(null)
+          return
+        }
+        const currentDismissed = sessionStorage.getItem('dismissed_announcement')
+        if (String(ann.id) !== currentDismissed) {
+          setAnnouncement(ann)
+          setDismissed(false)
+        }
+      } catch (_) {}
+    })
+    es.onerror = () => es.close()
+
+    return () => es.close()
   }, [])
 
   const handleDismiss = () => {

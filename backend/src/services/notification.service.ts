@@ -1,4 +1,5 @@
 import { pool } from '../config/database';
+import { sseService } from './sse.service';
 
 export interface Notification {
     id?: string;
@@ -20,7 +21,9 @@ export const notificationService = {
        RETURNING *`,
             [notification.user_id, notification.type, notification.title, notification.message, notification.task_id]
         );
-        return result.rows[0];
+        const created = result.rows[0];
+        sseService.pushNotification(notification.user_id, created);
+        return created;
     },
 
     // Get user's notifications

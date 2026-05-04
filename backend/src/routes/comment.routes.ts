@@ -3,6 +3,7 @@ import { pool } from '../config/database';
 import { authenticateToken } from '../middleware/auth.middleware';
 import activityService from '../services/activity.service';
 import notificationService from '../services/notification.service';
+import { sseService } from '../services/sse.service';
 
 const router = Router();
 
@@ -105,6 +106,7 @@ router.post('/tasks/:taskId/comments', authenticateToken, async (req: Request, r
             await notificationService.notifyNewComment(taskId, task.title, task.assigned_to, user.name);
         }
 
+        sseService.broadcastComment(taskId, result.rows[0]);
         res.status(201).json({ comment: result.rows[0] });
     } catch (error) {
         console.error('Error adding comment:', error);

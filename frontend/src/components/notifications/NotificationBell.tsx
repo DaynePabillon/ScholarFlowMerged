@@ -16,7 +16,7 @@ import {
     AlertCircle, 
     User 
 } from 'lucide-react'
-import apiClient from '@/lib/api/client'
+import apiClient, { API_URL } from '@/lib/api/client'
 
 interface Notification {
     id: string
@@ -38,9 +38,21 @@ export default function NotificationBell() {
 
     useEffect(() => {
         fetchNotifications()
-        // Poll for new notifications every 30 seconds
-        const interval = setInterval(fetchNotifications, 30000)
-        return () => clearInterval(interval)
+
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token')
+        if (!token) return
+
+        const es = new EventSource(`${API_URL}/api/sse/notifications?token=${token}`)
+        es.addEventListener('notification', (e) => {
+            try {
+                const notif: Notification = JSON.parse((e as MessageEvent).data)
+                setNotifications((prev) => [notif, ...prev])
+                setUnreadCount((prev) => prev + 1)
+            } catch (_) {}
+        })
+        es.onerror = () => es.close()
+
+        return () => es.close()
     }, [])
 
     useEffect(() => {

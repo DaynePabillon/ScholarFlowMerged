@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken } from '../middleware/auth.middleware';
 import { query } from '../config/database';
 import logger from '../config/logger';
+import { sseService } from '../services/sse.service';
 
 const router = Router();
 
@@ -329,6 +330,7 @@ router.post('/announcements', authenticateToken, async (req: AuthRequest, res: R
         );
 
         logger.info(`Announcement created by ${userEmail}: ${message.slice(0, 60)}`);
+        sseService.broadcastAnnouncement(result.rows[0]);
         return res.status(201).json({ announcement: result.rows[0] });
     } catch (error) {
         logger.error('Error creating announcement:', error);
@@ -370,6 +372,11 @@ router.patch('/announcements/:id', authenticateToken, async (req: AuthRequest, r
         );
         if (!result.rows[0]) return res.status(404).json({ error: 'Announcement not found' });
 
+        if (result.rows[0].is_active) {
+            sseService.broadcastAnnouncement(result.rows[0]);
+        } else {
+            sseService.broadcastAnnouncement(null);
+        }
         return res.json({ announcement: result.rows[0] });
     } catch (error) {
         logger.error('Error updating announcement:', error);
