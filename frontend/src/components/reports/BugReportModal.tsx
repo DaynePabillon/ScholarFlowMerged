@@ -63,7 +63,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
 
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100]">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden text-gray-900">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-blue-500 to-cyan-500 px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -91,7 +91,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                     <form onSubmit={handleSubmit} className="p-6 space-y-5">
                         {/* Category Selection */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-800 mb-2">
                                 Category
                             </label>
                             <div className="grid grid-cols-2 gap-2">
@@ -101,12 +101,12 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                                         type="button"
                                         onClick={() => setCategory(cat.value)}
                                         className={`flex items-center gap-2 px-4 py-3 rounded-lg border-2 transition-all ${category === cat.value
-                                                ? 'border-blue-500 bg-blue-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                                ? 'border-blue-500 bg-blue-50 text-gray-900'
+                                                : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50 text-gray-900'
                                             }`}
                                     >
                                         <cat.icon className={`w-5 h-5 ${cat.color}`} />
-                                        <span className="text-sm font-medium text-gray-700">{cat.label}</span>
+                                        <span className="text-sm font-medium text-gray-800">{cat.label}</span>
                                     </button>
                                 ))}
                             </div>
@@ -114,7 +114,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
 
                         {/* Title */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-800 mb-2">
                                 Title
                             </label>
                             <input
@@ -122,14 +122,14 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                                 value={title}
                                 onChange={(e) => setTitle(e.target.value)}
                                 placeholder="Brief description of the issue..."
-                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400 bg-white"
                                 required
                             />
                         </div>
 
                         {/* Description */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label className="block text-sm font-medium text-gray-800 mb-2">
                                 Description
                             </label>
                             <textarea
@@ -137,7 +137,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                                 onChange={(e) => setDescription(e.target.value)}
                                 placeholder="Please provide details about the issue, steps to reproduce, what you expected to happen..."
                                 rows={4}
-                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-gray-900 placeholder-gray-400 bg-white"
                                 required
                             />
                         </div>
@@ -156,7 +156,7 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="flex-1 px-4 py-3 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                                className="flex-1 px-4 py-3 border border-gray-200 text-gray-700 bg-white rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors font-medium"
                             >
                                 Cancel
                             </button>

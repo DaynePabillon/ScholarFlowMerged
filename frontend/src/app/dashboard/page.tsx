@@ -544,15 +544,34 @@ function StatCard({ icon, gradient, label, value, sub }: { icon: React.ReactNode
 }
 
 function QuickAction({ href, icon, label, color, external }: { href: string; icon: React.ReactNode; label: string; color: string; external?: boolean }) {
-  const colorMap: Record<string, string> = {
-    blue: 'from-blue-500 to-cyan-500', indigo: 'from-indigo-500 to-purple-500',
-    purple: 'from-purple-500 to-pink-500', cyan: 'from-cyan-500 to-teal-500',
+  const gradientMap: Record<string, string> = {
+    blue: 'linear-gradient(to right, #3b82f6, #06b6d4)',
+    indigo: 'linear-gradient(to right, #6366f1, #a855f7)',
+    purple: 'linear-gradient(to right, #a855f7, #ec4899)',
+    cyan: 'linear-gradient(to right, #06b6d4, #14b8a6)',
   }
+  const gradient = gradientMap[color] ?? gradientMap.blue
   return (
-    <a href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer' : undefined}
-      className={`flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl hover:bg-gradient-to-r hover:${colorMap[color]} hover:text-white hover:border-transparent transition-all duration-200 group shadow-sm hover:shadow-md`}>
-      <span className={`text-${color}-600 group-hover:text-white transition-colors`}>{icon}</span>
-      <span className="text-sm font-medium text-gray-700 group-hover:text-white transition-colors">{label}</span>
+    <a
+      href={href}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noopener noreferrer' : undefined}
+      className="flex items-center gap-2 p-3 bg-white border border-gray-200 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md hover:border-transparent"
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = gradient
+        e.currentTarget.style.color = '#fff'
+        const spans = e.currentTarget.querySelectorAll('span')
+        spans.forEach((s) => ((s as HTMLElement).style.color = '#fff'))
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = '#fff'
+        e.currentTarget.style.color = ''
+        const spans = e.currentTarget.querySelectorAll('span')
+        spans.forEach((s) => ((s as HTMLElement).style.color = ''))
+      }}
+    >
+      <span>{icon}</span>
+      <span className="text-sm font-medium text-gray-700">{label}</span>
     </a>
   )
 }

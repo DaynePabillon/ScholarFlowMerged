@@ -314,40 +314,10 @@ export default function InteractiveGuide() {
     const role = getEffectiveRole();
     setUserRole(role);
 
-    // Always read fresh from localStorage to avoid stale state
-    const state = loadOnboardingState();
-
-    // After visiting 4+ pages, show the Rate Us / Bug Report tip once
-    const feedbackKey = '__feedback_tip_shown';
-    const hasSeenFeedback = state.visitedPages.includes(feedbackKey);
-    if (!hasSeenFeedback && state.visitedPages.length >= 4) {
-      const next = { ...state, visitedPages: [...state.visitedPages, feedbackKey] };
-      saveOnboardingState(next);
-      setCurrentStep(FEEDBACK_GUIDE);
-      setIsVisible(true);
-      setIsMinimized(false);
-      return;
-    }
-
     const guideKey = getGuideKey(pathname, role);
     if (!guideKey) return;
 
     const guide = ALL_PAGE_GUIDES[guideKey];
-
-    if (guideKey === '/') {
-      if (state.hasSeenWelcome) return;
-      const next = { ...state, hasSeenWelcome: true };
-      saveOnboardingState(next);
-      setCurrentStep(guide);
-      setIsVisible(true);
-      setIsMinimized(false);
-      return;
-    }
-
-    if (state.visitedPages.includes(pathname)) return;
-
-    const next = { ...state, visitedPages: [...state.visitedPages, pathname] };
-    saveOnboardingState(next);
     setCurrentStep(guide);
     setIsVisible(true);
     setIsMinimized(false);
