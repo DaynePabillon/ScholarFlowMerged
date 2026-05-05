@@ -270,13 +270,35 @@ router.patch('/users/:memberId/role', authenticateToken, async (req: AuthRequest
 
 /**
  * GET /api/reports/announcement
- * Returns the currently active announcement (any authenticated user)
+ * Returns the currently active announcement.
+ * If ?orgId= is provided, returns the most recent org-specific announcement first,
+ * falling back to a global (organization_id IS NULL) one.
  */
-router.get('/announcement', authenticateToken, async (_req: AuthRequest, res: Response) => {
+router.get('/announcement', authenticateToken, async (req: AuthRequest, res: Response) => {
     try {
+        const orgId = req.query.orgId as string | undefined;
+
+        if (orgId) {
+            // Try org-specific first
+            const orgResult = await query(
+                `SELECT * FROM announcements
+                 WHERE is_active = true
+                   AND organization_id = $1
+                   AND (expires_at IS NULL OR expires_at > NOW())
+                 ORDER BY created_at DESC
+                 LIMIT 1`,
+                [orgId]
+            );
+            if (orgResult.rows[0]) {
+                return res.json({ announcement: orgResult.rows[0] });
+            }
+        }
+
+        // Fall back to global
         const result = await query(
             `SELECT * FROM announcements
              WHERE is_active = true
+               AND organization_id IS NULL
                AND (expires_at IS NULL OR expires_at > NOW())
              ORDER BY created_at DESC
              LIMIT 1`
@@ -297,7 +319,7 @@ router.get('/announcements/all', authenticateToken, async (req: AuthRequest, res
         const userEmail = req.user?.email;
         if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
 
-        const result = await query(`SELECT * FROM announcements ORDER BY created_at DESC`);
+        const result = await query(`SELECT a.*, o.name as org_name FROM announcements a LEFT JOIN organizations o ON a.organization_id = o.id ORDER BY a.created_at DESC`);
         return res.json({ announcements: result.rows });
     } catch (error) {
         logger.error('Error fetching all announcements:', error);
@@ -314,19 +336,24 @@ router.post('/announcements', authenticateToken, async (req: AuthRequest, res: R
         const userEmail = req.user?.email;
         if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
 
-        const { message, type, expires_at } = req.body;
+        const { message, type, expires_at, organization_id } = req.body;
         if (!message) return res.status(400).json({ error: 'Message is required' });
 
         const validTypes = ['info', 'warning', 'success', 'maintenance'];
         const announcementType = validTypes.includes(type) ? type : 'info';
+        const orgId: string | null = organization_id || null;
 
-        // Deactivate all existing active announcements first (only one active at a time)
-        await query(`UPDATE announcements SET is_active = false`);
+        // Deactivate existing active announcements in the same scope
+        if (orgId) {
+            await query(`UPDATE announcements SET is_active = false WHERE organization_id = $1`, [orgId]);
+        } else {
+            await query(`UPDATE announcements SET is_active = false WHERE organization_id IS NULL`);
+        }
 
         const result = await query(
-            `INSERT INTO announcements (message, type, is_active, expires_at, created_by)
-             VALUES ($1, $2, true, $3, $4) RETURNING *`,
-            [message, announcementType, expires_at || null, userEmail]
+            `INSERT INTO announcements (message, type, is_active, expires_at, created_by, organization_id)
+             VALUES ($1, $2, true, $3, $4, $5) RETURNING *`,
+            [message, announcementType, expires_at || null, userEmail, orgId]
         );
 
         logger.info(`Announcement created by ${userEmail}: ${message.slice(0, 60)}`);
@@ -348,7 +375,7 @@ router.patch('/announcements/:id', authenticateToken, async (req: AuthRequest, r
         if (userEmail !== CREATOR_EMAIL) return res.status(403).json({ error: 'Access denied' });
 
         const { id } = req.params;
-        const { message, type, is_active, expires_at } = req.body;
+        const { message, type, is_active, expires_at, organization_id } = req.body;
 
         const updates: string[] = [];
         const values: any[] = [];
@@ -357,11 +384,20 @@ router.patch('/announcements/:id', authenticateToken, async (req: AuthRequest, r
         if (message !== undefined) { updates.push(`message = $${i++}`); values.push(message); }
         if (type !== undefined)    { updates.push(`type = $${i++}`);    values.push(type); }
         if (is_active !== undefined) {
-            // If activating this one, deactivate all others first
-            if (is_active) await query(`UPDATE announcements SET is_active = false`);
+            if (is_active) {
+                // Deactivate others in same scope
+                const scopeRow = await query('SELECT organization_id FROM announcements WHERE id = $1', [id]);
+                const scopeOrgId = scopeRow.rows[0]?.organization_id || null;
+                if (scopeOrgId) {
+                    await query(`UPDATE announcements SET is_active = false WHERE organization_id = $1`, [scopeOrgId]);
+                } else {
+                    await query(`UPDATE announcements SET is_active = false WHERE organization_id IS NULL`);
+                }
+            }
             updates.push(`is_active = $${i++}`);
             values.push(is_active);
         }
+        if (organization_id !== undefined) { updates.push(`organization_id = $${i++}`); values.push(organization_id || null); }
         if (expires_at !== undefined) { updates.push(`expires_at = $${i++}`); values.push(expires_at || null); }
         updates.push(`updated_at = NOW()`);
         values.push(id);

@@ -95,6 +95,7 @@ export default function CreatorNotesPage() {
     const [annType, setAnnType] = useState('info');
     const [annExpiry, setAnnExpiry] = useState('');
     const [annPosting, setAnnPosting] = useState(false);
+    const [annOrgId, setAnnOrgId] = useState<string>('global');
 
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
@@ -142,10 +143,16 @@ export default function CreatorNotesPage() {
             await fetch(`${API_URL}/api/reports/announcements`, {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: annMessage, type: annType, expires_at: annExpiry || null }),
+                body: JSON.stringify({
+                    message: annMessage,
+                    type: annType,
+                    expires_at: annExpiry || null,
+                    organization_id: annOrgId === 'global' ? null : annOrgId,
+                }),
             });
             setAnnMessage('');
             setAnnExpiry('');
+            setAnnOrgId('global');
             await fetchAnnouncements();
         } catch (err) {
             console.error('Failed to post announcement:', err);
@@ -603,6 +610,16 @@ export default function CreatorNotesPage() {
                                         <option value="success">✅ Success</option>
                                         <option value="maintenance">🔧 Maintenance</option>
                                     </select>
+                                    <select
+                                        value={annOrgId}
+                                        onChange={(e) => setAnnOrgId(e.target.value)}
+                                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    >
+                                        <option value="global">🌐 Global (all users)</option>
+                                        {organizations.map((org: any) => (
+                                            <option key={org.id} value={org.id}>{org.name}</option>
+                                        ))}
+                                    </select>
                                     <div className="flex items-center gap-2">
                                         <label className="text-sm text-gray-500">Expires:</label>
                                         <input
@@ -652,6 +669,10 @@ export default function CreatorNotesPage() {
                                             <p className="text-xs text-gray-400 mt-1">
                                                 {new Date(ann.created_at).toLocaleString()}
                                                 {ann.expires_at && ` · Expires ${new Date(ann.expires_at).toLocaleString()}`}
+                                                {' · '}
+                                                <span className={`font-medium ${ann.org_name ? 'text-purple-500' : 'text-blue-400'}`}>
+                                                    {ann.org_name ? `📌 ${ann.org_name}` : '🌐 Global'}
+                                                </span>
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-2 flex-shrink-0">

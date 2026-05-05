@@ -38,8 +38,17 @@ export default function AnnouncementBanner() {
 
     const dismissedId = sessionStorage.getItem('dismissed_announcement')
 
-    // Initial fetch so the banner shows immediately on mount
-    fetch(`${API_URL}/api/reports/announcement`, {
+    // Read selected org for scoped announcements
+    let orgId: string | null = null
+    try {
+      const stored = localStorage.getItem('selectedOrganization')
+      if (stored) orgId = JSON.parse(stored)?.id || null
+    } catch (_) {}
+
+    const orgParam = orgId ? `&orgId=${orgId}` : ''
+
+    // Initial fetch
+    fetch(`${API_URL}/api/reports/announcement${orgId ? `?orgId=${orgId}` : ''}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.ok ? r.json() : null)
@@ -52,7 +61,7 @@ export default function AnnouncementBanner() {
       .catch(() => {})
 
     // SSE stream for live updates
-    const es = new EventSource(`${API_URL}/api/sse/announcements?token=${token}`)
+    const es = new EventSource(`${API_URL}/api/sse/announcements?token=${token}${orgParam}`)
     es.addEventListener('announcement', (e) => {
       try {
         const ann: Announcement | null = JSON.parse((e as MessageEvent).data)

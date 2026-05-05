@@ -39,7 +39,8 @@ router.get('/announcements', (req: AuthRequest, res: Response) => {
   if (!sseAuth(req, res)) return;
   sseHeaders(res);
   const id = randomUUID();
-  sseService.addAnnouncementClient(id, res);
+  const orgId = req.query.orgId as string | undefined;
+  sseService.addAnnouncementClient(id, res, orgId);
   const hb = heartbeat(res);
   req.on('close', () => {
     clearInterval(hb);

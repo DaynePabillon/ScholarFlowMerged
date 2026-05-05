@@ -307,6 +307,9 @@ export default function InteractiveGuide() {
     setLoaded(true);
   }, []);
 
+  // Track the guide for the current page (used by ? button even after dismiss)
+  const [pageGuide, setPageGuide] = useState<GuideStep | null>(null);
+
   // Handle route changes - only after localStorage is ready
   useEffect(() => {
     if (!pathname || !loaded) return;
@@ -315,7 +318,13 @@ export default function InteractiveGuide() {
     setUserRole(role);
 
     const guideKey = getGuideKey(pathname, role);
-    if (!guideKey) return;
+    if (!guideKey) {
+      setPageGuide(null);
+      return;
+    }
+
+    const guide = ALL_PAGE_GUIDES[guideKey];
+    setPageGuide(guide);
 
     // Portal home only shows once ever
     if (guideKey === '/') {
@@ -324,7 +333,6 @@ export default function InteractiveGuide() {
       saveOnboardingState({ ...state, hasSeenWelcome: true });
     }
 
-    const guide = ALL_PAGE_GUIDES[guideKey];
     setCurrentStep(guide);
     setIsVisible(true);
     setIsMinimized(false);
@@ -375,8 +383,15 @@ export default function InteractiveGuide() {
     }
   };
 
-  // Don't render if no current step or not visible
-  if (!isVisible && !isMinimized) return null;
+  const handleReplay = () => {
+    if (!pageGuide) return;
+    setCurrentStep(pageGuide);
+    setIsVisible(true);
+    setIsMinimized(false);
+  };
+
+  // ? button — always visible when a guide exists for this page and Sky is dismissed
+  const showReplayButton = !isVisible && !isMinimized && !!pageGuide;
 
   // Minimized state - floating button
   if (isMinimized) {
@@ -391,7 +406,19 @@ export default function InteractiveGuide() {
     );
   }
 
-  if (!currentStep) return null;
+  if (showReplayButton) {
+    return (
+      <button
+        onClick={handleReplay}
+        className="fixed bottom-6 left-6 z-[9999] w-12 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center font-black text-lg"
+        title={`Ask ${MASCOT_NAME} about this page`}
+      >
+        ?
+      </button>
+    );
+  }
+
+  if (!isVisible || !currentStep) return null;
 
   return (
     <div className="fixed bottom-0 left-4 z-[9999] flex flex-row-reverse items-end gap-4 max-w-[580px] animate-in slide-in-from-bottom-8 duration-500">

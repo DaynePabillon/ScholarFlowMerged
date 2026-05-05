@@ -20,8 +20,8 @@ class SSEService {
     } catch (_) {}
   }
 
-  addAnnouncementClient(id: string, res: Response) {
-    this.announcementClients.set(id, { id, res });
+  addAnnouncementClient(id: string, res: Response, orgId?: string) {
+    this.announcementClients.set(id, { id, res, orgId });
   }
 
   removeAnnouncementClient(id: string) {
@@ -29,8 +29,18 @@ class SSEService {
   }
 
   broadcastAnnouncement(announcement: any) {
-    this.announcementClients.forEach(({ res }) => {
-      this.sendEvent(res, 'announcement', announcement);
+    this.announcementClients.forEach((client) => {
+      if (announcement === null) {
+        // Deactivation — notify all clients
+        this.sendEvent(client.res, 'announcement', null);
+      } else {
+        const annOrgId: string | null = announcement.organization_id || null;
+        const clientOrgId = client.orgId || null;
+        // Send if global announcement, or org matches
+        if (!annOrgId || clientOrgId === annOrgId) {
+          this.sendEvent(client.res, 'announcement', announcement);
+        }
+      }
     });
   }
 

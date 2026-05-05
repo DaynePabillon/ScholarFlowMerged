@@ -1198,6 +1198,13 @@ async function runMigrations(): Promise<void> {
           updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `
+    },
+    {
+      name: '042_announcements_org_scope',
+      sql: `
+        ALTER TABLE announcements
+          ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+      `
     }
   ];
 
