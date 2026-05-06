@@ -248,7 +248,7 @@ export default function WorkspaceSyncPage() {
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                             Workspace Sync
                         </h1>
-                        <p className="text-gray-500 mt-1.5">Detect your Google Sheets and import teams directly into a course</p>
+                        <p className="text-gray-500 mt-1.5">Detect your Google Sheets and import class teams directly into a course</p>
                     </div>
                 </div>
 

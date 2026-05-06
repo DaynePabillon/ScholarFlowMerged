@@ -45,12 +45,9 @@ const getInitialScholarRole = (): UserRole => {
 }
 
 const getInitialThemeMode = (): ThemeMode => {
-  if (typeof window === 'undefined') {
-    return 'light'
-  }
-
-  const savedMode = localStorage.getItem('themeMode') as ThemeMode | null
-  return savedMode || 'light'
+  // Keep the first render deterministic on both server and client.
+  // The saved preference is applied after mount to avoid hydration mismatch.
+  return 'light'
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

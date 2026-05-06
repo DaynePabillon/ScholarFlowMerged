@@ -154,19 +154,20 @@ export default function AdviserAvailabilityPage() {
   return (
     <SidebarLayout>
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
-        <div className="mb-8">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Adviser Availability</h1>
+        <div className="portal-panel-strong p-6 sm:p-8 mb-6">
+          <span className="portal-chip mb-3">Adviser Oversight</span>
+          <h1 className="text-4xl sm:text-5xl font-black tracking-tight" style={{ color: 'var(--color-text)' }}>Adviser Availability</h1>
           <p className="text-lg mt-2" style={{ color: 'var(--color-textSecondary)' }}>
             Admin view of adviser and their assigned groups for the selected semester.
           </p>
         </div>
 
-        <div className="glass-card p-6 mb-8">
+        <div className="portal-panel p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Semester</label>
+              <label className="block text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--color-textSecondary)' }}>Semester</label>
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
+                <Calendar className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
                 <select
                   value={selectedTerm}
                   onChange={(e) => {
@@ -174,7 +175,7 @@ export default function AdviserAvailabilityPage() {
                     setSelectedTerm(next);
                     void loadData(next);
                   }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="portal-input text-sm"
                 >
                   {data.terms.length === 0 ? (
                     <option value="">No semesters found</option>
@@ -188,14 +189,14 @@ export default function AdviserAvailabilityPage() {
             </div>
 
             <div className="md:col-span-2">
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Search Adviser or Group</label>
+              <label className="block text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--color-textSecondary)' }}>Search Adviser or Group</label>
               <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute top-3 left-3" />
+                <Search className="w-4 h-4 absolute top-3 left-3" style={{ color: 'var(--color-textSecondary)' }} />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Type adviser name, email, group, or course"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="portal-input pl-10 pr-4 py-2.5 text-sm"
                 />
               </div>
             </div>
@@ -203,42 +204,48 @@ export default function AdviserAvailabilityPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="glass-card p-6">
-              <p className="text-xs uppercase tracking-widest text-gray-400">Total Adviser</p>
-            <p className="text-4xl font-black text-blue-700 mt-2 flex items-center gap-2"><Users className="w-6 h-6" />{data.summary.totalAdvisers}</p>
+          <div className="portal-stat">
+              <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Total Adviser</p>
+            <p className="text-4xl font-black mt-2 flex items-center gap-2" style={{ color: 'var(--color-primary)' }}><Users className="w-6 h-6" />{data.summary.totalAdvisers}</p>
           </div>
-          <div className="glass-card p-6">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Assigned</p>
-            <p className="text-4xl font-black text-emerald-700 mt-2 flex items-center gap-2"><UserCheck className="w-6 h-6" />{data.summary.assignedAdvisers}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Assigned</p>
+            <p className="text-4xl font-black mt-2 flex items-center gap-2" style={{ color: 'var(--color-success)' }}><UserCheck className="w-6 h-6" />{data.summary.assignedAdvisers}</p>
           </div>
-          <div className="glass-card p-6">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Available</p>
-            <p className="text-4xl font-black text-amber-700 mt-2 flex items-center gap-2"><UserX className="w-6 h-6" />{data.summary.availableAdvisers}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Available</p>
+            <p className="text-4xl font-black mt-2 flex items-center gap-2" style={{ color: 'var(--color-warning)' }}><UserX className="w-6 h-6" />{data.summary.availableAdvisers}</p>
           </div>
         </div>
 
-        <div className="glass-card p-6 mb-8">
-          <h2 className="text-xl font-black text-gray-900 mb-4">Adviser Assignment List</h2>
+        <div className="portal-panel p-6 mb-8">
+          <h2 className="text-xl font-black mb-4" style={{ color: 'var(--color-text)' }}>Adviser Assignment List</h2>
           {loadingData ? (
             <div className="flex items-center justify-center py-10">
-              <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent" />
+              <div className="animate-spin rounded-full h-10 w-10 border-4 border-t-transparent" style={{ borderColor: 'var(--color-primary)' }} />
             </div>
           ) : filteredAdvisers.length === 0 ? (
-            <p className="text-sm text-gray-500">No adviser matches the current filter.</p>
+            <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No adviser matches the current filter.</p>
           ) : (
             <div className="space-y-4">
               {filteredAdvisers.map((adviser) => (
-                <div key={adviser.accountId} className="border border-gray-200 rounded-xl p-4 bg-white">
+                <div key={adviser.accountId} className="portal-panel p-4">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
-                      <p className="text-sm font-black text-gray-900">{adviser.name}</p>
-                      <p className="text-xs text-gray-500">{adviser.email}</p>
+                      <p className="text-sm font-black" style={{ color: 'var(--color-text)' }}>{adviser.name}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{adviser.email}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${adviser.assignedCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                      <span
+                        className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full"
+                        style={{
+                          backgroundColor: adviser.assignedCount > 0 ? 'color-mix(in srgb, var(--color-success) 14%, transparent)' : 'color-mix(in srgb, var(--color-warning) 14%, transparent)',
+                          color: adviser.assignedCount > 0 ? 'var(--color-success)' : 'var(--color-warning)'
+                        }}
+                      >
                         {adviser.availabilityStatus}
                       </span>
-                      <span className="text-xs text-gray-600 font-semibold">{adviser.assignedCount} group(s)</span>
+                      <span className="text-xs font-semibold" style={{ color: 'var(--color-textSecondary)' }}>{adviser.assignedCount} group(s)</span>
                     </div>
                   </div>
 
@@ -248,15 +255,15 @@ export default function AdviserAvailabilityPage() {
                         <Link
                           key={`${adviser.accountId}-${group.groupId}`}
                           href={`/scholar/courses/${group.courseId}?groupId=${encodeURIComponent(group.groupId)}`}
-                          className="text-xs p-2.5 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                          className="text-xs p-2.5 rounded-lg portal-panel hover:-translate-y-0.5 transition-all"
                         >
-                          <p className="font-bold text-gray-800">{group.groupName}</p>
-                          <p className="text-gray-500">{group.courseCode} · {group.courseSection}</p>
+                          <p className="font-bold" style={{ color: 'var(--color-text)' }}>{group.groupName}</p>
+                          <p style={{ color: 'var(--color-textSecondary)' }}>{group.courseCode} · {group.courseSection}</p>
                         </Link>
                       ))}
                     </div>
                   ) : (
-                    <p className="mt-3 text-xs text-gray-500">No assigned groups in this semester.</p>
+                    <p className="mt-3 text-xs" style={{ color: 'var(--color-textSecondary)' }}>No assigned groups in this semester.</p>
                   )}
                 </div>
               ))}
@@ -265,36 +272,36 @@ export default function AdviserAvailabilityPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="glass-card p-6">
-            <h2 className="text-xl font-black text-gray-900 mb-3">Unassigned Groups</h2>
-            <p className="text-xs text-gray-500 mb-3">Groups with no adviser label in team data.</p>
+          <div className="portal-panel p-6">
+            <h2 className="text-xl font-black mb-3" style={{ color: 'var(--color-text)' }}>Unassigned Groups</h2>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-textSecondary)' }}>Groups with no adviser label in team data.</p>
             {data.unassignedGroups.length === 0 ? (
-              <p className="text-sm text-green-700">All groups have adviser labels for this semester.</p>
+              <p className="text-sm" style={{ color: 'var(--color-success)' }}>All groups have adviser labels for this semester.</p>
             ) : (
               <div className="space-y-2">
                 {data.unassignedGroups.slice(0, 20).map((group) => (
                   <Link
                     key={`unassigned-${group.groupId}`}
                     href={`/scholar/courses/${group.courseId}?groupId=${encodeURIComponent(group.groupId)}`}
-                    className="block p-2.5 border border-amber-200 bg-amber-50 rounded-lg text-xs"
+                    className="block p-2.5 rounded-lg text-xs portal-panel hover:-translate-y-0.5 transition-all"
                   >
-                    <p className="font-bold text-amber-800">{group.groupName}</p>
-                    <p className="text-amber-700">{group.courseCode} · {group.courseSection}</p>
+                    <p className="font-bold" style={{ color: 'var(--color-warning)' }}>{group.groupName}</p>
+                    <p style={{ color: 'var(--color-textSecondary)' }}>{group.courseCode} · {group.courseSection}</p>
                   </Link>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="glass-card p-6">
-            <h2 className="text-xl font-black text-gray-900 mb-3">Unmapped Adviser Labels</h2>
-            <p className="text-xs text-gray-500 mb-3">Labels used in groups but not found in Adviser accounts.</p>
+          <div className="portal-panel p-6">
+            <h2 className="text-xl font-black mb-3" style={{ color: 'var(--color-text)' }}>Unmapped Adviser Labels</h2>
+            <p className="text-xs mb-3" style={{ color: 'var(--color-textSecondary)' }}>Labels used in groups but not found in Adviser accounts.</p>
             {data.unmappedAdviserLabels.length === 0 ? (
-              <p className="text-sm text-green-700">No unmapped adviser labels found.</p>
+              <p className="text-sm" style={{ color: 'var(--color-success)' }}>No unmapped adviser labels found.</p>
             ) : (
               <ul className="space-y-2">
                 {data.unmappedAdviserLabels.map((label) => (
-                  <li key={label} className="text-xs p-2.5 border border-red-200 bg-red-50 rounded-lg text-red-700 flex items-start gap-2">
+                  <li key={label} className="text-xs p-2.5 rounded-lg flex items-start gap-2 portal-panel" style={{ color: 'var(--color-error)' }}>
                     <AlertTriangle className="w-3.5 h-3.5 mt-0.5" />
                     <span>{label}</span>
                   </li>

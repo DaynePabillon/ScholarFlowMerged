@@ -100,50 +100,51 @@ export default function AdminDataIntegrityPage() {
   return (
     <SidebarLayout>
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
-        <div className="mb-10">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Data Integrity</h1>
+        <div className="portal-panel-strong p-6 sm:p-8 mb-8">
+          <span className="portal-chip mb-3">Admin Review</span>
+          <h1 className="text-5xl font-black tracking-tight" style={{ color: 'var(--color-text)' }}>Data Integrity</h1>
           <p className="text-lg mt-2" style={{ color: 'var(--color-textSecondary)' }}>
             Admin quality checks for roles, groups, consultations, and academic records.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-          <div className="glass-card p-6">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Courses</p>
-            <p className="text-4xl font-black text-blue-700 mt-2">{courses.length}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Courses</p>
+            <p className="text-4xl font-black mt-2" style={{ color: 'var(--color-text)' }}>{courses.length}</p>
           </div>
-          <div className="glass-card p-6">
-            <p className="text-xs uppercase tracking-widest text-gray-400">High Severity</p>
-            <p className="text-4xl font-black text-red-700 mt-2">{summary.high}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>High Severity</p>
+            <p className="text-4xl font-black mt-2" style={{ color: 'var(--color-error)' }}>{summary.high}</p>
           </div>
-          <div className="glass-card p-6">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Medium Severity</p>
-            <p className="text-4xl font-black text-amber-700 mt-2">{summary.medium}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Medium Severity</p>
+            <p className="text-4xl font-black mt-2" style={{ color: 'var(--color-warning)' }}>{summary.medium}</p>
           </div>
-          <div className="glass-card p-6">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Low Severity</p>
-            <p className="text-4xl font-black text-blue-700 mt-2">{summary.low}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Low Severity</p>
+            <p className="text-4xl font-black mt-2" style={{ color: 'var(--color-info)' }}>{summary.low}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-          <div className="glass-card p-6">
-            <h2 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
-              <Shield className="w-5 h-5 text-blue-600" /> Role Distribution
+          <div className="portal-panel p-6">
+            <h2 className="text-xl font-black mb-4 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+              <Shield className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Role Distribution
             </h2>
-            <div className="space-y-3 text-sm text-gray-700">
+            <div className="space-y-3 text-sm" style={{ color: 'var(--color-text)' }}>
               <div className="flex justify-between"><span>Admin</span><span className="font-bold">{roleBreakdown.Admin}</span></div>
               <div className="flex justify-between"><span>Adviser</span><span className="font-bold">{roleBreakdown.Adviser}</span></div>
               <div className="flex justify-between"><span>Student</span><span className="font-bold">{roleBreakdown.Student}</span></div>
             </div>
-            <Link href="/scholar/admin/accounts" className="mt-5 inline-flex items-center gap-2 text-blue-600 text-sm font-bold">
+            <Link href="/scholar/admin/accounts" className="mt-5 inline-flex items-center gap-2 text-sm font-bold" style={{ color: 'var(--color-primary)' }}>
               Manage Accounts <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
 
-          <div className="glass-card p-6 lg:col-span-2">
-            <h2 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-blue-600" /> Course Integrity Snapshot
+          <div className="portal-panel p-6 lg:col-span-2">
+            <h2 className="text-xl font-black mb-4 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+              <BookOpen className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Course Integrity Snapshot
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {courses.slice(0, 8).map((course) => {
@@ -152,11 +153,11 @@ export default function AdminDataIntegrityPage() {
                   <Link
                     key={course.id}
                     href={`/scholar/courses/${course.id}`}
-                    className="border border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:shadow-sm transition-all"
+                    className="portal-panel p-4 hover:-translate-y-0.5 transition-all"
                   >
-                    <p className="font-bold text-gray-800">{course.courseCode}</p>
-                    <p className="text-xs text-gray-500">{course.courseName}</p>
-                    <p className="text-xs mt-2 font-semibold text-blue-700">{courseIssues} integrity issue(s)</p>
+                    <p className="font-bold" style={{ color: 'var(--color-text)' }}>{course.courseCode}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{course.courseName}</p>
+                    <p className="text-xs mt-2 font-semibold" style={{ color: 'var(--color-primary)' }}>{courseIssues} integrity issue(s)</p>
                   </Link>
                 );
               })}
@@ -164,35 +165,35 @@ export default function AdminDataIntegrityPage() {
           </div>
         </div>
 
-        <div className="glass-card p-6">
-          <h2 className="text-xl font-black text-gray-900 mb-4">Detected Issues</h2>
+        <div className="portal-panel p-6">
+          <h2 className="text-xl font-black mb-4" style={{ color: 'var(--color-text)' }}>Detected Issues</h2>
           {issues.length === 0 ? (
-            <div className="flex items-center gap-2 text-green-700 text-sm font-semibold">
+            <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--color-success)' }}>
               <CheckCircle2 className="w-5 h-5" /> No integrity issues detected.
             </div>
           ) : (
             <div className="space-y-3">
               {issues.map((issue, index) => (
-                <div key={`${issue.title}-${index}`} className="p-4 rounded-xl border border-gray-200 bg-white">
-                  <p className="text-sm font-black text-gray-900 flex items-center gap-2">
+                <div key={`${issue.title}-${index}`} className="portal-panel p-4">
+                  <p className="text-sm font-black flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
                     <AlertTriangle className={`w-4 h-4 ${issue.severity === 'high' ? 'text-red-600' : issue.severity === 'medium' ? 'text-amber-600' : 'text-blue-600'}`} />
                     {issue.title}
                   </p>
-                  <p className="text-sm text-gray-600 mt-1">{issue.detail}</p>
+                  <p className="text-sm mt-1" style={{ color: 'var(--color-textSecondary)' }}>{issue.detail}</p>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="mt-8 glass-card p-6">
-          <h2 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-600" /> Quality Review Workflow
+        <div className="mt-8 portal-panel p-6">
+          <h2 className="text-xl font-black mb-4 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <Users className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Quality Review Workflow
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="border border-gray-200 rounded-xl p-4">1. Fix role/access mismatches in Accounts.</div>
-            <div className="border border-gray-200 rounded-xl p-4">2. Open flagged courses and complete group adviser/member mapping.</div>
-            <div className="border border-gray-200 rounded-xl p-4">3. Ensure each active group has at least one consultation record.</div>
+            <div className="portal-panel p-4">1. Fix role/access mismatches in Accounts.</div>
+            <div className="portal-panel p-4">2. Open flagged courses and complete group adviser/member mapping.</div>
+            <div className="portal-panel p-4">3. Ensure each active group has at least one consultation record.</div>
           </div>
         </div>
       </div>
