@@ -4,6 +4,7 @@ import { query } from '../config/database';
 import logger from '../config/logger';
 import notificationService from '../services/notification.service';
 import { WorkspaceSyncService } from '../services/workspace.service';
+import { sseService } from '../services/sse.service';
 
 const router = Router();
 
@@ -144,6 +145,8 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     }
 
     logger.info(`Task created: ${createdTask.id} by user ${userId}`);
+    const projOrg = await query('SELECT organization_id FROM projects WHERE id = $1', [project_id]);
+    if (projOrg.rows[0]) sseService.broadcastTaskUpdate(projOrg.rows[0].organization_id, createdTask, 'task_created');
     res.status(201).json(createdTask);
   } catch (error) {
     logger.error('Error creating task:', error);
@@ -572,6 +575,7 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
       );
 
       logger.info(`Task ${id} status updated to ${dbStatus} by user ${userId}`);
+      sseService.broadcastTaskUpdate(regularTaskCheck.rows[0].organization_id, result.rows[0], 'task_updated');
       return res.json(result.rows[0]);
     }
 
@@ -767,6 +771,8 @@ router.patch('/:id', authenticateToken, async (req: AuthRequest, res: Response) 
         await query(`INSERT INTO task_followers (task_id, user_id) VALUES ($1, $2) ON CONFLICT (task_id, user_id) DO NOTHING`, [id, assigned_to]);
       }
 
+      const orgRow = await query('SELECT p.organization_id FROM tasks t JOIN projects p ON t.project_id = p.id WHERE t.id = $1', [id]);
+      if (orgRow.rows[0]) sseService.broadcastTaskUpdate(orgRow.rows[0].organization_id, updatedTask, 'task_updated');
       logger.info(`Regular task ${id} updated by user ${userId}`);
       return res.json(updatedTask);
     }

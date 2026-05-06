@@ -1,6 +1,6 @@
 "use client"
 
-import { Cloud, ArrowLeft } from "lucide-react"
+import { Cloud, ArrowLeft, ShieldAlert, ChevronRight, Info } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { API_URL } from "@/lib/api/client"
@@ -14,9 +14,17 @@ const CloudShape = ({ className, style }: { className?: string; style?: React.CS
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [showWarning, setShowWarning] = useState(false)
   const router = useRouter()
 
   const handleGoogleLogin = () => {
+    // Show the unverified app warning before redirecting
+    setShowWarning(true)
+  }
+
+  const proceedToGoogle = () => {
+    setShowWarning(false)
+    setIsLoading(true)
     // Clear any previous session so account switching always starts clean.
     localStorage.removeItem('token');
     localStorage.removeItem('auth_token');
@@ -32,6 +40,72 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 relative overflow-hidden flex items-center justify-center">
+
+      {/* Google Unverified App Warning Modal */}
+      {showWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-3xl shadow-2xl border border-gray-200 max-w-md w-full p-8 animate-in zoom-in-95 duration-300">
+            
+            {/* Icon */}
+            <div className="flex items-center justify-center w-14 h-14 bg-amber-100 rounded-2xl mx-auto mb-5">
+              <ShieldAlert className="w-7 h-7 text-amber-600" />
+            </div>
+
+            {/* Title */}
+            <h2 className="text-xl font-bold text-gray-900 text-center mb-2">Heads up before you sign in</h2>
+            <p className="text-sm text-gray-500 text-center mb-6">
+              Google may show a warning screen — here&apos;s what to expect and how to continue safely.
+            </p>
+
+            {/* Steps */}
+            <div className="space-y-3 mb-6">
+              <div className="flex gap-3 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                <span className="flex-shrink-0 w-6 h-6 bg-amber-500 text-white text-xs font-bold rounded-full flex items-center justify-center">1</span>
+                <p className="text-sm text-gray-700">
+                  Google will show a screen saying <strong>&quot;Google hasn&apos;t verified this app&quot;</strong>. This is normal — ScholarFlow is a school-issued internal tool still undergoing Google verification.
+                </p>
+              </div>
+              <div className="flex gap-3 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <span className="flex-shrink-0 w-6 h-6 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">2</span>
+                <p className="text-sm text-gray-700">
+                  Click <strong>&quot;Advanced&quot;</strong> at the bottom left of that screen, then click <strong>&quot;Go to ScholarFlow (unsafe)&quot;</strong> to continue.
+                </p>
+              </div>
+              <div className="flex gap-3 p-3 bg-green-50 border border-green-100 rounded-xl">
+                <span className="flex-shrink-0 w-6 h-6 bg-green-500 text-white text-xs font-bold rounded-full flex items-center justify-center">3</span>
+                <p className="text-sm text-gray-700">
+                  Review the permissions Google lists — these are only used to connect your Calendar, Drive, and identity. No data is shared externally.
+                </p>
+              </div>
+            </div>
+
+            {/* Info note */}
+            <div className="flex gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl mb-6">
+              <Info className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-gray-500">
+                This warning appears because ScholarFlow&apos;s Google OAuth is pending verification — it does not mean the app is unsafe. Your data stays within the school system.
+              </p>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowWarning(false)}
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={proceedToGoogle}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-sm font-semibold hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
+              >
+                I Understand, Continue
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         {/* Blur elements */}

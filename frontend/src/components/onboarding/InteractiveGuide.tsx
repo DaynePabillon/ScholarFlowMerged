@@ -162,6 +162,13 @@ const ADVISER_PAGES: Record<string, GuideStep> = {
   }
 };
 
+// Feedback reminder guide — shown after a user has explored the app
+const FEEDBACK_GUIDE: GuideStep = {
+  title: "You're all set! ⭐",
+  text: `Looks like you've explored ScholarFlow! If you enjoyed using it, please tap the green ★ Rate Us button at the bottom-right to leave a quick rating — it means a lot! And if you spot any bugs or have suggestions, the blue 🐛 button right below Rate Us is your direct line to us. We read every report!`,
+  image: "/mascot-happy.png"
+};
+
 // Combine all page guides
 const ALL_PAGE_GUIDES: Record<string, GuideStep> = {
   ...PAGE_GUIDES,
@@ -170,7 +177,7 @@ const ALL_PAGE_GUIDES: Record<string, GuideStep> = {
 };
 
 // Google Form URL for rating — replace with your actual form link
-const RATING_FORM_URL = 'https://forms.gle/yourFormIdHere';
+const RATING_FORM_URL = 'https://forms.gle/xGsY2AYWBLzm8YLx6';
 
 // ── Rate Us Button ─────────────────────────────────────────────────────────────
 export function RateUsButton() {
@@ -300,6 +307,9 @@ export default function InteractiveGuide() {
     setLoaded(true);
   }, []);
 
+  // Track the guide for the current page (used by ? button even after dismiss)
+  const [pageGuide, setPageGuide] = useState<GuideStep | null>(null);
+
   // Handle route changes - only after localStorage is ready
   useEffect(() => {
     if (!pathname || !loaded) return;
@@ -307,28 +317,22 @@ export default function InteractiveGuide() {
     const role = getEffectiveRole();
     setUserRole(role);
 
-    // Always read fresh from localStorage to avoid stale state
-    const state = loadOnboardingState();
-
     const guideKey = getGuideKey(pathname, role);
-    if (!guideKey) return;
-
-    const guide = ALL_PAGE_GUIDES[guideKey];
-
-    if (guideKey === '/') {
-      if (state.hasSeenWelcome) return;
-      const next = { ...state, hasSeenWelcome: true };
-      saveOnboardingState(next);
-      setCurrentStep(guide);
-      setIsVisible(true);
-      setIsMinimized(false);
+    if (!guideKey) {
+      setPageGuide(null);
       return;
     }
 
-    if (state.visitedPages.includes(pathname)) return;
+    const guide = ALL_PAGE_GUIDES[guideKey];
+    setPageGuide(guide);
 
-    const next = { ...state, visitedPages: [...state.visitedPages, pathname] };
-    saveOnboardingState(next);
+    // Portal home only shows once ever
+    if (guideKey === '/') {
+      const state = loadOnboardingState();
+      if (state.hasSeenWelcome) return;
+      saveOnboardingState({ ...state, hasSeenWelcome: true });
+    }
+
     setCurrentStep(guide);
     setIsVisible(true);
     setIsMinimized(false);
@@ -379,8 +383,15 @@ export default function InteractiveGuide() {
     }
   };
 
-  // Don't render if no current step or not visible
-  if (!isVisible && !isMinimized) return null;
+  const handleReplay = () => {
+    if (!pageGuide) return;
+    setCurrentStep(pageGuide);
+    setIsVisible(true);
+    setIsMinimized(false);
+  };
+
+  // ? button — always visible when a guide exists for this page and Sky is dismissed
+  const showReplayButton = !isVisible && !isMinimized && !!pageGuide;
 
   // Minimized state - floating button
   if (isMinimized) {
@@ -395,7 +406,19 @@ export default function InteractiveGuide() {
     );
   }
 
-  if (!currentStep) return null;
+  if (showReplayButton) {
+    return (
+      <button
+        onClick={handleReplay}
+        className="fixed bottom-6 left-6 z-[9999] w-12 h-12 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-xl hover:scale-110 transition-all duration-200 flex items-center justify-center font-black text-lg"
+        title={`Ask ${MASCOT_NAME} about this page`}
+      >
+        ?
+      </button>
+    );
+  }
+
+  if (!isVisible || !currentStep) return null;
 
   return (
     <div className="fixed bottom-0 left-4 z-[9999] flex flex-row-reverse items-end gap-4 max-w-[580px] animate-in slide-in-from-bottom-8 duration-500">

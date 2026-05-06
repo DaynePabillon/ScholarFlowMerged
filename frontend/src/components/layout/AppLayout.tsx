@@ -8,6 +8,7 @@ import NotificationBell from "@/components/notifications/NotificationBell"
 import BugReportModal from "@/components/reports/BugReportModal"
 import ThemeToggle from "@/components/shared/ThemeToggle"
 import InteractiveGuide, { RateUsButton } from "@/components/onboarding/InteractiveGuide"
+import AnnouncementBanner from "@/components/announcements/AnnouncementBanner"
 
 interface Organization {
   id: string
@@ -75,7 +76,8 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
   }
 
   return (
-    <div className="min-h-screen relative bg-white/50 dark:bg-slate-950/20">
+    <div className="min-h-screen relative overflow-hidden transition-colors duration-500 bg-white/50 dark:bg-slate-950/20">
+      <AnnouncementBanner />
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 rounded-full blur-3xl animate-float-slow opacity-20" style={{ backgroundColor: 'var(--color-primary)' }}></div>

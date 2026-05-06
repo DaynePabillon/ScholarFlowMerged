@@ -283,13 +283,13 @@ export default function DashboardPage() {
           setInsights({
             totalGroups: normalizedItems.length,
             consultationLogs: normalizedItems.length,
-            groupWithoutConsultation: normalizedItems.filter((item) => item.concern.toLowerCase().includes('no consultation logs')).length,
-            journalEntries: normalizedItems.filter((item) => item.action.length > 0).length,
+            groupWithoutConsultation: normalizedItems.filter((item: any) => item.concern.toLowerCase().includes('no consultation logs')).length,
+            journalEntries: normalizedItems.filter((item: any) => item.action.length > 0).length,
             upcomingSlots,
             riskGroups: parseRiskGroups(normalizedItems),
             followUps: parseFollowUps(normalizedItems),
             actionItems: buildActionItems(normalizedItems),
-            dataIntegrityIssues: normalizedItems.filter((item) => item.concern.toLowerCase().includes('no consultation logs')).map((item) => `${item.groupName} has no consultation logs yet.`)
+            dataIntegrityIssues: normalizedItems.filter((item: any) => item.concern.toLowerCase().includes('no consultation logs')).map((item: any) => `${item.groupName} has no consultation logs yet.`)
           });
         } catch (err) {
           console.error('Failed to fetch adviser dashboard data:', err);
@@ -298,8 +298,17 @@ export default function DashboardPage() {
       }
 
       if (effectiveRole === 'Student') {
-        if (isMounted) {
-          setInsights(emptyInsights);
+        try {
+          const myGroupsRes = await apiClient.get('/my-groups');
+          const myGroups = Array.isArray(myGroupsRes.data?.groups) ? myGroupsRes.data.groups : [];
+          if (isMounted) {
+            setInsights({
+              ...emptyInsights,
+              totalGroups: myGroups.length,
+            });
+          }
+        } catch {
+          if (isMounted) setInsights(emptyInsights);
         }
         return;
       }

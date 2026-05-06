@@ -1036,6 +1036,175 @@ async function runMigrations(): Promise<void> {
         );
         CREATE INDEX IF NOT EXISTS idx_ai_feedback_team ON ai_classification_feedback(team_group_id);
       `
+    },
+    {
+      name: '033_ss_group_course_scope',
+      sql: `
+        -- Add course_id to ss_group so groups with the same name in different courses are isolated
+        ALTER TABLE public.ss_group ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES ss_courses(id) ON DELETE SET NULL;
+
+        -- Drop the old global unique constraint on groupName (if still present)
+        DO $$ BEGIN
+          ALTER TABLE public.ss_group DROP CONSTRAINT IF EXISTS "ss_group_groupName_key";
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+
+        -- Add scoped unique index: groupName + course_id (only when course_id is not null)
+        CREATE UNIQUE INDEX IF NOT EXISTS ss_group_groupname_courseid_key
+          ON public.ss_group ("groupName", course_id)
+          WHERE course_id IS NOT NULL;
+      `
+    },
+    {
+      name: '034_team_groups_course_id',
+      sql: `
+        -- Add course_id to team_groups for ScholarSync course scoping
+        ALTER TABLE team_groups
+          ADD COLUMN IF NOT EXISTS course_id INTEGER REFERENCES ss_courses(id) ON DELETE SET NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_team_groups_course ON team_groups(course_id);
+      `
+    },
+    {
+      name: '035_team_group_members_email_unique',
+      sql: `
+        -- Add UNIQUE(team_group_id, email) so ON CONFLICT(team_group_id, email) works in resync
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_team_group_members_group_email'
+          ) THEN
+            ALTER TABLE team_group_members
+              ADD CONSTRAINT uq_team_group_members_group_email UNIQUE (team_group_id, email);
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '036_team_groups_name_course_unique',
+      sql: `
+        -- Add UNIQUE(name, course_id) so ON CONFLICT(name, course_id) works in ScholarSync sheet import
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'uq_team_groups_name_course'
+          ) THEN
+            ALTER TABLE team_groups
+              ADD CONSTRAINT uq_team_groups_name_course UNIQUE (name, course_id);
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '037_drop_dead_tables',
+      sql: `
+        -- Drop dead duplicate tables confirmed to have zero code references
+
+        -- consultation_slots / consultation_bookings: superseded by ss_consultation_slots / ss_consultation_bookings
+        DROP TABLE IF EXISTS consultation_bookings;
+        DROP TABLE IF EXISTS consultation_slots;
+
+        -- ss_member_journals: superseded by member_journals (active table used by all routes)
+        DROP TABLE IF EXISTS ss_member_journals;
+
+        -- ss_groupings: legacy groupings table, zero code references
+        DROP TABLE IF EXISTS ss_groupings;
+
+        -- ss_grouptasks: superseded by tasks + sheet_tasks, zero code references
+        DROP TABLE IF EXISTS ss_grouptasks;
+
+        -- activity_logs: dead duplicate; all code uses activity_log (no 's')
+        DROP TABLE IF EXISTS activity_logs;
+      `
+    },
+    {
+      name: '038_ss_account_user_id_bridge',
+      sql: `
+        -- Add user_id FK to ss_account to bridge ScholarSync identity with SkyFlow users table
+        ALTER TABLE ss_account
+          ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_ss_account_user_id ON ss_account(user_id);
+
+        -- Backfill: link existing ss_account rows to users rows by matching email (case-insensitive)
+        UPDATE ss_account sa
+        SET user_id = u.id
+        FROM users u
+        WHERE LOWER(TRIM(sa."accountEmail")) = LOWER(TRIM(u.email))
+          AND sa.user_id IS NULL;
+      `
+    },
+    {
+      name: '039_ss_consultation_role_sync_trigger',
+      sql: `
+        -- Function: when ss_account.accountRole changes, cascade to organization_members.role
+        CREATE OR REPLACE FUNCTION sync_academic_role_to_org()
+        RETURNS TRIGGER AS $$
+        DECLARE
+          v_org_role VARCHAR(20);
+        BEGIN
+          -- Map academic role to SkyFlow org role
+          v_org_role := CASE LOWER(TRIM(NEW."accountRole"))
+            WHEN 'admin'    THEN 'admin'
+            WHEN 'advisers' THEN 'manager'
+            WHEN 'adviser'  THEN 'manager'
+            ELSE                 'member'
+          END;
+
+          -- Only update if user_id is set (linked account)
+          IF NEW.user_id IS NOT NULL THEN
+            UPDATE organization_members
+            SET role = v_org_role
+            WHERE user_id = NEW.user_id
+              AND status = 'active';
+          END IF;
+
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+
+        DROP TRIGGER IF EXISTS trg_sync_academic_role ON ss_account;
+        CREATE TRIGGER trg_sync_academic_role
+        AFTER UPDATE OF "accountRole" ON ss_account
+        FOR EACH ROW
+        WHEN (OLD."accountRole" IS DISTINCT FROM NEW."accountRole")
+        EXECUTE FUNCTION sync_academic_role_to_org();
+      `
+    },
+    {
+      name: '040_ss_consultation_date_to_date',
+      sql: `
+        -- Safely convert ss_consultation."conDate" from TEXT to DATE
+        -- Rows with non-parseable dates will be set to NULL rather than failing
+        ALTER TABLE public.ss_consultation
+          ALTER COLUMN "conDate" TYPE DATE
+          USING (
+            CASE
+              WHEN "conDate" ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN "conDate"::DATE
+              ELSE NULL
+            END
+          );
+      `
+    },
+    {
+      name: '041_create_announcements',
+      sql: `
+        CREATE TABLE IF NOT EXISTS announcements (
+          id          SERIAL PRIMARY KEY,
+          message     TEXT        NOT NULL,
+          type        VARCHAR(20) NOT NULL DEFAULT 'info',
+          is_active   BOOLEAN     NOT NULL DEFAULT true,
+          expires_at  TIMESTAMPTZ,
+          created_by  TEXT        NOT NULL,
+          created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+      `
+    },
+    {
+      name: '042_announcements_org_scope',
+      sql: `
+        ALTER TABLE announcements
+          ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+      `
     }
   ];
 

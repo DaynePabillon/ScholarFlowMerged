@@ -153,6 +153,12 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           const ssRole = ssResult.rows[0].accountRole; // 'Admin', 'Advisers', 'Student'
           console.log(`ScholarSync role detected for ${user.email}: ${ssRole}`);
 
+          // Bridge: write user_id FK into ss_account so role changes auto-cascade
+          await dbQuery(
+            `UPDATE ss_account SET user_id = $1 WHERE "accountEmail" = $2 AND user_id IS DISTINCT FROM $1`,
+            [user.id, user.email]
+          );
+
           // Map ScholarSync role → SkyFlow role
           const skyflowRole = (ssRole === 'Admin' || ssRole === 'Advisers') ? 'admin' : 'member';
 
@@ -196,6 +202,13 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           );
 
           inviteToken = 'scholarsync-auto'; // triggers the "invited=true" path which skips onboarding
+
+          // Keep organization_members role in sync with ss_account academic role
+          const mappedRole = ssRole === 'Admin' ? 'admin' : ssRole === 'Advisers' ? 'manager' : 'member';
+          await dbQuery(
+            `UPDATE organization_members SET role = $1 WHERE user_id = $2 AND status = 'active'`,
+            [mappedRole, user.id]
+          );
           console.log(`Auto-onboarded ${user.email} as ${skyflowRole} via ScholarSync`);
         }
       } catch (ssErr: any) {

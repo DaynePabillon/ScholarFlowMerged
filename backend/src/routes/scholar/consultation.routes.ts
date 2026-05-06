@@ -394,7 +394,7 @@ router.get('/slots/adviser/:adviserId', authenticate, async (req, res) => {
 });
 
 // GET slots for a course (student-facing booking list)
-router.get('/slots/:courseId', authenticate, async (req, res) => {
+router.get('/slots/:courseId(\\d+)', authenticate, async (req, res) => {
   try {
     const { courseId } = req.params;
     const user: any = req.user;
@@ -407,6 +407,22 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
     let assignedAdviserKeys: string[] = [];
     let assignedAdviserAccountIds: string[] = [];
     if (requesterRole === 'student') {
+      // Verification: Ensure student is enrolled in the course they are requesting slots for
+      const { rows: enrollCheck } = await pool.query(
+        `SELECT 1 FROM team_group_members tgm
+         JOIN team_groups tg ON tg.id = tgm.team_group_id
+         WHERE tg.course_id = $1 AND LOWER(tgm.email) = $2
+         UNION
+         SELECT 1 FROM ss_enrollments e
+         JOIN ss_account a ON a.account_id = e.account_id
+         WHERE e.course_id = $1 AND LOWER(a."accountEmail") = $2`,
+        [Number(courseId), requesterEmail]
+      );
+
+      if (enrollCheck.length === 0) {
+        return res.status(403).json({ error: 'You are not enrolled in this course.' });
+      }
+
       const assignedAdvisers = await resolveStudentAssignedAdvisers(
         Number(courseId),
         requesterEmail,
@@ -480,7 +496,8 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
            OR LOWER(COALESCE(sg."groupName", '')) = LOWER($3::text)
          )
          AND (
-           (
+           s.slot_type = 'FIRST_COME_FIRST_SERVE'
+           OR (
              COALESCE(array_length($4::text[], 1), 0) = 0
              AND COALESCE(array_length($5::text[], 1), 0) = 0
            )
@@ -537,10 +554,29 @@ router.get('/slots/:courseId', authenticate, async (req, res) => {
 router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
   try {
     const user: any = (req as any).user;
-    const role = String(user?.role || '').trim().toLowerCase();
+    let role = String(user?.role || '').trim().toLowerCase();
     const futureOnly = String(req.query.futureOnly || '').toLowerCase() === 'true';
     const groupName = String(req.query.groupName || '').trim() || null;
     const courseId = req.query.courseId ? Number(req.query.courseId) : null;
+
+    // Normalize role aliases: ScholarFlow uses 'member', ScholarSync uses 'student'
+    if (role === 'member') role = 'student';
+
+    // If role is unrecognized (e.g. plain SkyFlow token), look up ss_account for the real academic role
+    if (role !== 'student' && role !== 'adviser' && role !== 'advisers' && role !== 'admin') {
+      const userEmail = String(user?.email || '').trim();
+      if (userEmail) {
+        const accRoleRes = await pool.query(
+          'SELECT "accountRole" FROM ss_account WHERE LOWER("accountEmail") = LOWER($1) LIMIT 1',
+          [userEmail]
+        );
+        const dbRole = String(accRoleRes.rows[0]?.accountRole || '').trim().toLowerCase();
+        if (dbRole === 'student') role = 'student';
+        else if (dbRole === 'adviser' || dbRole === 'advisers') role = 'adviser';
+        else if (dbRole === 'admin') role = 'admin';
+        else role = 'student'; // default to student for academic portal users
+      }
+    }
 
     if (role === 'adviser' || role === 'advisers') {
       // Resolve numeric account_id from user email
@@ -554,7 +590,7 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
                 COALESCE(b.current_groups, 0)::int as current_groups
          FROM ss_consultation_slots s
          LEFT JOIN ss_account a ON a.account_id = s.owner_account_id
-         LEFT JOIN ss_group sg ON sg."groupName" = s.allowed_group_id
+         LEFT JOIN ss_group sg ON sg."smallgroupID" = s.allowed_group_id
          LEFT JOIN (
            SELECT slot_id, COUNT(*)::int as current_groups
            FROM ss_consultation_bookings
@@ -571,15 +607,107 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
     }
 
     if (role === 'student') {
-      // Determine student's enrolled courses and assigned advisers across them
       const requesterEmail = String(user?.email || '').trim().toLowerCase();
-      const targetCourseId = courseId;
 
-      const assigned = await resolveStudentAssignedAdvisers(Number(targetCourseId) || 0, requesterEmail, null);
-      const assignedAdviserKeys = assigned.adviserKeys;
-      const assignedAdviserAccountIds = assigned.adviserAccountIds;
+      // Resolve all courses the student belongs to (via team_group_members OR ss_enrollments)
+      const { rows: memberCourseRows } = await pool.query(
+        `SELECT DISTINCT tg.course_id
+         FROM team_group_members tgm
+         JOIN team_groups tg ON tg.id = tgm.team_group_id
+         WHERE LOWER(tgm.email) = $1`,
+        [requesterEmail]
+      );
+      let studentCourseIds: number[] = memberCourseRows.map((r: any) => Number(r.course_id)).filter(Boolean);
 
-      // Fetch slots across courses filtered by assigned advisers
+      // Also check ss_enrollments as secondary source
+      if (studentCourseIds.length === 0) {
+        const accRes = await pool.query(
+          'SELECT account_id FROM ss_account WHERE LOWER("accountEmail") = $1 LIMIT 1',
+          [requesterEmail]
+        );
+        if (accRes.rows[0]) {
+          const enrollRes = await pool.query(
+            'SELECT course_id FROM ss_enrollments WHERE account_id = $1',
+            [accRes.rows[0].account_id]
+          );
+          studentCourseIds = enrollRes.rows.map((r: any) => Number(r.course_id)).filter(Boolean);
+        }
+      }
+
+      // If a specific courseId was requested, scope to that ONLY if the student is actually enrolled in it.
+      let effectiveCourseIds: number[] = [];
+      if (courseId) {
+        const requestedId = Number(courseId);
+        if (studentCourseIds.includes(requestedId)) {
+          effectiveCourseIds = [requestedId];
+        } else {
+          // If the student is trying to access a course they are not enrolled in, return nothing.
+          return res.json({ slots: [] });
+        }
+      } else {
+        effectiveCourseIds = studentCourseIds;
+      }
+
+      // If the student is not enrolled in any courses at all, return nothing immediately.
+      if (effectiveCourseIds.length === 0) {
+        return res.json({ slots: [] });
+      }
+
+      // Resolve advisers across all student courses from team_groups
+      let assignedAdviserKeys: string[] = [];
+      let assignedAdviserAccountIds: string[] = [];
+
+      if (effectiveCourseIds.length > 0) {
+        const { rows: adviserRows } = await pool.query(
+          `SELECT DISTINCT
+             LOWER(TRIM(COALESCE(tg.adviser_name, ''))) AS adviser_key,
+             tg.adviser_id
+           FROM team_groups tg
+           JOIN team_group_members tgm ON tgm.team_group_id = tg.id
+           WHERE tg.course_id = ANY($1::int[])
+             AND LOWER(COALESCE(tgm.email, '')) = $2
+             AND COALESCE(TRIM(tg.adviser_name), '') <> ''`,
+          [effectiveCourseIds, requesterEmail]
+        );
+
+        const rawKeys = adviserRows
+          .map((r: any) => String(r.adviser_key || '').trim().toLowerCase())
+          .filter((k: string) => k.length > 0);
+        const directIds = adviserRows
+          .map((r: any) => String(r.adviser_id || '').trim())
+          .filter((id: string) => id.length > 0);
+
+        if (rawKeys.length > 0) {
+          const accMatch = await pool.query(
+            `SELECT DISTINCT account_id FROM ss_account
+             WHERE LOWER(TRIM(COALESCE("accountEmail", ''))) = ANY($1::text[])
+                OR LOWER(TRIM(COALESCE("accountName", ''))) = ANY($1::text[])`,
+            [rawKeys]
+          );
+          const matchedIds = accMatch.rows
+            .map((r: any) => String(r.account_id || '').trim())
+            .filter((id: string) => id.length > 0);
+          assignedAdviserAccountIds = Array.from(new Set([...directIds, ...matchedIds]));
+        } else {
+          assignedAdviserAccountIds = directIds;
+        }
+        assignedAdviserKeys = rawKeys;
+      }
+
+      // Build course filter: slots must belong to one of the student's courses (or have no course set)
+      const courseFilter = effectiveCourseIds.length > 0
+        ? `AND (s.course_id = ANY($5::int[]) OR s.course_id IS NULL)`
+        : '';
+
+      // When no adviser can be resolved (e.g. team_groups not yet imported),
+      // fall back to showing FIRST_COME_FIRST_SERVE open slots so students see something.
+      const hasAdviserFilter = assignedAdviserAccountIds.length > 0 || assignedAdviserKeys.length > 0;
+
+      // Fetch slots: visible to student if they're in an enrolled course and
+      // either no adviser filter applies (open slots) or slot belongs to their assigned adviser
+      const queryParams: any[] = [futureOnly, groupName || null, assignedAdviserAccountIds, assignedAdviserKeys];
+      if (effectiveCourseIds.length > 0) queryParams.push(effectiveCourseIds);
+
       const { rows } = await pool.query(
         `SELECT s.*, s.slot_date::text as slot_date_only, a."accountName" as adviser_name, a."accountEmail" as adviser_email,
                 sg."groupName" as reserved_group_name, COALESCE(b.current_groups, 0)::int as current_groups
@@ -592,20 +720,18 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
            WHERE status = 'BOOKED'
            GROUP BY slot_id
          ) b ON b.slot_id = s.slot_id
-         WHERE ($1::int IS NULL OR s.course_id = $1)
-           AND ($2::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
-           AND ($3::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR LOWER(COALESCE(sg."groupName", '')) = LOWER($3::text))
+         WHERE ($1::boolean = false OR s.slot_date > CURRENT_DATE OR (s.slot_date = CURRENT_DATE AND s.end_time > CURRENT_TIME))
+           AND ($2::text IS NULL OR s.slot_type = 'FIRST_COME_FIRST_SERVE' OR s.allowed_group_id IS NULL OR LOWER(COALESCE(sg."groupName", '')) = LOWER($2::text))
            AND (
-             (
-               COALESCE(array_length($4::text[], 1), 0) = 0
-               AND COALESCE(array_length($5::text[], 1), 0) = 0
-             )
-             OR CAST(s.adviser_id AS text) = ANY($4::text[])
-             OR LOWER(TRIM(a."accountEmail")) = ANY($5::text[])
-             OR LOWER(TRIM(a."accountName")) = ANY($5::text[])
+             s.slot_type = 'FIRST_COME_FIRST_SERVE'
+             OR COALESCE(array_length($3::text[], 1), 0) = 0
+             OR CAST(s.adviser_id AS text) = ANY($3::text[])
+             OR LOWER(TRIM(a."accountEmail")) = ANY($4::text[])
+             OR LOWER(TRIM(a."accountName")) = ANY($4::text[])
            )
+           ${courseFilter}
          ORDER BY s.slot_date, s.start_time`,
-        [targetCourseId || null, futureOnly, groupName, assignedAdviserAccountIds, assignedAdviserKeys]
+        queryParams
       );
 
       return res.json({ slots: rows });

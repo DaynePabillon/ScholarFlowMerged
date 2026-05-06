@@ -244,7 +244,57 @@ function BoardsContent() {
         }
     }, [selectedTeam])
 
-    // No separate API call needed ΓÇö teamGroups already includes members from the endpoint
+    // SSE: live task updates for the selected org
+    useEffect(() => {
+        if (!selectedOrg) return
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token')
+        if (!token) return
+
+        const es = new EventSource(`${API_URL}/api/sse/tasks/${selectedOrg.id}?token=${token}`)
+        es.addEventListener('task_created', (e) => {
+            try {
+                const task = JSON.parse((e as MessageEvent).data)
+                setTasks((prev) => [task, ...prev])
+            } catch (_) {}
+        })
+        es.addEventListener('task_updated', (e) => {
+            try {
+                const task = JSON.parse((e as MessageEvent).data)
+                setTasks((prev) => prev.map((t) => t.id === task.id ? { ...t, ...task } : t))
+                setSelectedTask((prev) => prev?.id === task.id ? { ...prev, ...task } : prev)
+            } catch (_) {}
+        })
+        es.addEventListener('task_deleted', (e) => {
+            try {
+                const task = JSON.parse((e as MessageEvent).data)
+                setTasks((prev) => prev.filter((t) => t.id !== task.id))
+            } catch (_) {}
+        })
+        es.onerror = () => es.close()
+        return () => es.close()
+    }, [selectedOrg?.id])
+
+    // SSE: live comments for the selected task
+    useEffect(() => {
+        if (!selectedTask) return
+        const token = localStorage.getItem('auth_token') || localStorage.getItem('token')
+        if (!token) return
+
+        const es = new EventSource(`${API_URL}/api/sse/comments/${selectedTask.id}?token=${token}`)
+        es.addEventListener('comment', (e) => {
+            try {
+                const comment = JSON.parse((e as MessageEvent).data)
+                setTaskComments((prev) => {
+                    if (prev.some((c) => c.id === comment.id)) return prev
+                    return [...prev, comment]
+                })
+            } catch (_) {}
+        })
+        es.onerror = () => es.close()
+        return () => es.close()
+    }, [selectedTask?.id])
+
+    // No separate API call needed — teamGroups already includes members from the endpoint
 
     const fetchData = async (orgId: string) => {
         await Promise.all([
@@ -475,6 +525,12 @@ function BoardsContent() {
                 for (const ws of workspaces) {
                     await apiClient.post(`/workspaces/${ws.id}/sync`)
                 }
+            }
+            // Also resync Academic side: re-import all connected Google Sheets (no emails)
+            try {
+                await apiClient.post('/resync-sheets')
+            } catch (scholarErr) {
+                console.warn('Academic resync skipped (no sheets connected or insufficient role):', scholarErr)
             }
             // Refresh tasks after sync
             await fetchData(selectedOrg.id)
