@@ -1,6 +1,13 @@
 'use client';
 
-import { ThemeProvider } from '@/contexts/scholar/ThemeContext';
+import { ThemeProvider, useTheme } from '@/contexts/scholar/ThemeContext';
+import './globals.css';
+
+function ScholarThemeShell({ children }: { children: React.ReactNode }) {
+  const { role } = useTheme();
+
+  return <div className={`scholar-theme ${role === 'manager' ? 'scholar-role-manager' : ''}`}>{children}</div>;
+}
 
 export default function ScholarLayout({
   children,
@@ -9,7 +16,7 @@ export default function ScholarLayout({
 }) {
   return (
     <ThemeProvider>
-      {children}
+      <ScholarThemeShell>{children}</ScholarThemeShell>
     </ThemeProvider>
   );
 }

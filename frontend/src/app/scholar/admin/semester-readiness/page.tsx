@@ -192,19 +192,20 @@ export default function SemesterReadinessPage() {
   return (
     <SidebarLayout>
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
-        <div className="mb-8">
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Semester Readiness Checklist</h1>
+        <div className="portal-panel-strong p-6 sm:p-8 mb-6">
+          <span className="portal-chip mb-3">Semester Planning</span>
+          <h1 className="text-4xl sm:text-5xl font-black tracking-tight" style={{ color: 'var(--color-text)' }}>Semester Readiness Checklist</h1>
           <p className="text-lg mt-2" style={{ color: 'var(--color-textSecondary)' }}>
             Admin checklist for semester setup and adviser/group consultation readiness.
           </p>
         </div>
 
-        <div className="glass-card p-6 mb-8">
+        <div className="portal-panel p-6 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
             <div>
-              <label className="block text-xs font-black uppercase tracking-widest text-gray-400 mb-2">Semester</label>
+              <label className="block text-xs font-black uppercase tracking-widest mb-2" style={{ color: 'var(--color-textSecondary)' }}>Semester</label>
               <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-400" />
+                <Calendar className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
                 <select
                   value={selectedTerm}
                   onChange={(e) => {
@@ -212,7 +213,7 @@ export default function SemesterReadinessPage() {
                     setSelectedTerm(term);
                     void fetchData(term);
                   }}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="portal-input text-sm"
                 >
                   {data.terms.length === 0 ? (
                     <option value="">No semester found</option>
@@ -225,63 +226,69 @@ export default function SemesterReadinessPage() {
               </div>
             </div>
             <div className="text-left md:text-right">
-              <p className="text-xs font-black uppercase tracking-widest text-gray-400">Readiness Score</p>
-              <p className={`text-5xl font-black ${readinessColor}`}>{data.summary.readinessScore}%</p>
+              <p className="text-xs font-black uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Readiness Score</p>
+              <p className="text-5xl font-black" style={{ color: readinessColor === 'text-emerald-700' ? 'var(--color-success)' : readinessColor === 'text-amber-700' ? 'var(--color-warning)' : 'var(--color-error)' }}>{data.summary.readinessScore}%</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <div className="glass-card p-4">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Courses</p>
-            <p className="text-3xl font-black text-blue-700 mt-1">{data.summary.coursesInTerm}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Courses</p>
+            <p className="text-3xl font-black mt-1" style={{ color: 'var(--color-primary)' }}>{data.summary.coursesInTerm}</p>
           </div>
-          <div className="glass-card p-4">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Groups</p>
-            <p className="text-3xl font-black text-blue-700 mt-1">{data.summary.groupsInTerm}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Groups</p>
+            <p className="text-3xl font-black mt-1" style={{ color: 'var(--color-primary)' }}>{data.summary.groupsInTerm}</p>
           </div>
-          <div className="glass-card p-4">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Adviser</p>
-            <p className="text-3xl font-black text-blue-700 mt-1">{data.summary.advisersInSystem}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Adviser</p>
+            <p className="text-3xl font-black mt-1" style={{ color: 'var(--color-primary)' }}>{data.summary.advisersInSystem}</p>
           </div>
-          <div className="glass-card p-4">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Assigned</p>
-            <p className="text-3xl font-black text-emerald-700 mt-1">{data.summary.assignedAdvisersInTerm}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Assigned</p>
+            <p className="text-3xl font-black mt-1" style={{ color: 'var(--color-success)' }}>{data.summary.assignedAdvisersInTerm}</p>
           </div>
-          <div className="glass-card p-4">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Available</p>
-            <p className="text-3xl font-black text-amber-700 mt-1">{data.summary.availableAdvisersInTerm}</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Available</p>
+            <p className="text-3xl font-black mt-1" style={{ color: 'var(--color-warning)' }}>{data.summary.availableAdvisersInTerm}</p>
           </div>
-          <div className="glass-card p-4">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Loading</p>
+          <div className="portal-stat">
+            <p className="text-xs uppercase tracking-widest" style={{ color: 'var(--color-textSecondary)' }}>Loading</p>
             <p className="text-sm font-black mt-2" style={{ color: 'var(--color-textSecondary)' }}>{loadingData ? 'Refreshing...' : 'Ready'}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {checklistItems.map((item) => (
-            <div key={item.title} className="glass-card p-6">
+            <div key={item.title} className="portal-panel p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
-                  <ClipboardList className="w-5 h-5 text-blue-600" />
+                <h2 className="text-xl font-black flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+                  <ClipboardList className="w-5 h-5" style={{ color: 'var(--color-primary)' }} />
                   {item.title}
                 </h2>
-                <span className={`text-xs font-black uppercase tracking-widest px-2 py-1 rounded-full ${item.count === 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                <span
+                  className="text-xs font-black uppercase tracking-widest px-2 py-1 rounded-full"
+                  style={{
+                    backgroundColor: item.count === 0 ? 'color-mix(in srgb, var(--color-success) 14%, transparent)' : 'color-mix(in srgb, var(--color-warning) 14%, transparent)',
+                    color: item.count === 0 ? 'var(--color-success)' : 'var(--color-warning)'
+                  }}
+                >
                   {item.count}
                 </span>
               </div>
 
               {item.count === 0 ? (
-                <div className="flex items-center gap-2 text-sm text-emerald-700 font-semibold">
+                <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--color-success)' }}>
                   <CheckCircle2 className="w-4 h-4" />
                   Complete
                 </div>
               ) : (
                 <div className="space-y-2">
                   {item.entries.slice(0, 12).map((entry) => (
-                    <Link key={entry.key} href={entry.href} className="block p-2.5 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors">
-                      <p className="text-sm font-bold text-gray-800">{entry.primary}</p>
-                      <p className="text-xs text-gray-500">{entry.secondary}</p>
+                    <Link key={entry.key} href={entry.href} className="block p-2.5 rounded-lg portal-panel hover:-translate-y-0.5 transition-all">
+                      <p className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{entry.primary}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{entry.secondary}</p>
                     </Link>
                   ))}
                 </div>
@@ -290,23 +297,23 @@ export default function SemesterReadinessPage() {
           ))}
         </div>
 
-        <div className="mt-8 glass-card p-6">
-          <h2 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5 text-blue-600" /> Suggested Admin Flow
+        <div className="mt-8 portal-panel p-6">
+          <h2 className="text-xl font-black mb-4 flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+            <Users className="w-5 h-5" style={{ color: 'var(--color-primary)' }} /> Suggested Admin Flow
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div className="border border-gray-200 rounded-xl p-4">1. Resolve courses without groups.</div>
-            <div className="border border-gray-200 rounded-xl p-4">2. Assign advisers and verify member rosters.</div>
-            <div className="border border-gray-200 rounded-xl p-4">3. Ensure each group has at least one consultation record.</div>
+            <div className="portal-panel p-4">1. Resolve courses without groups.</div>
+            <div className="portal-panel p-4">2. Assign advisers and verify member rosters.</div>
+            <div className="portal-panel p-4">3. Ensure each group has at least one consultation record.</div>
           </div>
 
           {(data.checklist.groupsWithoutAdviser.length > 0 || data.checklist.coursesWithoutGroups.length > 0) && (
-            <div className="mt-4 p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm flex items-start gap-2">
+            <div className="mt-4 p-3 rounded-xl text-sm flex items-start gap-2 portal-panel" style={{ color: 'var(--color-warning)' }}>
               <AlertTriangle className="w-4 h-4 mt-0.5" />
               <span>
                 You can also review adviser capacity in
                 {' '}
-                <Link href="/scholar/admin/adviser-availability" className="font-bold underline">Adviser Availability</Link>
+                <Link href="/scholar/admin/adviser-availability" className="font-bold underline" style={{ color: 'var(--color-primary)' }}>Adviser Availability</Link>
                 {' '}
                 before assigning missing groups.
               </span>

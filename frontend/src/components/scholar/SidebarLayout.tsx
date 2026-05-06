@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
@@ -14,11 +14,13 @@ import {
     FolderKanban, 
     ChevronDown, 
     Shield,
+    Home,
     LayoutDashboard,
     RefreshCw,
     Bug,
     ClipboardList,
-    AlertTriangle
+    AlertTriangle,
+    Sparkles
 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import ThemeToggle from './shared/ThemeToggle';
@@ -40,7 +42,8 @@ const normalizeScholarRole = (value: unknown): string => {
 }
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    // Sidebar is permanently expanded for simplicity — collapsing removed
+    const [isSidebarOpen] = useState(true);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [userRole, setUserRole] = useState('');
@@ -49,7 +52,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     const [hasHydrated, setHasHydrated] = useState(false);
     const pathname = usePathname();
     const router = useRouter();
-    const { toggleMode, setRole } = useTheme();
+    const { toggleMode, setRole, mode } = useTheme();
     const [showBugReport, setShowBugReport] = useState(false);
 
     useEffect(() => {
@@ -132,7 +135,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     const isAdviser = normalizedRole === 'adviser' || normalizedRole === 'advisers' || normalizedRole === 'manager';
     const isStudent = normalizedRole === 'student' || normalizedRole === 'member';
 
-    const portalItem = { href: '/', label: 'Portal Home', icon: LayoutDashboard };
+    const portalItem = { href: '/', label: 'Academic Home', icon: Home };
 
     const dashboardItems = [
         { href: '/scholar/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -152,6 +155,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         ...(userRole === 'Admin' ? [{ href: '/scholar/workspace-sync', label: 'Workspace Sync', icon: RefreshCw }] : []),
     ];
 
+    const adminPanelItems = [
+        { href: '/scholar/admin/accounts', label: 'Accounts', icon: Shield },
+        { href: '/scholar/admin/data-integrity', label: 'Data Integrity', icon: AlertTriangle },
+        { href: '/scholar/admin/adviser-availability', label: 'Adviser Availability', icon: Users },
+        { href: '/scholar/admin/semester-readiness', label: 'Semester Readiness', icon: ClipboardList },
+    ];
+
     const academicItems = [
         ...dashboardItems,
         ...courseItems,
@@ -160,95 +170,113 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
     const navSections = [
         { title: 'Academic', items: academicItems },
-        { title: 'Google Tools', items: googleItems },
+        { title: 'Google Workspace', items: googleItems },
+        ...(isAdmin ? [{ title: 'Admin', items: adminPanelItems }] : []),
     ].filter((section) => section.items.length > 0);
 
-    const adminPanelItems = [
-        { href: '/scholar/admin/accounts', label: 'Accounts', icon: Shield },
-        { href: '/scholar/admin/data-integrity', label: 'Data Integrity', icon: AlertTriangle },
-        { href: '/scholar/admin/adviser-availability', label: 'Adviser Availability', icon: Users },
-        { href: '/scholar/admin/semester-readiness', label: 'Semester Readiness', icon: ClipboardList },
-    ];
-
     const isActive = (path: string) => pathname === path;
+    const compactIconColor = mode === 'dark' ? '#ffffff' : 'var(--color-primary)';
+    const compactIconBackground = mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.10)'
+        : 'color-mix(in srgb, var(--color-primary) 18%, white)';
 
-    const NavLink = ({ href, label, icon: Icon }: { href: string; label: string; icon: any }) => (
-        <Link
-            href={href}
-            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 group shadow-sm hover:shadow-md"
-            style={{
-                background: isActive(href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-                color: isActive(href) ? '#ffffff' : 'var(--color-text)'
-            }}
-            onMouseEnter={(e) => {
-                if (!isActive(href)) {
-                    e.currentTarget.style.backgroundColor = 'var(--color-hover)';
-                }
-            }}
-            onMouseLeave={(e) => {
-                if (!isActive(href)) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                }
-            }}
-        >
-            <Icon className="w-5 h-5 transition-colors" style={{ color: isActive(href) ? '#ffffff' : 'var(--color-text)' }} />
-            <span>{label}</span>
-        </Link>
+    // Sidebar scroll preservation
+    const navScrollRef = useRef<HTMLDivElement | null>(null);
+    const latestScrollRef = useRef<number>(0);
+    const mainRef = useRef<HTMLElement | null>(null);
+
+    const saveSidebarScroll = () => {
+        if (navScrollRef.current) latestScrollRef.current = navScrollRef.current.scrollTop;
+    };
+
+    // keep latest scroll updated as the user scrolls the sidebar
+    const handleNavScroll = () => {
+        if (navScrollRef.current) latestScrollRef.current = navScrollRef.current.scrollTop;
+    };
+
+    useEffect(() => {
+        // restore scroll position after navigation and prevent focus-driven jump
+        const restore = () => {
+            if (navScrollRef.current) {
+                const el = navScrollRef.current;
+                const max = el.scrollHeight - el.clientHeight;
+                el.scrollTop = Math.min(latestScrollRef.current, Math.max(0, max));
+            }
+
+            // move focus to main content without scrolling the page
+            try {
+                if (mainRef.current) mainRef.current.focus({ preventScroll: true } as any);
+            } catch (e) {
+                // some browsers may not support the option; ignore
+            }
+        };
+
+        // run on next animation frame to ensure layout settled
+        const id = window.requestAnimationFrame(() => setTimeout(restore, 8));
+        return () => window.cancelAnimationFrame(id);
+    }, [pathname]);
+
+    const NavLink = ({ href, label, icon: Icon, compact = false }: { href: string; label: string; icon: any; compact?: boolean }) => {
+        const active = isActive(href);
+
+        return (
+            <Link
+                href={href}
+                className={`scholar-nav-item flex items-center ${compact ? 'gap-2 px-2 py-2' : 'gap-3 px-3 py-3'} ${active ? 'scholar-nav-item-active' : ''}`}
+                title={label}
+                onClick={() => saveSidebarScroll()}
+            >
+                <span
+                    className={`scholar-nav-icon flex items-center justify-center rounded-xl transition-colors ${compact ? 'h-8 w-8' : 'h-9 w-9'} ${active ? 'bg-white/16' : ''}`}
+                    style={{
+                        color: compactIconColor,
+                        backgroundColor: active ? (mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'color-mix(in srgb, var(--color-primary) 24%, white)') : compactIconBackground,
+                    }}
+                >
+                    <Icon className={`${compact ? 'h-4 w-4' : 'h-5 w-5'} shrink-0 stroke-[2.5]`} style={{ color: compactIconColor }} />
+                </span>
+                <span className={`${compact ? 'text-xs' : 'text-sm'} font-semibold leading-none`}>{label}</span>
+            </Link>
+        );
+    };
+
+    const RolePill = ({ compact = false }: { compact?: boolean }) => (
+        <div className={`portal-chip ${compact ? 'w-full justify-center' : ''}`}>
+            <Shield className="w-3.5 h-3.5" />
+            {!compact && <span>{displayRole || 'Student'}</span>}
+        </div>
     );
 
     return (
-        <div className="min-h-screen relative overflow-hidden font-sans transition-colors duration-300" style={{ backgroundColor: 'var(--color-background)' }}>
-            {/* Animated Background Elements (SkyFlow Style) */}
+        <div className="portal-shell min-h-screen relative overflow-hidden font-sans transition-colors duration-300 scholar-theme">
+            {/* Ambient background accents */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                <div className="absolute top-20 left-10 w-72 h-72 bg-blue-200/30 rounded-full blur-3xl animate-float-slow"></div>
-                <div className="absolute top-40 right-20 w-96 h-96 bg-cyan-200/30 rounded-full blur-3xl animate-bounce-slow"></div>
-                <div className="absolute bottom-20 left-1/3 w-80 h-80 bg-purple-200/20 rounded-full blur-3xl animate-wave"></div>
+                <div className="absolute top-12 left-8 w-80 h-80 rounded-full blur-3xl animate-float-slow" style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-primary) 18%, transparent), transparent 70%)', opacity: 0.52 }} />
+                <div className="absolute top-28 right-4 w-[30rem] h-[30rem] rounded-full blur-3xl animate-bounce-slow" style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-secondary) 16%, transparent), transparent 72%)', opacity: 0.4 }} />
+                <div className="absolute bottom-0 left-1/3 w-[34rem] h-[34rem] rounded-full blur-3xl animate-wave" style={{ background: 'radial-gradient(circle, color-mix(in srgb, var(--color-accent) 14%, transparent), transparent 72%)', opacity: 0.3 }} />
             </div>
 
             {/* Header */}
-            <header className="sticky top-0 z-40 shadow-lg backdrop-blur-xl transition-colors duration-300" style={{ backgroundColor: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
-                <div className="px-4 sm:px-6 lg:px-8 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            {/* Mobile Menu Toggle */}
-                            <button 
-                                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-                                className="lg:hidden p-2 rounded-lg transition-colors"
-                                style={{ color: 'var(--color-text)' }}
-                            >
-                                {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                            </button>
-
-                            {/* Branding */}
-                            <Link href="/" className="flex items-center gap-3 group">
-                                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform duration-300">
-                                    <Cloud className="w-6 h-6 text-white" />
-                                </div>
-                                <div className="flex flex-col">
-                                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-[family-name:var(--font-lilita)] tracking-wide">
-                                        ScholarFlow
-                                    </h1>
-                                    <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest leading-none">
-                                        Academic Portal
-                                    </p>
-                                </div>
-                            </Link>
+            <header className="sticky top-0 z-20 border-b backdrop-blur-2xl transition-colors duration-300" style={{ backgroundColor: 'color-mix(in srgb, var(--color-surface) 92%, transparent)', borderBottomColor: 'color-mix(in srgb, var(--color-border) 92%, white)' }}>
+                <div className="px-4 sm:px-6 lg:px-8 py-2">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-3">
+                                <Link href="/scholar/dashboard" className="flex items-center gap-3 group">
+                                    <div className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm transform group-hover:scale-105 transition-transform duration-200" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' }}>
+                                        <Cloud className="w-4 h-4 text-white" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <h1 className="scholar-display text-lg leading-none text-transparent bg-clip-text" style={{ backgroundImage: 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' }}>
+                                            ScholarSync
+                                        </h1>
+                                    </div>
+                                </Link>
+                            </div>
                         </div>
 
-                        {/* Desktop Header Actions */}
-                        <div className="hidden md:flex items-center gap-6">
-                            <div className="flex flex-col items-end">
-                                <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{userName || userEmail.split('@')[0] || 'User'}</p>
-                                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{displayRole}</p>
-                            </div>
+                        <div className="flex items-center gap-3 justify-end">
                             <ThemeToggle />
-                            <button 
-                                onClick={handleLogout} 
-                                className="p-2.5 hover:bg-red-50 rounded-xl transition-all duration-300 group"
-                                title="Sign Out"
-                            >
-                                <LogOut className="w-5 h-5 text-gray-400 group-hover:text-red-500 transition-colors" />
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -256,92 +284,50 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             <div className="flex relative z-30">
                 {/* Desktop Sidebar */}
-                <aside className={`hidden lg:flex lg:flex-col sticky top-[73px] h-[calc(100vh-73px)] backdrop-blur-xl transition-all duration-300 shadow-xl ${isSidebarOpen ? 'w-64' : 'w-20'}`} style={{ backgroundColor: 'var(--color-surface)', borderRight: '1px solid var(--color-border)' }}>
-                    <div className="p-4 flex flex-col h-full">
-                        {/* Sidebar Toggle */}
-                        <button 
-                            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                            className="self-end mb-6 p-1.5 rounded-lg transition-all"
-                            style={{ color: 'var(--color-textSecondary)' }}
-                        >
-                            <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isSidebarOpen ? 'rotate-90' : '-rotate-90'}`} />
-                        </button>
-
-                        {/* Nav Items */}
-                        <nav className="space-y-3">
-                            {isSidebarOpen ? (
-                                <NavLink {...portalItem} />
-                            ) : (
-                                <Link
-                                    href={portalItem.href}
-                                    className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
-                                    style={{
-                                        background: isActive(portalItem.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-                                        color: isActive(portalItem.href) ? '#ffffff' : 'var(--color-text)'
-                                    }}
-                                    title={portalItem.label}
-                                >
-                                    <portalItem.icon className="w-5 h-5" />
-                                </Link>
-                            )}
-
-                            {navSections.map((section, sectionIndex) => (
-                                <div key={`desktop-section-${sectionIndex}`} className="pt-3 mt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                                    {isSidebarOpen && (
-                                        <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2 px-4" style={{ color: 'var(--color-textSecondary)' }}>
-                                            {section.title}
-                                        </h3>
-                                    )}
-                                    {section.items.map((item) => (
-                                        isSidebarOpen ? (
-                                            <NavLink key={item.href} {...item} />
-                                        ) : (
-                                            <Link
-                                                key={item.href}
-                                                href={item.href}
-                                                className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
-                                                style={{
-                                                    background: isActive(item.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-                                                    color: isActive(item.href) ? '#ffffff' : 'var(--color-text)'
-                                                }}
-                                                title={item.label}
-                                            >
-                                                <item.icon className="w-5 h-5" />
-                                            </Link>
-                                        )
-                                    ))}
+                <aside className={`hidden lg:flex lg:flex-col sticky top-[81px] h-[calc(100vh-81px)] backdrop-blur-2xl transition-all duration-300 shadow-xl w-[19rem] overflow-x-hidden scholar-sidebar-compact`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-surface) 92%, transparent)', borderRight: '1px solid color-mix(in srgb, var(--color-border) 92%, white)' }}>
+                    <div className="p-4 flex flex-col h-full gap-4 overflow-x-hidden min-w-0">
+                        <nav ref={navScrollRef} onScroll={handleNavScroll} className="flex-1 overflow-y-hidden overflow-x-hidden custom-scrollbar min-w-0">
+                            <div className="scholar-sidebar-list min-w-0">
+                                <div className="scholar-sidebar-group">
+                                    <div className="scholar-sidebar-group-heading">
+                                        <h3 className="scholar-hero-kicker">Academic Home</h3>
+                                        <span className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--color-textSecondary)' }}>
+                                            shortcuts
+                                        </span>
+                                    </div>
+                                    <NavLink {...portalItem} compact />
                                 </div>
-                            ))}
-                        </nav>
 
-                        {/* Admin Section */}
-                        {isAdmin && (
-                            <div className="mt-8 pt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
-                                {isSidebarOpen && (
-                                    <h2 className="text-[10px] font-bold uppercase tracking-widest mb-4 px-4" style={{ color: 'var(--color-textSecondary)' }}>
-                                        Admin Panel
-                                    </h2>
-                                )}
-                                {adminPanelItems.map((item) => (
-                                    isSidebarOpen ? (
-                                        <NavLink key={item.href} {...item} />
-                                    ) : (
-                                        <Link
-                                            key={item.href}
-                                            href={item.href}
-                                            className="flex items-center justify-center p-3 rounded-xl transition-all duration-300"
-                                            style={{
-                                                background: isActive(item.href) ? 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' : 'transparent',
-                                                color: isActive(item.href) ? '#ffffff' : 'var(--color-text)'
-                                            }}
-                                            title={item.label}
-                                        >
-                                            <item.icon className="w-5 h-5" />
-                                        </Link>
-                                    )
+                                {navSections.map((section) => (
+                                    <div key={section.title} className="scholar-sidebar-group scholar-sidebar-group-divider">
+                                        <div className="scholar-sidebar-group-heading">
+                                            <h3 className="scholar-hero-kicker">{section.title}</h3>
+                                            <span className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--color-textSecondary)' }}>
+                                                {section.items.length} links
+                                            </span>
+                                        </div>
+
+                                        <div className="space-y-1.5 min-w-0">
+                                            {section.items.map((item) => (
+                                                <NavLink key={item.href} {...item} compact />
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
-                        )}
+                        </nav>
+
+                        <div className="portal-panel p-4 min-w-0 overflow-x-hidden">
+                            <p className="scholar-metric-label">Signed in as</p>
+                            <p className="mt-2 text-sm font-bold" style={{ color: 'var(--color-text)' }}>{userName || userEmail.split('@')[0] || 'User'}</p>
+                            <p className="mt-1 text-xs" style={{ color: 'var(--color-textSecondary)' }}>{displayRole || 'Student'}</p>
+                            <div className="mt-3">
+                                <button onClick={handleLogout} className="portal-button portal-button-primary w-full">
+                                    <LogOut className="w-4 h-4" />
+                                    Sign out
+                                </button>
+                            </div>
+                        </div>
 
                     </div>
                 </aside>
@@ -349,51 +335,78 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 {/* Mobile Sidebar Overlay */}
                 {isMobileMenuOpen && (
                     <div className="fixed inset-0 z-50 lg:hidden">
-                        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-                        <aside className="absolute left-0 top-0 bottom-0 w-72 backdrop-blur-xl shadow-2xl p-6 flex flex-col animate-in slide-in-from-left duration-300" style={{ backgroundColor: 'var(--color-surface)' }}>
-                            <div className="flex items-center gap-3 mb-10">
-                                <div className="p-2 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-md">
-                                    <Cloud className="w-6 h-6 text-white" />
+                        <div className="absolute inset-0 bg-black/22 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+                        <aside className="absolute left-0 top-0 bottom-0 w-[19rem] backdrop-blur-2xl shadow-2xl p-5 flex flex-col animate-in slide-in-from-left duration-300" style={{ backgroundColor: 'color-mix(in srgb, var(--color-surface) 96%, transparent)' }}>
+                            <div className="flex items-start justify-between gap-4 mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' }}>
+                                        <Cloud className="w-6 h-6 text-white" />
+                                    </div>
+                                    <div>
+                                        <p className="scholar-hero-kicker">Academic Portal</p>
+                                        <span className="block mt-2 text-2xl font-bold text-transparent bg-clip-text scholar-display" style={{ backgroundImage: 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))' }}>
+                                            ScholarSync
+                                        </span>
+                                    </div>
                                 </div>
-                                <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent font-[family-name:var(--font-lilita)]">
-                                    ScholarFlow
-                                </span>
+                                <button onClick={() => setIsMobileMenuOpen(false)} className="portal-button portal-button-secondary px-3 py-2">
+                                    <X className="w-4 h-4" />
+                                </button>
                             </div>
 
-                            <nav className="space-y-3 flex-1">
-                                <div>
+                            <div className="portal-panel p-4 mb-4">
+                                <p className="scholar-metric-label">Signed in as</p>
+                                <p className="mt-2 text-base font-bold" style={{ color: 'var(--color-text)' }}>{userName || userEmail.split('@')[0] || 'User'}</p>
+                                <p className="text-sm mt-1" style={{ color: 'var(--color-textSecondary)' }}>{displayRole || 'Student'}</p>
+                            </div>
+
+                            <nav className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
+                                <div className="portal-panel p-3">
                                     <NavLink {...portalItem} />
                                 </div>
 
                                 {navSections.map((section, sectionIndex) => (
-                                    <div key={`mobile-section-${sectionIndex}`} className="pt-3 mt-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-                                        <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2 px-4" style={{ color: 'var(--color-textSecondary)' }}>
-                                            {section.title}
-                                        </h3>
-                                        {section.items.map((item) => (
-                                            <NavLink key={item.href} {...item} />
-                                        ))}
+                                    <div key={`mobile-section-${sectionIndex}`} className="portal-panel p-3">
+                                        <div className="mb-3 flex items-center justify-between">
+                                            <h3 className="scholar-hero-kicker">{section.title}</h3>
+                                            <span className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--color-textSecondary)' }}>{section.items.length} links</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {section.items.map((item) => (
+                                                <NavLink key={item.href} {...item} />
+                                            ))}
+                                        </div>
                                     </div>
                                 ))}
                                 
                                 {isAdmin && (
-                                    <div className="pt-6 mt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
-                                        <h3 className="text-[10px] font-bold uppercase tracking-widest mb-2 px-4" style={{ color: 'var(--color-textSecondary)' }}>
-                                            Admin Panel
-                                        </h3>
-                                        {adminPanelItems.map((item) => (
-                                            <NavLink key={item.href} {...item} />
-                                        ))}
+                                    <div className="portal-panel p-3">
+                                        <div className="mb-3 flex items-center justify-between">
+                                            <h3 className="scholar-hero-kicker">Admin</h3>
+                                            <span className="text-[10px] font-semibold uppercase tracking-[0.22em]" style={{ color: 'var(--color-textSecondary)' }}>controls</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {adminPanelItems.map((item) => (
+                                                <NavLink key={item.href} {...item} />
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </nav>
+
+                            <div className="mt-4 portal-panel p-4">
+                                <button onClick={handleLogout} className="portal-button portal-button-primary w-full">
+                                    <LogOut className="w-4 h-4" />
+                                    Sign out
+                                </button>
+                            </div>
 
                         </aside>
                     </div>
                 )}
 
                 {/* Main Content Area */}
-                <main className="flex-1 h-[calc(100vh-73px)] overflow-y-auto">
+                <main ref={mainRef as any} tabIndex={-1} className="flex-1 h-[calc(100vh-81px)] overflow-y-auto">
                     <div className="p-4 sm:p-6 lg:p-8">
                         {children}
                     </div>

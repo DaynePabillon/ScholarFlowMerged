@@ -513,6 +513,7 @@ function ScheduleContent() {
           multipleSlots: [],
           wholeDay: false,
           wholeWeek: false,
+          totalSlots: '',
         })
         fetchSlots()
       } else {
@@ -1182,32 +1183,65 @@ function ScheduleContent() {
 
   return (
     <SidebarLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-              My Schedule
-            </h1>
-            <p className="text-gray-500 mt-1 text-sm">Manage consultation time slots and group bookings</p>
+        <section className="portal-panel-strong p-6 sm:p-8 overflow-hidden relative">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/55 via-transparent to-transparent dark:from-white/8" />
+          <div className="relative grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
+            <div className="space-y-4">
+              <span className="scholar-hero-kicker">Consultation Schedule</span>
+              <div>
+                <h1 className="scholar-display text-4xl sm:text-5xl" style={{ color: 'var(--color-text)' }}>
+                  My Schedule
+                </h1>
+                <p className="mt-3 text-base sm:text-lg max-w-2xl" style={{ color: 'var(--color-textSecondary)' }}>
+                  Design consultation windows, review group bookings, and keep your week organized from one place.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => setShowCreateForm(!showCreateForm)}
+                  className="portal-button portal-button-primary"
+                >
+                  <Plus className="w-4 h-4" />
+                  {showCreateForm ? 'Close builder' : 'New slot'}
+                </button>
+                <span className="portal-chip">
+                  <Clock className="w-3.5 h-3.5" />
+                  {slots.length} total slot{slots.length === 1 ? '' : 's'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="scholar-metric">
+                <p className="scholar-metric-label">Upcoming days</p>
+                <p className="scholar-metric-value">{new Set(slots.map((slot) => toDateKey(slot))).size}</p>
+                <p className="mt-2 text-xs" style={{ color: 'var(--color-textSecondary)' }}>Distinct days in your agenda</p>
+              </div>
+              <div className="scholar-metric">
+                <p className="scholar-metric-label">Capacity</p>
+                <p className="scholar-metric-value">{slots.reduce((total, slot) => total + Number(slot.max_groups || 0), 0)}</p>
+                <p className="mt-2 text-xs" style={{ color: 'var(--color-textSecondary)' }}>Total group capacity across slots</p>
+              </div>
+            </div>
           </div>
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium hover:from-blue-600 hover:to-cyan-600 transition-all shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            New Slot
-          </button>
-        </div>
+        </section>
 
         {/* Create Slot Form */}
         {showCreateForm && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Create Consultation Slot</h2>
+          <div className="portal-panel-strong p-6 mb-6">
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <span className="portal-chip mb-3">Slot Builder</span>
+                <h2 className="scholar-section-heading text-2xl" style={{ color: 'var(--color-text)' }}>Create Consultation Slot</h2>
+                <p className="mt-1 text-sm" style={{ color: 'var(--color-textSecondary)' }}>Lay out one date, a full day, or a whole week of appointment windows.</p>
+              </div>
+            </div>
 
             {formError && (
-              <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg flex gap-2">
+              <div className="mb-4 p-3 rounded-xl flex gap-2" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)', border: '1px solid color-mix(in srgb, var(--color-error) 24%, transparent)' }}>
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                 {formError}
               </div>
@@ -1216,11 +1250,11 @@ function ScheduleContent() {
             <div className="space-y-4">
               {/* Course Dropdown */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Course</label>
                 <select
                   value={formData.courseId}
                   onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="portal-input text-sm"
                 >
                   <option value="">Select a course</option>
                   {courses.map((course) => (
@@ -1233,17 +1267,17 @@ function ScheduleContent() {
 
               {/* Date */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date {formData.wholeWeek ? '(pick any day in target week)' : ''}</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Date {formData.wholeWeek ? '(pick any day in target week)' : ''}</label>
                 <input
                   type="date"
                   value={formData.slotDate}
                   onChange={(e) => setFormData({ ...formData, slotDate: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="portal-input text-sm"
                 />
               </div>
 
               {/* Whole Day Toggle */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 rounded-2xl portal-panel p-4">
                 <input
                   type="checkbox"
                   id="wholeDay"
@@ -1251,13 +1285,13 @@ function ScheduleContent() {
                   onChange={(e) => setFormData({ ...formData, wholeDay: e.target.checked, wholeWeek: e.target.checked ? false : formData.wholeWeek })}
                   className="w-4 h-4"
                 />
-                <label htmlFor="wholeDay" className="text-sm font-medium text-gray-700">
+                <label htmlFor="wholeDay" className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                   Whole Day (auto-generates 1-hour slots from 8:00 AM to 5:00 PM)
                 </label>
               </div>
 
               {/* Whole Week Toggle */}
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 rounded-2xl portal-panel p-4">
                 <input
                   type="checkbox"
                   id="wholeWeek"
@@ -1265,7 +1299,7 @@ function ScheduleContent() {
                   onChange={(e) => setFormData({ ...formData, wholeWeek: e.target.checked, wholeDay: e.target.checked ? false : formData.wholeDay })}
                   className="w-4 h-4"
                 />
-                <label htmlFor="wholeWeek" className="text-sm font-medium text-gray-700">
+                <label htmlFor="wholeWeek" className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>
                   Whole Week (Mon-Sat uses the same time range for each day)
                 </label>
               </div>
@@ -1273,21 +1307,21 @@ function ScheduleContent() {
               {!formData.wholeDay && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Start Time</label>
                     <input
                       type="time"
                       value={formData.startTime}
                       onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="portal-input text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                    <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>End Time</label>
                     <input
                       type="time"
                       value={formData.endTime}
                       onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="portal-input text-sm"
                     />
                   </div>
                 </div>
@@ -1295,11 +1329,11 @@ function ScheduleContent() {
 
               {/* Slot Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Slot Type</label>
+                <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Slot Type</label>
                 <select
                   value={formData.slotType}
                   onChange={(e) => setFormData({ ...formData, slotType: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="portal-input text-sm"
                 >
                   <option value="FIRST_COME_FIRST_SERVE">First Come First Serve</option>
                   <option value="SPECIFIC_GROUP">Specific Group</option>
@@ -1309,13 +1343,13 @@ function ScheduleContent() {
               {/* Select Groups (for SPECIFIC_GROUP) */}
               {formData.slotType === 'SPECIFIC_GROUP' && formData.courseId && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Groups</label>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-textSecondary)' }}>Select Groups</label>
                   {groups.length === 0 ? (
-                    <p className="text-sm text-gray-500">No groups available for this course</p>
+                    <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No groups available for this course</p>
                   ) : (
-                    <div className="space-y-2 border border-gray-300 rounded-lg p-3 bg-gray-50 max-h-48 overflow-y-auto">
+                    <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
                       {groups.map((group) => (
-                        <div key={group.id} className="flex items-center gap-2">
+                        <div key={group.id} className="flex items-center gap-2 portal-panel p-3">
                           <input
                             type="checkbox"
                             id={`group-${group.id}`}
@@ -1335,7 +1369,7 @@ function ScheduleContent() {
                             }}
                             className="w-4 h-4"
                           />
-                          <label htmlFor={`group-${group.id}`} className="text-sm text-gray-700 cursor-pointer">
+                          <label htmlFor={`group-${group.id}`} className="text-sm cursor-pointer" style={{ color: 'var(--color-text)' }}>
                             {getGroupPickerLabel(group)}
                           </label>
                         </div>
@@ -1348,11 +1382,11 @@ function ScheduleContent() {
               {/* Max Groups Dropdown (for FCFS) */}
               {formData.slotType === 'FIRST_COME_FIRST_SERVE' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Groups</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Max Groups</label>
                   <select
                     value={formData.maxGroups}
                     onChange={(e) => setFormData({ ...formData, maxGroups: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="portal-input text-sm"
                   >
                     <option value="1">1</option>
                     <option value="2">2</option>
@@ -1366,29 +1400,29 @@ function ScheduleContent() {
               {/* Total Slots Override */}
               {formData.slotType === 'FIRST_COME_FIRST_SERVE' && !formData.wholeDay && !previewSlots.length && (
                 <div className="space-y-1">
-                  <label className="block text-sm font-semibold text-gray-700">Total Slots to Generate</label>
+                  <label className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>Total Slots to Generate</label>
                   <input
                     type="number"
                     min="1"
                     placeholder="e.g. 3"
                     value={formData.totalSlots}
                     onChange={(e) => setFormData(prev => ({ ...prev, totalSlots: e.target.value }))}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all font-medium"
+                    className="portal-input text-sm"
                   />
-                  <p className="text-[10px] text-gray-400 font-medium px-1">
+                  <p className="text-[10px] font-medium px-1" style={{ color: 'var(--color-textSecondary)' }}>
                     System detected {groups.length} groups. Adjust this if you want more or fewer slots.
                   </p>
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
+              <div className="flex flex-wrap items-center gap-3 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
                 <button
                   onClick={() => {
                     setShowCreateForm(false)
                     setPreviewSlots([])
                   }}
-                  className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors"
+                  className="portal-button portal-button-secondary text-sm"
                 >
                   Cancel
                 </button>
@@ -1396,7 +1430,7 @@ function ScheduleContent() {
                   <button
                     onClick={handleGeneratePreview}
                     disabled={loadingGroups}
-                    className="flex items-center gap-2 bg-[#1a237e] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#1a237e]/90 transition-all shadow-lg hover:shadow-[#1a237e]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="portal-button portal-button-primary text-sm disabled:opacity-50"
                   >
                     {loadingGroups ? (
                       <>
@@ -1411,7 +1445,7 @@ function ScheduleContent() {
                   <button
                     onClick={handleCreateSlot}
                     disabled={isSaving}
-                    className="flex items-center gap-2 bg-[#1a237e] text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[#1a237e]/90 transition-all shadow-lg hover:shadow-[#1a237e]/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="portal-button portal-button-primary text-sm disabled:opacity-50"
                   >
                     {isSaving ? (
                       <>
@@ -1428,15 +1462,16 @@ function ScheduleContent() {
 
             {/* Preview Section */}
             {previewSlots.length > 0 && (
-              <div className="mt-6 border-t border-gray-100 pt-6">
+              <div className="mt-6 pt-6" style={{ borderTop: '1px solid var(--color-border)' }}>
                 <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-[#1a237e]" />
+                  <h4 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--color-text)' }}>
+                    <Clock className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
                     Review Generated Slots
                   </h4>
                   <button 
                     onClick={() => setPreviewSlots([])}
-                    className="text-xs text-red-500 hover:text-red-600 font-medium"
+                    className="text-xs font-medium"
+                    style={{ color: 'var(--color-error)' }}
                   >
                     Reset Preview
                   </button>
@@ -1446,16 +1481,16 @@ function ScheduleContent() {
                   {previewSlots.map((slot, idx) => (
                     <div 
                       key={idx} 
-                      className="flex items-center gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100 group hover:border-[#1a237e]/20 transition-all"
+                      className="flex items-center gap-4 portal-panel p-3 group transition-all"
                     >
                       <div className="w-24">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Date</span>
-                        <span className="text-sm font-semibold text-gray-900">{formatDayLabel(slot.slotDate)}</span>
+                        <span className="text-xs font-bold uppercase tracking-wider block" style={{ color: 'var(--color-textSecondary)' }}>Date</span>
+                        <span className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>{formatDayLabel(slot.slotDate)}</span>
                       </div>
                       
                       <div className="flex-1 flex items-center gap-2">
                         <div className="flex-1">
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Start</span>
+                          <span className="text-xs font-bold uppercase tracking-wider block" style={{ color: 'var(--color-textSecondary)' }}>Start</span>
                           <input
                             type="time"
                             value={slot.startTime}
@@ -1464,11 +1499,11 @@ function ScheduleContent() {
                               newPreview[idx].startTime = e.target.value
                               setPreviewSlots(newPreview)
                             }}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-[#1a237e]/20 focus:border-[#1a237e] outline-none transition-all"
+                            className="portal-input px-2 py-1.5 text-sm"
                           />
                         </div>
                         <div className="flex-1">
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">End</span>
+                          <span className="text-xs font-bold uppercase tracking-wider block" style={{ color: 'var(--color-textSecondary)' }}>End</span>
                           <input
                             type="time"
                             value={slot.endTime}
@@ -1477,7 +1512,7 @@ function ScheduleContent() {
                               newPreview[idx].endTime = e.target.value
                               setPreviewSlots(newPreview)
                             }}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:ring-2 focus:ring-[#1a237e]/20 focus:border-[#1a237e] outline-none transition-all"
+                            className="portal-input px-2 py-1.5 text-sm"
                           />
                         </div>
                       </div>
@@ -1486,7 +1521,8 @@ function ScheduleContent() {
                         onClick={() => {
                           setPreviewSlots(previewSlots.filter((_, i) => i !== idx))
                         }}
-                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                        className="p-2 rounded-lg transition-all hover:bg-black/5"
+                        style={{ color: 'var(--color-textSecondary)' }}
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1494,7 +1530,7 @@ function ScheduleContent() {
                   ))}
                 </div>
                 
-                <p className="mt-4 text-xs text-gray-500 italic">
+                <p className="mt-4 text-xs italic" style={{ color: 'var(--color-textSecondary)' }}>
                   * You can adjust the times for each slot above or remove specific ones before finalizing.
                 </p>
               </div>
@@ -1504,31 +1540,31 @@ function ScheduleContent() {
 
         {/* Slots List */}
         {loading ? (
-          <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-t-transparent" style={{ borderColor: 'var(--color-primary)' }} />
           </div>
         ) : groupedSlots.length === 0 ? (
-          <div className="text-center py-12">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-500">No consultation slots yet</p>
+          <div className="portal-panel p-12 text-center">
+            <Calendar className="w-12 h-12 mx-auto mb-3" style={{ color: 'var(--color-textSecondary)' }} />
+            <p style={{ color: 'var(--color-textSecondary)' }}>No consultation slots yet</p>
           </div>
         ) : (
           <div>
             {/* Section Header */}
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900">THIS WEEK'S AGENDA</h2>
-              <p className="text-sm text-gray-500 mt-1">Your consultation schedule and availability</p>
+            <div className="mb-6">
+              <span className="portal-chip mb-3">Weekly agenda</span>
+              <h2 className="scholar-section-heading text-3xl" style={{ color: 'var(--color-text)' }}>This Week's Agenda</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--color-textSecondary)' }}>Your consultation schedule and availability</p>
             </div>
 
             {/* Days Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {groupedSlots.map((dayGroup) => (
-              <div key={dayGroup.date} className="relative h-full bg-white border border-gray-300 rounded-xl overflow-visible hover:shadow-lg transition-all">
-                {/* Day Card - Two Column Layout */}
-                <div className="bg-white h-full">
+              <div key={dayGroup.date} className="relative h-full portal-panel-strong overflow-visible transition-all">
+                <div className="h-full">
                   <div className="grid grid-cols-[200px_1fr] h-full items-stretch">
                     {/* Left: Day and Date */}
-                    <div className="h-full border-r border-gray-300 p-6 flex flex-col items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
+                    <div className="h-full p-6 flex flex-col items-center justify-center" style={{ borderRight: '1px solid var(--color-border)', background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 90%, transparent) 100%)' }}>
                       <div className="text-center">
                           {(() => {
                             const [yRaw, mRaw, dRaw] = String(dayGroup.date || '').slice(0, 10).split('-')
@@ -1537,8 +1573,8 @@ function ScheduleContent() {
                             const dayNum = String(dRaw).replace(/^0/, '')
                             return (
                               <>
-                                <p className="text-sm font-medium text-gray-600 tracking-wider">{dayName} • {monthName}</p>
-                                <p className="text-4xl font-bold text-gray-900 mt-1">{dayNum}</p>
+                                <p className="text-sm font-medium tracking-wider" style={{ color: 'var(--color-textSecondary)' }}>{dayName} • {monthName}</p>
+                                <p className="text-4xl font-bold mt-1" style={{ color: 'var(--color-text)' }}>{dayNum}</p>
                               </>
                             )
                           })()}
@@ -1547,7 +1583,7 @@ function ScheduleContent() {
 
                     {/* Right: Available Slots */}
                     <div className="p-6 h-full flex flex-col">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">AVAILABLE:</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--color-textSecondary)' }}>Available</p>
                       <div className="space-y-2">
                         {dayGroup.slots.map((slot) => {
                           const booked = Number(slot.current_groups_display ?? slot.current_groups ?? 0)
@@ -1557,19 +1593,13 @@ function ScheduleContent() {
                           return (
                             <div 
                               key={slot.slot_id}
-                              className={`text-sm font-medium px-3 py-2 rounded transition-all cursor-pointer ${
-                                isFullyBooked
-                                  ? 'bg-red-50 text-red-700 border border-red-200'
-                                  : hasBookings
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                  : 'bg-green-50 text-green-700 border border-green-200 hover:shadow-md'
-                              }`}
+                              className="text-sm font-medium px-3 py-2 rounded-2xl transition-all cursor-pointer portal-panel"
                               onClick={() => toggleSlotExpand(slot.slot_id)}
                               title={`${formatTimeRange12Hour(slot.start_time, slot.end_time)}: ${booked}/${capacity} groups booked`}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span>{formatTimeRange12Hour(slot.start_time, slot.end_time)}</span>
-                                <span className="text-xs font-semibold opacity-70">({booked}/{capacity})</span>
+                                <span style={{ color: 'var(--color-text)' }}>{formatTimeRange12Hour(slot.start_time, slot.end_time)}</span>
+                                <span className="text-xs font-semibold opacity-70" style={{ color: 'var(--color-textSecondary)' }}>({booked}/{capacity})</span>
                               </div>
                             </div>
                           )
@@ -1577,21 +1607,22 @@ function ScheduleContent() {
                       </div>
 
                       {/* Summary Stats */}
-                      <div className="mt-auto pt-3 border-t border-gray-200 flex justify-between">
+                      <div className="mt-auto pt-3 flex justify-between" style={{ borderTop: '1px solid var(--color-border)' }}>
                         <div>
-                          <p className="text-xs text-gray-500">Booked</p>
-                          <p className="text-lg font-bold text-gray-900">{dayGroup.totalBooked}/{dayGroup.totalCapacity}</p>
+                          <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>Booked</p>
+                          <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{dayGroup.totalBooked}/{dayGroup.totalCapacity}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-gray-500">Slots</p>
-                          <p className="text-lg font-bold text-gray-900">{dayGroup.slots.length}</p>
+                          <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>Slots</p>
+                          <p className="text-lg font-bold" style={{ color: 'var(--color-text)' }}>{dayGroup.slots.length}</p>
                         </div>
                         <button
                           onClick={(e) => {
                             e.stopPropagation()
                             setOpenActionMenu(openActionMenu === `day-${dayGroup.date}` ? null : `day-${dayGroup.date}`)
                           }}
-                          className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 relative"
+                          className="p-2 rounded-lg hover:bg-black/5 relative"
+                          style={{ color: 'var(--color-textSecondary)' }}
                           aria-label="Open day actions"
                         >
                           <MoreVertical className="w-4 h-4" />
@@ -1601,14 +1632,14 @@ function ScheduleContent() {
                   </div>
                 </div>
                 {openActionMenu === `day-${dayGroup.date}` && (
-                  <div className="absolute top-full right-6 mt-1 w-36 bg-white border border-gray-200 rounded-lg shadow-lg z-[200]" onClick={(e) => e.stopPropagation()}>
+                  <div className="absolute top-full right-6 mt-1 w-36 portal-panel p-1 z-[200]" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         setOpenActionMenu(null)
                         openDayEditModal(dayGroup.date, dayGroup.slots.length)
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-100"
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-black/5 border-b" style={{ color: 'var(--color-text)' , borderBottomColor: 'var(--color-border)' }}
                     >
                       Edit Day
                     </button>
@@ -1618,7 +1649,7 @@ function ScheduleContent() {
                         setOpenActionMenu(null)
                         handleDeleteDay(dayGroup.date, dayGroup.slots.length)
                       }}
-                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                      className="w-full text-left px-4 py-2 text-sm hover:bg-black/5" style={{ color: 'var(--color-error)' }}
                     >
                       Delete Day
                     </button>
@@ -1632,9 +1663,9 @@ function ScheduleContent() {
 
         {showEditModal && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="portal-panel-strong w-full max-w-md p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
                   {editMode === 'single' ? 'Edit Consultation Slot' : 'Edit Whole Day Slots'}
                 </h3>
                 <button
@@ -1643,67 +1674,67 @@ function ScheduleContent() {
                     setEditingSlot(null)
                     setEditingDay(null)
                   }}
-                  className="p-1 rounded hover:bg-gray-100"
+                  className="p-1 rounded hover:bg-black/5"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
                 </button>
               </div>
 
               {editMode === 'day' && editingDay && (
-                <p className="text-sm text-gray-600 mb-3">
+                <p className="text-sm mb-3" style={{ color: 'var(--color-textSecondary)' }}>
                   Updating {editingDay.slotCount} slot(s) from {editingDay.date}.
                 </p>
               )}
 
               {formError && (
-                <div className="mb-3 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm">
+                <div className="mb-3 p-3 rounded-lg text-sm" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)', border: '1px solid color-mix(in srgb, var(--color-error) 24%, transparent)' }}>
                   {formError}
                 </div>
               )}
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Date</label>
                   <input
                     type="date"
                     value={editForm.slotDate}
                     onChange={(e) => setEditForm(prev => ({ ...prev, slotDate: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="portal-input text-sm"
                   />
                 </div>
 
                 {editMode === 'single' && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                      <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Start Time</label>
                       <input
                         type="time"
                         value={editForm.startTime}
                         onChange={(e) => setEditForm(prev => ({ ...prev, startTime: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="portal-input text-sm"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                      <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>End Time</label>
                       <input
                         type="time"
                         value={editForm.endTime}
                         onChange={(e) => setEditForm(prev => ({ ...prev, endTime: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="portal-input text-sm"
                       />
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>
                     {editMode === 'day' ? 'Extra Groups' : 'Max Groups'}
                   </label>
                   {editMode === 'day' ? (
                     <select
                       value={editForm.extraGroups}
                       onChange={(e) => setEditForm(prev => ({ ...prev, extraGroups: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="portal-input text-sm"
                     >
                       <option value="0">0</option>
                       <option value="1">1</option>
@@ -1716,7 +1747,7 @@ function ScheduleContent() {
                     <select
                       value={editForm.maxGroups}
                       onChange={(e) => setEditForm(prev => ({ ...prev, maxGroups: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="portal-input text-sm"
                     >
                       <option value="1">1</option>
                       <option value="2">2</option>
@@ -1726,7 +1757,7 @@ function ScheduleContent() {
                     </select>
                   )}
                   {editMode === 'day' && (
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs mt-1" style={{ color: 'var(--color-textSecondary)' }}>
                       Adds extra FCFS slots for this day (1 hour each).
                     </p>
                   )}
@@ -1736,7 +1767,7 @@ function ScheduleContent() {
               <div className="flex justify-end gap-2 mt-5">
                 <button
                   onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                  className="portal-button portal-button-secondary disabled:opacity-50"
                   disabled={isUpdating}
                 >
                   Cancel
@@ -1744,7 +1775,7 @@ function ScheduleContent() {
                 <button
                   onClick={handleSubmitEdit}
                   disabled={isUpdating}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="portal-button portal-button-primary disabled:opacity-50"
                 >
                   {isUpdating ? 'Saving...' : 'Save Changes'}
                 </button>
@@ -1755,9 +1786,9 @@ function ScheduleContent() {
 
         {showConsultationForm && currentBooking && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 my-8">
+            <div className="portal-panel-strong w-full max-w-2xl p-6 my-8">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
                   Consultation Record - {currentBooking.group_name}
                 </h3>
                 <button
@@ -1765,28 +1796,28 @@ function ScheduleContent() {
                     setShowConsultationForm(false)
                     setCurrentBooking(null)
                   }}
-                  className="p-1 rounded hover:bg-gray-100"
+                  className="p-1 rounded hover:bg-black/5"
                   disabled={isSavingConsultation}
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
                 </button>
               </div>
 
               {consultationError && (
-                <div className="mb-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm flex items-center justify-between">
+                <div className="mb-4 p-3 rounded-lg text-sm flex items-center justify-between" style={{ backgroundColor: 'color-mix(in srgb, var(--color-error) 12%, transparent)', color: 'var(--color-error)', border: '1px solid color-mix(in srgb, var(--color-error) 24%, transparent)' }}>
                   <span>{consultationError}</span>
-                  <button onClick={() => setConsultationError('')} className="text-red-600 hover:text-red-800">✕</button>
+                  <button onClick={() => setConsultationError('')} className="font-bold" style={{ color: 'var(--color-error)' }}>✕</button>
                 </div>
               )}
 
               <div className="space-y-4 max-h-96 overflow-y-auto">
                 {/* Milestone */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Milestone/Topic</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Milestone/Topic</label>
                   <textarea
                     value={consultationForm.conMil}
                     onChange={(e) => setConsultationForm({...consultationForm, conMil: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="portal-input text-sm"
                     rows={2}
                     placeholder="What milestone or topic was discussed?"
                   />
@@ -1794,23 +1825,23 @@ function ScheduleContent() {
 
                 {/* Consultation Date */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Consultation Date</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Consultation Date</label>
                   <input
                     type="date"
                     value={consultationForm.conDate}
                     onChange={(e) => setConsultationForm({...consultationForm, conDate: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="portal-input text-sm"
                     placeholder="YYYY-MM-DD"
                   />
                 </div>
 
                 {/* Adviser Notes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Adviser Notes</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Adviser Notes</label>
                   <textarea
                     value={consultationForm.adviserNotes}
                     onChange={(e) => setConsultationForm({...consultationForm, adviserNotes: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="portal-input text-sm"
                     rows={3}
                     placeholder="Summary of discussion and observations..."
                   />
@@ -1818,11 +1849,11 @@ function ScheduleContent() {
 
                 {/* Action */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Action Items</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Action Items</label>
                   <textarea
                     value={consultationForm.conAction}
                     onChange={(e) => setConsultationForm({...consultationForm, conAction: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="portal-input text-sm"
                     rows={2}
                     placeholder="Agreed next steps and deliverables..."
                   />
@@ -1830,11 +1861,11 @@ function ScheduleContent() {
 
                 {/* Concerns */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Concerns</label>
+                  <label className="block text-sm font-medium mb-1" style={{ color: 'var(--color-textSecondary)' }}>Concerns</label>
                   <textarea
                     value={consultationForm.conConcerns}
                     onChange={(e) => setConsultationForm({...consultationForm, conConcerns: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    className="portal-input text-sm"
                     rows={2}
                     placeholder="Adviser/admin concerns for follow-up..."
                   />
@@ -1842,12 +1873,12 @@ function ScheduleContent() {
 
                 {/* Member Attendance & Participation */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Member Attendance & Participation</label>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-textSecondary)' }}>Member Attendance & Participation</label>
                   <div className="space-y-2">
                     {Object.keys(consultationForm.memberAttendance).map((member) => (
-                      <div key={member} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                        <div key={member} className="flex items-center gap-3 p-3 portal-panel">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-700">{member}</p>
+                            <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{member}</p>
                         </div>
                         <div className="flex gap-2">
                           <select
@@ -1856,7 +1887,7 @@ function ScheduleContent() {
                               ...consultationForm,
                               memberAttendance: {...consultationForm.memberAttendance, [member]: e.target.value as any}
                             })}
-                            className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="portal-input px-2 py-1 text-xs"
                           >
                             <option value="Present">Present</option>
                             <option value="Absent">Absent</option>
@@ -1867,7 +1898,7 @@ function ScheduleContent() {
                               ...consultationForm,
                               memberParticipation: {...consultationForm.memberParticipation, [member]: e.target.value as any}
                             })}
-                            className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="portal-input px-2 py-1 text-xs"
                           >
                             <option value="High">High</option>
                             <option value="Moderate">Moderate</option>
@@ -1886,7 +1917,7 @@ function ScheduleContent() {
                     setShowConsultationForm(false)
                     setCurrentBooking(null)
                   }}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:opacity-50"
+                  className="portal-button portal-button-secondary disabled:opacity-50"
                   disabled={isSavingConsultation}
                 >
                   Cancel
@@ -1894,7 +1925,7 @@ function ScheduleContent() {
                 <button
                   onClick={handleSaveConsultation}
                   disabled={isSavingConsultation}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  className="portal-button portal-button-primary disabled:opacity-50"
                 >
                   {isSavingConsultation ? 'Saving...' : 'Save Record'}
                 </button>
@@ -1906,7 +1937,7 @@ function ScheduleContent() {
         {/* Slot Details Modal */}
         {expandedSlot && slots.find(s => s.slot_id === expandedSlot) && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 max-h-[70vh] overflow-y-auto">
+            <div className="portal-panel-strong w-full max-w-md p-6 max-h-[70vh] overflow-y-auto">
               {(() => {
                 const slot = slots.find(s => s.slot_id === expandedSlot)
                 if (!slot) return null
@@ -1915,51 +1946,51 @@ function ScheduleContent() {
                   <>
                     <div className="flex items-center justify-between mb-4">
                       <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
                           Slot Details
                         </h3>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
                           {formatDayLabel(toDateKey(slot))} • {formatTimeRange12Hour(slot.start_time, slot.end_time)}
                         </p>
                       </div>
                       <button
                         onClick={() => setExpandedSlot(null)}
-                        className="p-1 rounded hover:bg-gray-100"
+                        className="p-1 rounded hover:bg-black/5"
                       >
-                        <X className="w-4 h-4 text-gray-500" />
+                        <X className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
                       </button>
                     </div>
 
-                    <div className="bg-gray-50 rounded-lg p-4 mb-4 space-y-2">
+                    <div className="portal-panel p-4 mb-4 space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Type:</span>
+                        <span style={{ color: 'var(--color-textSecondary)' }}>Type:</span>
                         <span className="font-medium">
                           {slot.slot_type === 'FIRST_COME_FIRST_SERVE' ? 'FCFS' : 'Specific Group'}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Capacity:</span>
+                        <span style={{ color: 'var(--color-textSecondary)' }}>Capacity:</span>
                         <span className="font-medium">
                           {Number(slot.current_groups_display ?? slot.current_groups ?? 0)} / {slot.max_groups}
                         </span>
                       </div>
                     </div>
 
-                    <h4 className="font-semibold text-gray-800 mb-3">Bookings</h4>
+                    <h4 className="font-semibold mb-3" style={{ color: 'var(--color-text)' }}>Bookings</h4>
                     <div className="space-y-2 mb-4">
                       {loadingBookings[slot.slot_id] ? (
-                        <div className="flex items-center justify-center py-6">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                          <div className="flex items-center justify-center py-6">
+                          <div className="animate-spin rounded-full h-6 w-6 border-4 border-t-transparent" style={{ borderColor: 'var(--color-primary)' }}></div>
                         </div>
                       ) : slotBookings[slot.slot_id]?.length ? (
                         slotBookings[slot.slot_id].map((booking) => {
                           const isCompleted = Boolean(booking.consultation_id)
                           return (
-                          <div key={booking.booking_id} className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
+                          <div key={booking.booking_id} className="portal-panel p-3 rounded-lg">
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex-1 min-w-0">
-                                <p className="font-medium text-gray-900 truncate">{booking.group_name}</p>
-                                <p className="text-xs text-gray-600">{isCompleted ? 'COMPLETED' : booking.status}</p>
+                                <p className="font-medium truncate" style={{ color: 'var(--color-text)' }}>{booking.group_name}</p>
+                                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{isCompleted ? 'COMPLETED' : booking.status}</p>
                               </div>
                             </div>
                             <div className="flex gap-2">
@@ -1969,9 +2000,7 @@ function ScheduleContent() {
                                   router.push(`/scholar/adviser/consultation-prep/${booking.slot_id || slot.slot_id}`)
                                 }}
                                 disabled={isCompleted}
-                                className={`w-full px-3 py-1 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
-                                  isCompleted ? 'bg-gray-300 text-gray-700' : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                                }`}
+                                className={`w-full portal-button text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${isCompleted ? 'portal-button-secondary' : 'portal-button-primary'}`}
                               >
                                 {isCompleted ? 'Completed' : 'Prepare'}
                               </button>
@@ -1979,31 +2008,31 @@ function ScheduleContent() {
                           </div>
                         )})
                       ) : slot.slot_type === 'SPECIFIC_GROUP' && slot.reserved_group_name ? (
-                        <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
-                          <p className="text-sm font-medium text-blue-900 mb-2">Reserved: {slot.reserved_group_name}</p>
-                          <p className="text-xs text-blue-700 mb-3">Ready for consultation record.</p>
+                        <div className="portal-panel p-3 rounded-lg">
+                          <p className="text-sm font-medium mb-2" style={{ color: 'var(--color-text)' }}>Reserved: {slot.reserved_group_name}</p>
+                          <p className="text-xs mb-3" style={{ color: 'var(--color-textSecondary)' }}>Ready for consultation record.</p>
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               router.push(`/scholar/adviser/consultation-prep/${slot.slot_id}`)
                             }}
-                            className="w-full px-3 py-1 bg-amber-100 text-amber-700 rounded text-xs font-semibold hover:bg-amber-200 transition-colors"
+                            className="w-full portal-button portal-button-primary text-xs font-semibold transition-colors"
                           >
                             Prepare
                           </button>
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-600 text-center py-3">No bookings for this slot yet</p>
+                        <p className="text-sm text-center py-3" style={{ color: 'var(--color-textSecondary)' }}>No bookings for this slot yet</p>
                       )}
                     </div>
 
-                    <div className="pt-4 border-t border-gray-200 flex gap-2">
+                    <div className="pt-4 flex gap-2" style={{ borderTop: '1px solid var(--color-border)' }}>
                       <button
                         onClick={() => {
                           setExpandedSlot(null)
                           openSingleEditModal(slot)
                         }}
-                        className="flex-1 px-3 py-2 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 font-medium transition-colors"
+                        className="flex-1 portal-button portal-button-secondary text-sm font-medium transition-colors"
                       >
                         Edit
                       </button>
@@ -2012,7 +2041,8 @@ function ScheduleContent() {
                           setExpandedSlot(null)
                           handleDeleteSlot(slot.slot_id)
                         }}
-                        className="flex-1 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 font-medium transition-colors"
+                        className="flex-1 portal-button portal-button-secondary text-sm font-medium transition-colors"
+                        style={{ color: 'var(--color-error)' }}
                       >
                         Delete
                       </button>
@@ -2026,31 +2056,32 @@ function ScheduleContent() {
 
         {deleteConfirm.open && (
           <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="portal-panel-strong w-full max-w-md p-6">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-gray-900">{deleteConfirm.title}</h3>
+                <h3 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>{deleteConfirm.title}</h3>
                 <button
                   onClick={() => setDeleteConfirm({ open: false, mode: 'single', title: '', message: '' })}
-                  className="p-1 rounded hover:bg-gray-100"
+                  className="p-1 rounded hover:bg-black/5"
                   disabled={isDeleting}
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4" style={{ color: 'var(--color-textSecondary)' }} />
                 </button>
               </div>
 
-              <p className="text-sm text-gray-600 mb-5">{deleteConfirm.message}</p>
+              <p className="text-sm mb-5" style={{ color: 'var(--color-textSecondary)' }}>{deleteConfirm.message}</p>
 
               <div className="flex justify-end gap-2">
                 <button
                   onClick={() => setDeleteConfirm({ open: false, mode: 'single', title: '', message: '' })}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  className="portal-button portal-button-secondary"
                   disabled={isDeleting}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  className="portal-button disabled:opacity-50"
+                  style={{ background: 'linear-gradient(135deg, var(--color-error), color-mix(in srgb, var(--color-error) 65%, black))', color: 'white' }}
                   disabled={isDeleting}
                 >
                   {isDeleting ? 'Deleting...' : 'Delete'}
@@ -2066,7 +2097,7 @@ function ScheduleContent() {
 
 export default function SchedulePage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading schedule...</div>}>
+    <Suspense fallback={<div className="p-8 text-center" style={{ color: 'var(--color-textSecondary)' }}>Loading schedule...</div>}>
       <ScheduleContent />
     </Suspense>
   )

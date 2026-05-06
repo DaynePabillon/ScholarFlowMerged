@@ -75,7 +75,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
   }
 
   return (
-    <div className="min-h-screen relative overflow-hidden transition-colors duration-500 bg-white/50 dark:bg-slate-950/20">
+    <div className="min-h-screen relative bg-white/50 dark:bg-slate-950/20">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 rounded-full blur-3xl animate-float-slow opacity-20" style={{ backgroundColor: 'var(--color-primary)' }}></div>
@@ -84,7 +84,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
       </div>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 shadow-lg backdrop-blur-xl transition-colors duration-300" style={{ 
+      <header className="sticky top-0 z-20 shadow-lg backdrop-blur-xl transition-colors duration-300" style={{ 
         backgroundColor: 'var(--color-surface)', 
         borderBottom: `1px solid var(--color-border)` 
       }}>
@@ -165,20 +165,9 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
 
               {/* Theme Toggle */}
               <ThemeToggle />
-
-              <div className="flex flex-col items-end">
-                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{user?.name || 'Loading...'}</p>
-                <p className="text-xs" style={{ color: 'var(--color-textSecondary)' }}>{user?.email || ''}</p>
-              </div>
-              <button onClick={handleLogout} className="p-2 hover:bg-red-50 rounded-xl transition-all duration-300 group">
-                <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
-              </button>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="md:hidden p-2 hover:bg-muted rounded-lg">
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+
           </div>
         </div>
       </header>
@@ -272,7 +261,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
           backgroundColor: 'var(--color-surface)',
           borderRight: `1px solid var(--color-border)`
         }}>
-          <div className="p-6">
+          <div className="p-6 flex flex-col h-full">
             {/* Navigation Section */}
             <nav className="mb-6 space-y-2">
               <a href="/" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
@@ -366,6 +355,18 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                   </a>
                 )}
               </nav>
+            </div>
+
+            {/* User Info Footer */}
+            <div className="mt-auto pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <div className="flex flex-col">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{user?.name || 'Loading...'}</p>
+                {selectedOrg && (
+                  <span className={`text-xs px-2 py-1 rounded-md inline-block w-fit mt-2 ${getRoleBadge(selectedOrg.role).color}`}>
+                    {getRoleBadge(selectedOrg.role).label}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </aside>
