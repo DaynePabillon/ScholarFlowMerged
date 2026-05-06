@@ -326,11 +326,18 @@ export default function InteractiveGuide() {
     const guide = ALL_PAGE_GUIDES[guideKey];
     setPageGuide(guide);
 
-    // Portal home only shows once ever
+    // Check if user has already seen this page's guide
+    const state = loadOnboardingState();
+    const hasSeenThisPage = state.visitedPages.includes(guideKey);
+
+    // Portal home: only show once ever (tracked by hasSeenWelcome)
     if (guideKey === '/') {
-      const state = loadOnboardingState();
       if (state.hasSeenWelcome) return;
-      saveOnboardingState({ ...state, hasSeenWelcome: true });
+      saveOnboardingState({ ...state, hasSeenWelcome: true, visitedPages: [...state.visitedPages, guideKey] });
+    } else {
+      // Other pages: only auto-show once per page
+      if (hasSeenThisPage) return;
+      saveOnboardingState({ ...state, visitedPages: [...state.visitedPages, guideKey] });
     }
 
     setCurrentStep(guide);

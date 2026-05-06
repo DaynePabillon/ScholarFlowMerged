@@ -162,7 +162,7 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
         if (!member.email) return
         setIsResending(member.id)
         try {
-            const res = await fetch(`${API_URL}/api/scholar/resend-invite`, {
+            const res = await fetch(`${API_URL}/api/resend-invite`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
                 body: JSON.stringify({
