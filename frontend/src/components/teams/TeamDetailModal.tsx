@@ -162,20 +162,14 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
         if (!member.email) return
         setIsResending(member.id)
         try {
-            const res = await fetch(`${API_URL}/api/resend-invite`, {
+            // Use SkyFlow's resend invite endpoint (moved from ScholarSync)
+            const res = await fetch(`${API_URL}/api/team-groups/${team.id}/members/${member.id}/resend-invite`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-                body: JSON.stringify({
-                    memberEmail: member.email,
-                    memberName: member.name,
-                    courseCode: team.team_code || '',
-                    courseName: team.proposed_project || '',
-                    groupName: team.name,
-                    adviserName: team.adviser_name || ''
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` }
             })
             if (res.ok) {
-                alert('Invite resent successfully to ' + member.email)
+                const data = await res.json()
+                alert(data.message || 'Invite resent successfully to ' + member.email)
             } else {
                 const data = await res.json()
                 alert(data.error || 'Failed to resend invite.')

@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken } from '../middleware/auth.middleware';
 import { query } from '../config/database';
 import logger from '../config/logger';
+import { sendTeamImportEmail } from '../services/email.service';
 
 const router = Router();
 
@@ -383,6 +384,64 @@ router.delete('/team-groups/:teamId/members/:memberId', authenticateToken, async
     } catch (error) {
         logger.error('Error removing team member:', error);
         res.status(500).json({ error: 'Failed to remove team member' });
+    }
+});
+
+/**
+ * POST /api/team-groups/:teamId/members/:memberId/resend-invite
+ * Resend invitation email to a team member (admin, manager)
+ */
+router.post('/team-groups/:teamId/members/:memberId/resend-invite', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const { teamId, memberId } = req.params;
+        const userId = req.user!.id;
+
+        // Get team and check permissions
+        const teamCheck = await query('SELECT organization_id, team_code, name, proposed_project, adviser_name FROM team_groups WHERE id = $1', [teamId]);
+        if (teamCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Team not found' });
+        }
+
+        const role = await getUserOrgRole(userId, teamCheck.rows[0].organization_id);
+        if (!role || role === 'member') {
+            return res.status(403).json({ error: 'Only admins and managers can resend invites' });
+        }
+
+        // Get member details
+        const memberResult = await query(
+            'SELECT name, email, student_id FROM team_group_members WHERE id = $1 AND team_group_id = $2',
+            [memberId, teamId]
+        );
+        if (memberResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Member not found' });
+        }
+
+        const member = memberResult.rows[0];
+        if (!member.email) {
+            return res.status(400).json({ error: 'Member has no email address' });
+        }
+
+        const team = teamCheck.rows[0];
+
+        // Send the invitation email
+        const result = await sendTeamImportEmail({
+            to: member.email,
+            studentName: member.name,
+            courseName: team.proposed_project || team.name || 'Your Course',
+            courseCode: team.team_code || '',
+            groupName: team.name,
+            adviserName: team.adviser_name || ''
+        });
+
+        if (result.success) {
+            logger.info(`✉️ Invite resent to ${member.email} for team ${teamId} by user ${userId}`);
+            return res.json({ success: true, message: `Invite resent successfully to ${member.email}` });
+        } else {
+            return res.status(500).json({ error: `Failed to send email: ${result.error}` });
+        }
+    } catch (error) {
+        logger.error('Error resending team invite:', error);
+        res.status(500).json({ error: 'Failed to resend invitation' });
     }
 });
 
