@@ -459,8 +459,11 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response)
     );
 
     if (taskCheck.rows.length > 0) {
+      // Get org_id before deleting for SSE broadcast
+      const projOrg = await query('SELECT organization_id FROM projects WHERE id = $1', [taskCheck.rows[0].project_id]);
       await query('DELETE FROM tasks WHERE id = $1', [id]);
       logger.info(`Regular task ${id} deleted by user ${userId}`);
+      if (projOrg.rows[0]) sseService.broadcastTaskUpdate(projOrg.rows[0].organization_id, { id }, 'task_deleted');
       return res.json({ success: true, message: 'Task deleted' });
     }
 
@@ -652,59 +655,6 @@ router.patch('/:id/status', authenticateToken, async (req: AuthRequest, res: Res
 });
 
 /**
- * POST /api/tasks/:id/assignees
- * Add multiple assignees to a task
- */
-router.post('/:id/assignees', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { user_ids } = req.body;
-    const userId = req.user!.id;
-
-    if (!user_ids || !Array.isArray(user_ids)) {
-      return res.status(400).json({ error: 'user_ids array is required' });
-    }
-
-    const results = [];
-    for (const assigneeId of user_ids) {
-      const result = await query(
-        `INSERT INTO task_assignees (task_id, user_id, assigned_by)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (task_id, user_id) DO NOTHING
-         RETURNING *`,
-        [id, assigneeId, userId]
-      );
-      if (result.rows[0]) results.push(result.rows[0]);
-    }
-
-    res.status(201).json({ message: 'Assignees added successfully', added: results });
-  } catch (error) {
-    logger.error('Error adding assignees:', error);
-    res.status(500).json({ error: 'Failed to add assignees' });
-  }
-});
-
-/**
- * DELETE /api/tasks/:id/assignees/:assigneeId
- * Remove an assignee from a task
- */
-router.delete('/:id/assignees/:assigneeId', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id, assigneeId } = req.params;
-
-    await query(
-      'DELETE FROM task_assignees WHERE task_id = $1 AND user_id = $2',
-      [id, assigneeId]
-    );
-
-    res.json({ message: 'Assignee removed successfully' });
-  } catch (error) {
-    logger.error('Error removing assignee:', error);
-    res.status(500).json({ error: 'Failed to remove assignee' });
-  }
-});
-
-/**
  * PATCH /api/tasks/:id
  * Update task fields (assignment, title, description, etc.)
  * Only admin and manager can edit tasks (members can only change status via /status endpoint)
@@ -844,50 +794,6 @@ router.patch('/:id', authenticateToken, async (req: AuthRequest, res: Response) 
   } catch (error: any) {
     logger.error('Error updating task:', error);
     res.status(500).json({ error: 'Failed to update task' });
-  }
-});
-
-/**
- * DELETE /api/tasks/:id
- * Delete task
- */
-router.delete('/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user!.id;
-
-    // Check if user is project lead or org admin/manager
-    const roleCheck = await query(
-      `SELECT pm.role as project_role, om.role as org_role
-       FROM tasks t
-       INNER JOIN projects p ON t.project_id = p.id
-       INNER JOIN organization_members om ON p.organization_id = om.organization_id
-       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $2
-       WHERE t.id = $1 AND om.user_id = $2 AND om.status = $3`,
-      [id, userId, 'active']
-    );
-
-    if (roleCheck.rows.length === 0) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const { project_role, org_role } = roleCheck.rows[0];
-
-    // Check if task is absolute
-    const taskFetch = await query('SELECT is_absolute FROM tasks WHERE id = $1', [id]);
-    if (taskFetch.rows[0]?.is_absolute && org_role === 'member') {
-      return res.status(403).json({ error: 'This is an absolute task and cannot be deleted by students.' });
-    }
-
-    if (project_role !== 'lead' && !['admin', 'manager'].includes(org_role)) {
-      return res.status(403).json({ error: 'Permission denied' });
-    }
-
-    await query('DELETE FROM tasks WHERE id = $1', [id]);
-    res.json({ message: 'Task deleted successfully' });
-  } catch (error) {
-    logger.error('Error deleting task:', error);
-    res.status(500).json({ error: 'Failed to delete task' });
   }
 });
 

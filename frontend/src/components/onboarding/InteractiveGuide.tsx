@@ -28,8 +28,8 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
   },
   // Academic Dashboard - shown to all, message varies by role
   '/scholar/dashboard': {
-    title: "Welcome to Academic Portal!",
-    text: "This is your Academic Dashboard! Here you can see AI-powered insights about your courses, track consultation logs, and get personalized recommendations for your academic journey.",
+    title: "Welcome to the Academic Dashboard!",
+    text: "This is your Academic Dashboard! Here you can see insights about your courses, track consultation logs, and get personalized recommendations for your academic journey.",
     image: "/mascot-happy.png"
   },
   // Courses - shown to all, same URL /scholar/courses
@@ -60,8 +60,8 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
   },
   // Workspace Sync - Admin only
   '/scholar/workspace-sync': {
-    title: "Google Workspace Sync",
-    text: "This is the Workspace Sync page for administrators! Here you can connect Google Workspace resources, manage shared drives, and configure automatic synchronization of documents and calendars across the academic portal.",
+    title: "Course Sync",
+    text: "This is the Course Sync page for administrators! Here you can connect Google Workspace resources, manage shared drives, and configure automatic synchronization of documents and calendars across the academic portal.",
     image: "/mascot-thinking.png",
     roles: ['admin']
   },
@@ -128,7 +128,7 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
 const ADMIN_PAGES: Record<string, GuideStep> = {
   '/scholar/admin/accounts': {
     title: "Accounts Management",
-    text: "This is the Accounts Management page for administrators! Here you can create new accounts, manage existing users, assign roles (Admin, Adviser, Student), and handle account-related issues across the ScholarSync system.",
+    text: "This is the Accounts Management page for administrators! Here you can create new accounts, manage existing users, assign roles (Admin, Adviser, Student), and handle account-related issues across the academic portal.",
     image: "/mascot-thinking.png",
     roles: ['admin']
   },
@@ -156,7 +156,7 @@ const ADMIN_PAGES: Record<string, GuideStep> = {
 const ADVISER_PAGES: Record<string, GuideStep> = {
   '/scholar/adviser/follow-ups': {
     title: "Follow-ups Management",
-    text: "This page helps you track and manage follow-ups with your advisee groups. You can see which groups need attention, record follow-up actions, and ensure no group falls through the cracks during the capstone process.",
+    text: "This page helps you track and manage follow-ups with your advisee groups. You can see which groups need attention, record follow-up actions, and ensure no group falls through the cracks during the academic process.",
     image: "/mascot-thinking.png",
     roles: ['adviser', 'admin', 'manager']
   }

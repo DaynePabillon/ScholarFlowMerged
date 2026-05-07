@@ -1179,6 +1179,19 @@ export class WorkspaceSyncService {
           const studentId = colStudentId !== -1 ? String(row[colStudentId] || '').trim() : null;
           const isLeader = memberNum === 1;
 
+          // First, check if another member in this team already has the new email
+          // If so, clear that member's email to avoid unique constraint violation
+          if (email) {
+            await query(
+              `UPDATE team_group_members
+               SET email = NULL
+               WHERE team_group_id = $1
+                 AND email = $2
+                 AND member_number != $3`,
+              [teamGroupId, email, memberNum]
+            );
+          }
+
           await query(
             `INSERT INTO team_group_members (team_group_id, name, email, student_id, member_number, is_leader)
              VALUES ($1, $2, $3, $4, $5, $6)

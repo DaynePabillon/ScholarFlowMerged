@@ -99,42 +99,57 @@ export default function AdminAccountsPage() {
     return (
         <SidebarLayout>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="mb-8">
-                    <div className="flex items-center gap-3 mb-2">
-                        <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl shadow-md">
-                            <Shield className="w-6 h-6 text-white" />
+                <div className="portal-panel-strong p-6 sm:p-8 mb-6">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="w-11 h-11 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' }}>
+                                    <Shield className="w-6 h-6 text-white" />
+                                </div>
+                                <span className="portal-chip">Admin Accounts</span>
+                            </div>
+                            <h1 className="text-4xl sm:text-5xl font-black tracking-tight" style={{ color: 'var(--color-text)' }}>Account Management</h1>
+                            <p className="mt-2 text-sm sm:text-base" style={{ color: 'var(--color-textSecondary)' }}>Manage user roles and platform access in one cohesive view.</p>
                         </div>
-                        <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Account Management</h1>
+                        <div className="portal-stat min-w-[220px]">
+                            <p className="text-xs uppercase tracking-[0.25em]" style={{ color: 'var(--color-textSecondary)' }}>Accounts Loaded</p>
+                            <p className="text-3xl font-black mt-2" style={{ color: 'var(--color-text)' }}>{accounts.length}</p>
+                        </div>
                     </div>
-                    <p className="text-gray-500 ml-14">Manage user roles and platform access</p>
                 </div>
-                <div className="mb-4 flex items-center justify-between gap-4">
+
+                {error && <div className="mb-4 rounded-xl border px-4 py-3 text-sm font-medium" style={{ borderColor: 'rgba(239, 68, 68, 0.35)', backgroundColor: 'rgba(239, 68, 68, 0.08)', color: 'var(--color-text)' }}>{error}</div>}
+
+                <div className="flex flex-col gap-4 mb-5 lg:flex-row lg:items-center lg:justify-between">
                     <div className="relative w-full max-w-md">
                         <input
                             aria-label="Search accounts"
                             placeholder="Search by name, email or role..."
                             value={query}
                             onChange={e => setQuery(e.target.value)}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="portal-input pl-11"
                         />
-                        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400">
+                        <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-[var(--color-textSecondary)]">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m0 0A7.5 7.5 0 1116.65 16.65z" />
                             </svg>
                         </div>
                     </div>
+                    <div className="portal-chip">{accounts.filter(acc => {
+                        const q = String(query || '').trim().toLowerCase();
+                        if (!q) return true;
+                        return String(acc.accountName || '').toLowerCase().includes(q) || String(acc.accountEmail || '').toLowerCase().includes(q) || String(acc.accountRole || '').toLowerCase().includes(q);
+                    }).length} visible</div>
                 </div>
 
-                {error && <div className="mb-4 text-red-600 font-medium text-sm bg-red-50 p-3 rounded-xl">{error}</div>}
-
-                <div className="glass-card overflow-hidden">
-                    <table className="w-full text-left">
+                <div className="portal-panel overflow-hidden">
+                    <table className="portal-table text-left">
                         <thead>
-                            <tr className="border-b border-gray-200 bg-gray-50">
-                                <th className="p-4 font-semibold text-gray-700 text-sm">User</th>
-                                <th className="p-4 font-semibold text-gray-700 text-sm">Email</th>
-                                <th className="p-4 font-semibold text-gray-700 text-sm">Role</th>
-                                <th className="p-4 font-semibold text-gray-700 text-sm text-right">Actions</th>
+                            <tr className="border-b" style={{ borderBottomColor: 'var(--color-border)' }}>
+                                <th className="p-4 font-semibold text-sm">User</th>
+                                <th className="p-4 font-semibold text-sm">Email</th>
+                                <th className="p-4 font-semibold text-sm">Role</th>
+                                <th className="p-4 font-semibold text-sm text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -149,21 +164,21 @@ export default function AdminAccountsPage() {
                                     );
                                 })
                                 .map((acc, idx) => (
-                                <tr key={acc.account_id} className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors ${idx % 2 === 0 ? '' : 'bg-gray-50'}`}>
+                                <tr key={acc.account_id} className={`border-b transition-colors ${idx % 2 === 0 ? '' : 'bg-black/5 dark:bg-white/3'}`} style={{ borderBottomColor: 'var(--color-border)' }}>
                                     <td className="p-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                                            <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-xs" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' }}>
                                                 {acc.accountName?.charAt(0).toUpperCase()}
                                             </div>
-                                            <span className="font-medium text-gray-800 text-sm">{acc.accountName}</span>
+                                            <span className="font-medium text-sm" style={{ color: 'var(--color-text)' }}>{acc.accountName}</span>
                                         </div>
                                     </td>
-                                    <td className="p-4 text-gray-500 text-sm">{acc.accountEmail}</td>
+                                    <td className="p-4 text-sm" style={{ color: 'var(--color-textSecondary)' }}>{acc.accountEmail}</td>
                                     <td className="p-4">
                                         <select
                                             value={acc.accountRole || 'Student'}
                                             onChange={e => handleRoleChange(acc.account_id, e.target.value)}
-                                            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="portal-input px-3 py-1.5 text-sm"
                                         >
                                             <option value="Student">Student</option>
                                             <option value="Adviser">Adviser</option>
@@ -172,10 +187,10 @@ export default function AdminAccountsPage() {
                                     </td>
                                     <td className="p-4 text-right">
                                         <button onClick={() => handleDelete(acc.account_id)}
-                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                            className="p-2 rounded-lg transition-colors hover:bg-red-500/10"
                                             title="Delete account"
                                         >
-                                            <Trash2 className="w-4 h-4" />
+                                            <Trash2 className="w-4 h-4" style={{ color: 'var(--color-error)' }} />
                                         </button>
                                     </td>
                                 </tr>
@@ -190,9 +205,9 @@ export default function AdminAccountsPage() {
                                 );
                             }).length === 0 && (
                                 <tr>
-                                    <td colSpan={4} className="p-12 text-center text-gray-400">
-                                        <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-                                        <p>No accounts found</p>
+                                    <td colSpan={4} className="p-12 text-center portal-empty">
+                                        <Users className="w-10 h-10 mx-auto mb-3" style={{ color: 'var(--color-textSecondary)' }} />
+                                        <p style={{ color: 'var(--color-textSecondary)' }}>No accounts found</p>
                                     </td>
                                 </tr>
                             )}

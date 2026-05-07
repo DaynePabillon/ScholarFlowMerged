@@ -18,7 +18,8 @@ import {
   Activity,
   UserCheck,
   ArrowRight,
-  Clock
+  Clock,
+  FolderKanban
 } from 'lucide-react';
 
 type Course = {
@@ -80,6 +81,14 @@ type AvailabilitySummary = {
   availableAdvisers: number;
   totalGroupsInTerm: number;
   unassignedGroupsInTerm: number;
+};
+
+type AdviserFollowUpItem = {
+  groupName: string;
+  courseCode: string;
+  concern: string;
+  action: string;
+  status: string;
 };
 
 const emptyInsights: DashboardInsights = {
@@ -260,7 +269,7 @@ export default function DashboardPage() {
           if (!isMounted) return;
 
           const items = Array.isArray(followupsRes.data?.items) ? followupsRes.data.items : [];
-          const normalizedItems = items.map((item: any) => ({
+          const normalizedItems: AdviserFollowUpItem[] = items.map((item: any) => ({
             groupName: String(item.groupName || 'Unnamed Group'),
             courseCode: String(item.courseCode || 'Course'),
             concern: String(item.concern || '').trim(),
@@ -375,294 +384,252 @@ export default function DashboardPage() {
     { label: 'Journal Entries', value: insights.journalEntries, icon: Activity, color: 'from-amber-600 to-orange-600' }
   ];
 
-  const readinessTone =
-    readiness.readinessScore >= 85
-      ? 'text-emerald-300'
-      : readiness.readinessScore >= 60
-        ? 'text-amber-300'
-        : 'text-rose-300';
+  const workspaceTitle = isAdmin ? 'Academic Hub' : isAdviser ? 'Adviser Hub' : 'Student Hub';
+  const workspaceLead = isAdmin
+    ? 'Monitor readiness, assignment health, and integrity signals across the academic term.'
+    : isAdviser
+      ? 'Review consultations, upcoming slots, and groups that need immediate follow-up.'
+      : 'Track your courses, consultation activity, and the next actions that matter most.';
 
-  const adminQuickLinks = [
-    {
-      href: '/scholar/admin/accounts',
-      title: 'Account Access',
-      subtitle: `${accounts.length} account(s)`,
-      icon: Shield,
-      tone: 'border-slate-200 bg-white'
-    },
-    {
-      href: '/scholar/admin/data-integrity',
-      title: 'Data Integrity',
-      subtitle: `${insights.dataIntegrityIssues.length} issue(s) flagged`,
-      icon: AlertTriangle,
-      tone: 'border-slate-200 bg-white'
-    },
-    {
-      href: '/scholar/admin/semester-readiness',
-      title: 'Semester Readiness',
-      subtitle: `${readiness.readinessScore}% readiness score`,
-      icon: CheckCircle2,
-      tone: 'border-slate-200 bg-white'
-    },
-    {
-      href: '/scholar/admin/adviser-availability',
-      title: 'Adviser Availability',
-      subtitle: `${availability.unassignedGroupsInTerm} unassigned group(s)`,
-      icon: UserCheck,
-      tone: 'border-slate-200 bg-white'
-    },
-    {
-      href: '/scholar/courses',
-      title: 'Course Insights',
-      subtitle: 'Inspect groups, logs, and AI synthesis by course',
-      icon: Sparkles,
-      tone: 'border-slate-200 bg-white'
-    },
-    {
-      href: '/scholar/schedule',
-      title: 'Consultation Schedule',
-      subtitle: `${insights.upcomingSlots} upcoming slot(s) in your feed`,
-      icon: Calendar,
-      tone: 'border-slate-200 bg-white'
-    }
-  ];
+  const heroLinks = isAdmin
+    ? [
+        { href: '/scholar/admin/accounts', title: 'Accounts', subtitle: `${accounts.length} records tracked`, icon: Shield },
+        { href: '/scholar/admin/semester-readiness', title: 'Readiness', subtitle: `${readiness.readinessScore}% semester readiness`, icon: CheckCircle2 },
+        { href: '/scholar/admin/adviser-availability', title: 'Availability', subtitle: `${availability.unassignedGroupsInTerm} unassigned group(s)`, icon: UserCheck },
+        { href: '/scholar/admin/data-integrity', title: 'Integrity', subtitle: `${insights.dataIntegrityIssues.length} issue(s) surfaced`, icon: AlertTriangle }
+      ]
+    : isAdviser
+      ? [
+          { href: '/scholar/schedule', title: 'Consultation slots', subtitle: `${insights.upcomingSlots} upcoming slot(s)`, icon: Calendar },
+          { href: '/scholar/courses', title: 'Follow-up review', subtitle: `${insights.followUps.length} live follow-up item(s)`, icon: ClipboardList },
+          { href: '/scholar/drive', title: 'Drive access', subtitle: 'Open shared academic files', icon: FolderKanban },
+          { href: '/scholar/calendar', title: 'Calendar', subtitle: 'See the week at a glance', icon: Clock }
+        ]
+      : [
+          { href: '/scholar/booking', title: 'Book consultation', subtitle: 'Find an available adviser slot', icon: Calendar },
+          { href: '/scholar/courses', title: 'Course history', subtitle: `${courses.length} enrolled course(s)`, icon: BookOpen },
+          { href: '/scholar/calendar', title: 'Calendar', subtitle: `${insights.upcomingSlots} upcoming slot(s)`, icon: Clock },
+          { href: '/scholar/drive', title: 'Shared resources', subtitle: 'Open course files and notes', icon: FolderKanban }
+        ];
+
+  const secondaryFocus = isAdmin
+    ? [
+        { label: 'Readiness score', value: `${readiness.readinessScore}%`, detail: readiness.selectedTerm || availability.selectedTerm || 'Current term' },
+        { label: 'Risk groups', value: String(insights.riskGroups.length), detail: 'Require immediate follow-up' },
+        { label: 'Follow-up items', value: String(insights.followUps.length), detail: 'Recent adviser action logs' },
+        { label: 'Integrity issues', value: String(insights.dataIntegrityIssues.length), detail: 'Data quality alerts' }
+      ]
+    : isAdviser
+      ? [
+          { label: 'Upcoming slots', value: String(insights.upcomingSlots), detail: 'Future consultations on the calendar' },
+          { label: 'Follow-up items', value: String(insights.followUps.length), detail: 'Open concerns and actions' },
+          { label: 'Risk groups', value: String(insights.riskGroups.length), detail: 'Groups needing attention' },
+          { label: 'Consultation logs', value: String(insights.consultationLogs), detail: 'Recent activity recorded' }
+        ]
+      : [
+          { label: 'Course load', value: String(courses.length), detail: 'Active enrolled courses' },
+          { label: 'Consultation logs', value: String(insights.consultationLogs), detail: 'Logs already recorded' },
+          { label: 'Journal entries', value: String(insights.journalEntries), detail: 'Completed entries' },
+          { label: 'Action items', value: String(insights.actionItems.length), detail: 'Suggested next steps' }
+        ];
+
+  const storyCards = isAdmin
+    ? [
+        {
+          title: 'Integrity feed',
+          icon: AlertTriangle,
+          tone: 'from-amber-500/15 to-rose-500/10',
+          items: insights.dataIntegrityIssues.length > 0 ? insights.dataIntegrityIssues.slice(0, 4) : ['No active integrity issues detected.']
+        },
+        {
+          title: 'Risk groups',
+          icon: Activity,
+          tone: 'from-rose-500/15 to-orange-500/10',
+          items: insights.riskGroups.length > 0
+            ? insights.riskGroups.slice(0, 4).map((item) => `${item.groupName} · ${item.courseCode} — ${item.reason}`)
+            : ['No critical groups flagged right now.']
+        }
+      ]
+    : isAdviser
+      ? [
+          {
+            title: 'Follow-up tracker',
+            icon: ClipboardList,
+            tone: 'from-cyan-500/15 to-blue-500/10',
+            items: insights.followUps.length > 0
+              ? insights.followUps.slice(0, 4).map((item) => `${item.groupName} · ${item.courseCode} — ${item.action || item.concern}`)
+              : ['No follow-up items yet.']
+          },
+          {
+            title: 'At-risk groups',
+            icon: AlertTriangle,
+            tone: 'from-amber-500/15 to-rose-500/10',
+            items: insights.riskGroups.length > 0
+              ? insights.riskGroups.slice(0, 4).map((item) => `${item.groupName} · ${item.courseCode} — ${item.reason}`)
+              : ['No flagged groups in the latest scan.']
+          }
+        ]
+      : [
+          {
+            title: 'Action item checklist',
+            icon: CheckCircle2,
+            tone: 'from-emerald-500/15 to-teal-500/10',
+            items: insights.actionItems.length > 0 ? insights.actionItems.slice(0, 6) : ['No action items yet. Submit or attend a consultation first.']
+          },
+          {
+            title: 'Progress snapshot',
+            icon: Sparkles,
+            tone: 'from-sky-500/15 to-cyan-500/10',
+            items: [
+              `${insights.consultationLogs} consultation log(s) recorded.`,
+              `${insights.journalEntries} journal entry/entries submitted.`,
+              `${insights.groupWithoutConsultation} scanned group(s) have no consultations yet.`
+            ]
+          }
+        ];
+
+  const coursePreview = courses.slice(0, 9);
 
   return (
     <SidebarLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 sm:py-10">
-        {isAdmin ? (
-          <div className="space-y-8 sm:space-y-10">
-            <section className="rounded-3xl border border-slate-200 bg-white px-5 py-6 sm:p-8 lg:p-10 shadow-sm">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 sm:py-10 space-y-8">
+        <section className="portal-panel-strong relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-white/55 via-transparent to-transparent dark:from-white/8" />
+          <div className="relative grid gap-8 lg:grid-cols-[1.3fr_.9fr] p-6 sm:p-8 lg:p-10">
+            <div className="space-y-5">
+              <span className="scholar-hero-kicker">Academic Dashboard</span>
               <div>
-                <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-                  <div>
-                    <p className="text-[11px] sm:text-xs uppercase tracking-[0.28em] font-black text-slate-400 mb-3">ScholarSync Dashboard</p>
-                    <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black leading-tight text-slate-900">
-                      Admin Dashboard
-                    </h1>
-                    <p className="mt-3 text-sm sm:text-base text-slate-600 max-w-2xl">
-                      Track readiness, adviser distribution, and group progress in one place.
+                <h1 className="scholar-display text-4xl sm:text-5xl lg:text-6xl" style={{ color: 'var(--color-text)' }}>
+                  {workspaceTitle}
+                </h1>
+                <p className="mt-4 max-w-2xl text-base sm:text-lg" style={{ color: 'var(--color-textSecondary)' }}>
+                  {workspaceLead}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Link href="/scholar/courses" className="portal-button portal-button-primary">
+                  <BookOpen className="w-4 h-4" />
+                  Open courses
+                </Link>
+                {isAdmin && (
+                  <Link href="/scholar/admin/semester-readiness" className="portal-button portal-button-secondary">
+                    <CheckCircle2 className="w-4 h-4" />
+                    Review readiness
+                  </Link>
+                )}
+                {isAdviser && (
+                  <Link href="/scholar/schedule" className="portal-button portal-button-secondary">
+                    <Calendar className="w-4 h-4" />
+                    Open schedule
+                  </Link>
+                )}
+                {isStudent && (
+                  <Link href="/scholar/booking" className="portal-button portal-button-secondary">
+                    <Clock className="w-4 h-4" />
+                    Book consultation
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="portal-panel p-5">
+                <p className="scholar-metric-label">Signed in as</p>
+                <p className="mt-2 text-xl font-bold" style={{ color: 'var(--color-text)' }}>
+                  {user.name || user.email?.split('@')[0]}
+                </p>
+                <p className="mt-1 text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                  Role: {effectiveRole}
+                </p>
+                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                  Term: {readiness.selectedTerm || availability.selectedTerm || 'N/A'}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {secondaryFocus.map((item) => (
+                  <div key={item.label} className="scholar-metric">
+                    <p className="scholar-metric-label">{item.label}</p>
+                    <p className="scholar-metric-value">{item.value}</p>
+                    <p className="mt-2 text-xs leading-relaxed" style={{ color: 'var(--color-textSecondary)' }}>
+                      {item.detail}
                     </p>
                   </div>
-
-                  <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 sm:p-5 min-w-[260px]">
-                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Signed in as</p>
-                    <p className="text-lg font-bold text-slate-900 mt-1">{user.name || user.email?.split('@')[0]}</p>
-                    <p className="text-xs text-slate-600 mt-1">Role: {effectiveRole}</p>
-                    <p className="text-xs text-slate-600">Term: {readiness.selectedTerm || availability.selectedTerm || 'N/A'}</p>
-                  </div>
-                </div>
-
-                <div className="mt-7 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500 font-black">Readiness Score</p>
-                    <p className={`mt-2 text-3xl font-black ${readinessTone}`}>{readiness.readinessScore}%</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500 font-black">Courses</p>
-                    <p className="mt-2 text-3xl font-black text-slate-900">{courses.length}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500 font-black">Groups</p>
-                    <p className="mt-2 text-3xl font-black text-slate-900">{insights.totalGroups}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500 font-black">At-risk Groups</p>
-                    <p className="mt-2 text-3xl font-black text-slate-900">{insights.riskGroups.length}</p>
-                  </div>
-                </div>
+                ))}
               </div>
-            </section>
+            </div>
+          </div>
+        </section>
 
-            <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-              <div className="xl:col-span-8 space-y-6">
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                  <div className="flex items-center justify-between gap-3 mb-5">
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">Quick Actions</h2>
-                    <span className="text-[11px] uppercase tracking-[0.2em] font-black text-slate-400">Primary Actions</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {adminQuickLinks.map((item) => (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`rounded-2xl border p-4 ${item.tone} hover:shadow-sm transition-all group`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <item.icon className="w-5 h-5 text-slate-800" />
-                          <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-slate-800" />
-                        </div>
-                        <p className="mt-4 text-sm font-black text-slate-900">{item.title}</p>
-                        <p className="text-xs text-slate-600 mt-1">{item.subtitle}</p>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                  <div className="flex items-center justify-between gap-3 mb-5">
-                    <h2 className="text-xl sm:text-2xl font-black text-slate-900">Group Signals</h2>
-                    <span className="text-[11px] uppercase tracking-[0.2em] font-black text-slate-400">Live Monitoring</span>
-                  </div>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] font-black text-rose-700 mb-3">Priority Groups</p>
-                      {insights.riskGroups.length === 0 ? (
-                        <p className="text-sm text-rose-700/80">No critical groups flagged right now.</p>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {insights.riskGroups.slice(0, 5).map((item, index) => (
-                            <div key={`${item.groupName}-${index}`} className="rounded-xl border border-rose-200 bg-white p-3">
-                              <p className="text-xs font-black text-rose-700">{item.groupName} · {item.courseCode}</p>
-                              <p className="text-xs text-slate-700 mt-1">{item.reason}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                      <p className="text-xs uppercase tracking-[0.16em] font-black text-amber-700 mb-3">Latest Follow-ups</p>
-                      {insights.followUps.length === 0 ? (
-                        <p className="text-sm text-amber-700/80">No recent follow-up action logs.</p>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {insights.followUps.slice(0, 5).map((item, index) => (
-                            <div key={`${item.groupName}-${index}`} className="rounded-xl border border-amber-200 bg-white p-3">
-                              <p className="text-xs font-black text-amber-700">{item.groupName} · {item.courseCode}</p>
-                              <p className="text-xs text-slate-700 mt-1">{item.action || item.concern || 'No action details provided.'}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="xl:col-span-4 space-y-6">
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                  <div className="flex items-center justify-between gap-3 mb-4">
-                    <h2 className="text-lg font-black text-slate-900">AI Insights</h2>
-                    <Sparkles className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <div className="space-y-3 text-sm">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="font-semibold text-slate-700">At-risk groups</p>
-                      <p className="text-slate-900 font-black mt-1">{insights.riskGroups.length}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="font-semibold text-slate-700">Follow-up items</p>
-                      <p className="text-slate-900 font-black mt-1">{insights.followUps.length}</p>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs uppercase tracking-widest font-black text-slate-500 mb-2">Recommended Actions</p>
-                      <ul className="space-y-1.5 text-xs text-slate-700">
-                        <li>Assign advisers to all unassigned groups in the active term.</li>
-                        <li>Prioritize groups with blocker or risk concerns for check-ins.</li>
-                        <li>Prompt first consultation for groups with no consultation logs.</li>
-                      </ul>
-                    </div>
-                  </div>
-                  <Link href="/scholar/courses" className="inline-flex items-center gap-2 text-sm font-bold text-slate-700 hover:text-slate-900 mt-4">
-                    Open course-level AI analysis
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                  <h2 className="text-lg font-black text-slate-900 mb-4">Readiness Matrix</h2>
-                  <div className="space-y-3 text-sm">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-slate-700">Courses without groups</span>
-                      <span className="font-black text-slate-900">{readiness.coursesWithoutGroups}</span>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-slate-700">Groups without adviser</span>
-                      <span className="font-black text-slate-900">{readiness.groupsWithoutAdviser}</span>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-slate-700">Groups without members</span>
-                      <span className="font-black text-slate-900">{readiness.groupsWithoutMembers}</span>
-                    </div>
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-slate-700">Groups without consultation</span>
-                      <span className="font-black text-slate-900">{readiness.groupsWithoutConsultation}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                  <h2 className="text-lg font-black text-slate-900 mb-4">Resource Balance</h2>
-                  <div className="space-y-3 text-sm">
-                    <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-cyan-800">Assigned advisers</span>
-                      <span className="font-black text-cyan-900">{availability.assignedAdvisers}/{availability.totalAdvisers}</span>
-                    </div>
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-emerald-800">Available advisers</span>
-                      <span className="font-black text-emerald-900">{availability.availableAdvisers}</span>
-                    </div>
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex items-center justify-between">
-                      <span className="font-semibold text-amber-800">Unassigned groups</span>
-                      <span className="font-black text-amber-900">{availability.unassignedGroupsInTerm}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-                  <h2 className="text-lg font-black text-slate-900 mb-4">Integrity Feed</h2>
-                  {insights.dataIntegrityIssues.length === 0 ? (
-                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      No active integrity issues detected.
-                    </div>
-                  ) : (
-                    <div className="space-y-2 text-sm">
-                      {insights.dataIntegrityIssues.slice(0, 5).map((issue, index) => (
-                        <div key={`${issue}-${index}`} className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-900 flex items-start gap-2">
-                          <AlertTriangle className="w-4 h-4 mt-0.5" />
-                          <span>{issue}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <section className="grid gap-6 xl:grid-cols-[1.3fr_.9fr]">
+          <div className="space-y-6">
+            <div className="portal-panel p-6 sm:p-7">
+              <div className="flex items-center justify-between gap-4 mb-5">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900">Course Overview</h2>
-                  <p className="text-sm text-slate-500 mt-1">High-level access to your active academic units.</p>
+                  <h2 className="scholar-section-heading text-2xl sm:text-3xl" style={{ color: 'var(--color-text)' }}>
+                    Role Workbench
+                  </h2>
+                  <p className="mt-1 text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                    The most relevant actions for your current role.
+                  </p>
                 </div>
-                <Link href="/scholar/courses" className="inline-flex items-center gap-2 text-sm font-black text-cyan-700 hover:text-cyan-800">
-                  Open full course index
+                <span className="portal-chip">Live actions</span>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                {heroLinks.map((item) => (
+                  <Link key={item.href} href={item.href} className="portal-panel p-4 group">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, var(--color-primary), var(--color-secondary))' }}>
+                          <item.icon className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-base" style={{ color: 'var(--color-text)' }}>{item.title}</p>
+                          <p className="text-sm mt-1" style={{ color: 'var(--color-textSecondary)' }}>{item.subtitle}</p>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 mt-1 text-[var(--color-textSecondary)] transition-transform group-hover:translate-x-1" />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <div className="portal-panel p-6 sm:p-7">
+              <div className="flex items-center justify-between gap-4 mb-5">
+                <div>
+                  <h2 className="scholar-section-heading text-2xl sm:text-3xl" style={{ color: 'var(--color-text)' }}>
+                    Courses
+                  </h2>
+                  <p className="mt-1 text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                    Fast access to the active course set.
+                  </p>
+                </div>
+                <Link href="/scholar/courses" className="text-sm font-bold text-[var(--color-primary)] hover:opacity-80 inline-flex items-center gap-2">
+                  View all
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
 
-              {courses.length > 0 ? (
+              {coursePreview.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {courses.slice(0, 9).map((course) => (
-                    <Link
-                      key={course.id}
-                      href={`/scholar/courses/${course.id}`}
-                      className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-5 hover:shadow-md hover:border-cyan-300 transition-all group"
-                    >
+                  {coursePreview.map((course) => (
+                    <Link key={course.id} href={`/scholar/courses/${course.id}`} className="portal-panel p-5 group">
                       <div className="flex items-start justify-between gap-4 mb-4">
-                        <div className="h-10 w-10 rounded-xl bg-slate-900 flex items-center justify-center shadow-sm">
-                          <BookOpen className="w-5 h-5 text-cyan-200" />
+                        <div className="h-11 w-11 rounded-2xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 95%, white), var(--color-secondary))' }}>
+                          <BookOpen className="w-5 h-5 text-white" />
                         </div>
-                        <span className="text-xs font-black uppercase tracking-[0.16em] px-2 py-1 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200">
-                          {course.courseSection}
-                        </span>
+                        <span className="portal-chip">{course.courseSection}</span>
                       </div>
-                      <p className="font-black text-slate-900 leading-snug group-hover:text-cyan-800">{course.courseName}</p>
-                      <p className="text-sm text-slate-600 mt-1">{course.courseCode} · {course.courseTerm}</p>
-                      <div className="mt-4 flex items-center gap-2 text-xs text-slate-500">
+                      <p className="font-bold text-lg leading-snug group-hover:opacity-80" style={{ color: 'var(--color-text)' }}>
+                        {course.courseName}
+                      </p>
+                      <p className="mt-1 text-sm" style={{ color: 'var(--color-textSecondary)' }}>
+                        {course.courseCode} · {course.courseTerm}
+                      </p>
+                      <div className="mt-4 flex items-center gap-2 text-xs" style={{ color: 'var(--color-textSecondary)' }}>
                         <Users className="w-4 h-4" />
                         {course.courseAmount || 0} student(s)
                       </div>
@@ -670,200 +637,63 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                  <p className="font-semibold text-slate-700">No courses available yet.</p>
-                  <p className="text-sm text-slate-500 mt-1">Create or import courses to populate your dashboard.</p>
+                <div className="portal-empty rounded-2xl p-8 text-center">
+                  <Calendar className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--color-textSecondary)' }} />
+                  <p className="font-semibold text-lg" style={{ color: 'var(--color-text)' }}>No courses available yet.</p>
+                  <p className="text-sm mt-2" style={{ color: 'var(--color-textSecondary)' }}>Create or import courses to populate your dashboard.</p>
                 </div>
               )}
-            </section>
+            </div>
           </div>
-        ) : (
-          <>
-            <div className="mb-12 animate-fade-in">
-              <h1 className="text-5xl sm:text-6xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                {isAdviser ? 'Adviser Workspace' : 'Student Workspace'}
-              </h1>
-              <p className="mt-3 text-2xl" style={{ color: 'var(--color-text)' }}>
-                Welcome back, <span className="font-semibold">{user.name || user.email?.split('@')[0]}</span>
-                <span style={{ color: 'var(--color-textSecondary)' }}> · {effectiveRole}</span>
-              </p>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-              {statCards.map((card) => (
-                <div key={card.label} className="glass-card p-8 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="flex items-center gap-4 mb-4">
-                    <div className={`p-3 bg-gradient-to-br ${card.color} rounded-xl shadow-md`}>
-                      <card.icon className="w-7 h-7 text-white" />
+          <div className="space-y-6">
+            {storyCards.map((card) => (
+              <div key={card.title} className="portal-panel p-6">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-10 w-10 rounded-2xl flex items-center justify-center bg-gradient-to-br ${card.tone}`}>
+                      <card.icon className="w-5 h-5" style={{ color: 'var(--color-text)' }} />
                     </div>
-                    <span className="text-base font-semibold" style={{ color: 'var(--color-text)' }}>{card.label}</span>
+                    <h3 className="scholar-section-heading text-xl" style={{ color: 'var(--color-text)' }}>{card.title}</h3>
                   </div>
-                  <p className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
-                    {card.value}
-                  </p>
                 </div>
-              ))}
-            </div>
 
-            <div className="glass-card p-8 mb-12">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-8">Role Actions</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {isAdviser && (
-                  <>
-                    <Link href="/scholar/schedule" className="flex items-center gap-4 p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all group">
-                      <Calendar className="w-7 h-7 text-blue-600" />
-                      <div>
-                        <p className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Consultation Slot Management</p>
-                        <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>{insights.upcomingSlots} upcoming slot(s)</p>
-                      </div>
-                      <ArrowRight className="w-6 h-6 text-gray-400 ml-auto" />
-                    </Link>
-                    <Link href="/scholar/courses" className="flex items-center gap-4 p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all group">
-                      <Stethoscope className="w-7 h-7 text-blue-600" />
-                      <div>
-                        <p className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Consultation Prep Workspace</p>
-                        <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>Review journals, concerns, and actions</p>
-                      </div>
-                      <ArrowRight className="w-6 h-6 text-gray-400 ml-auto" />
-                    </Link>
-                  </>
-                )}
-
-                {isStudent && (
-                  <>
-                    <Link href="/scholar/booking" className="flex items-center gap-4 p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all group">
-                      <Calendar className="w-7 h-7 text-blue-600" />
-                      <div>
-                        <p className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Book Consultation</p>
-                        <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>Find available adviser slots</p>
-                      </div>
-                      <ArrowRight className="w-6 h-6 text-gray-400 ml-auto" />
-                    </Link>
-                    <Link href="/scholar/courses" className="flex items-center gap-4 p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all group">
-                      <ClipboardList className="w-7 h-7 text-blue-600" />
-                      <div>
-                        <p className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Journal and Consultation History</p>
-                        <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>Track entries and adviser feedback</p>
-                      </div>
-                      <ArrowRight className="w-6 h-6 text-gray-400 ml-auto" />
-                    </Link>
-                    <Link href="/scholar/courses" className="flex items-center gap-4 p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all group">
-                      <UserCheck className="w-7 h-7 text-blue-600" />
-                      <div>
-                        <p className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Action Items</p>
-                        <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>Follow adviser guidance and next steps</p>
-                      </div>
-                      <ArrowRight className="w-6 h-6 text-gray-400 ml-auto" />
-                    </Link>
-                  </>
-                )}
-
-                <Link
-                  href="/scholar/courses"
-                  className="flex items-center gap-4 p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all group"
-                >
-                  <BookOpen className="w-7 h-7 text-blue-600" />
-                  <div>
-                    <p className="font-semibold text-base" style={{ color: 'var(--color-text)' }}>Courses</p>
-                    <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>Open course and group views</p>
-                  </div>
-                  <ArrowRight className="w-6 h-6 text-gray-400 ml-auto" />
-                </Link>
+                <div className="space-y-2.5">
+                  {card.items.map((item, index) => (
+                    <div key={`${card.title}-${index}`} className="portal-panel p-3">
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text)' }}>{item}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
 
-            {isAdviser && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-            <div className="glass-card p-8">
-              <h2 className="text-2xl font-bold text-blue-700 mb-4">Follow-up Tracker</h2>
-              {insights.followUps.length === 0 ? (
-                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No follow-ups recorded yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  {insights.followUps.slice(0, 5).map((item, index) => (
-                    <div key={`${item.groupName}-${index}`} className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-                      <p className="text-sm font-bold text-gray-800">{item.groupName} · {item.courseCode}</p>
-                      {item.concern && <p className="text-xs text-amber-700 mt-1">Concern: {item.concern}</p>}
-                      {item.action && <p className="text-xs text-blue-700 mt-1">Action: {item.action}</p>}
-                    </div>
-                  ))}
+            <div className="portal-panel p-6">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="scholar-section-heading text-xl" style={{ color: 'var(--color-text)' }}>Space Snapshot</h3>
+                <span className="portal-chip">At a glance</span>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-[color-mix(in_srgb,var(--color-border)_88%,white)] bg-[color-mix(in_srgb,var(--color-surface)_94%,white)] px-4 py-3">
+                  <span style={{ color: 'var(--color-textSecondary)' }}>Courses</span>
+                  <span className="font-bold" style={{ color: 'var(--color-text)' }}>{courses.length}</span>
                 </div>
-              )}
-            </div>
-            <div className="glass-card p-8">
-              <h2 className="text-2xl font-bold text-blue-700 mb-4">At-risk Groups</h2>
-              {insights.riskGroups.length === 0 ? (
-                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No flagged groups in the latest scan.</p>
-              ) : (
-                <div className="space-y-4">
-                  {insights.riskGroups.slice(0, 5).map((item, index) => (
-                    <div key={`${item.groupName}-${index}`} className="p-4 bg-red-50 rounded-xl border border-red-100">
-                      <p className="text-sm font-bold text-red-700">{item.groupName} · {item.courseCode}</p>
-                      <p className="text-xs text-red-600 mt-1">{item.reason}</p>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-[color-mix(in_srgb,var(--color-border)_88%,white)] bg-[color-mix(in_srgb,var(--color-surface)_94%,white)] px-4 py-3">
+                  <span style={{ color: 'var(--color-textSecondary)' }}>Groups</span>
+                  <span className="font-bold" style={{ color: 'var(--color-text)' }}>{insights.totalGroups}</span>
                 </div>
-              )}
-            </div>
-          </div>
-            )}
-
-            {isStudent && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-            <div className="glass-card p-8">
-              <h2 className="text-2xl font-bold text-blue-700 mb-4">Action Item Checklist</h2>
-              {insights.actionItems.length === 0 ? (
-                <p className="text-sm" style={{ color: 'var(--color-textSecondary)' }}>No action items yet. Submit or attend a consultation first.</p>
-              ) : (
-                <ul className="space-y-2 text-sm" style={{ color: 'var(--color-text)' }}>
-                  {insights.actionItems.slice(0, 8).map((item, index) => (
-                    <li key={`${item}-${index}`} className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-green-600" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-            <div className="glass-card p-8">
-              <h2 className="text-2xl font-bold text-blue-700 mb-4">Progress Snapshot</h2>
-              <div className="space-y-3 text-sm" style={{ color: 'var(--color-text)' }}>
-                <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-blue-600" /><span>{insights.consultationLogs} consultation log(s) recorded.</span></div>
-                <div className="flex items-center gap-2"><ClipboardList className="w-4 h-4 text-blue-600" /><span>{insights.journalEntries} journal entry/entries submitted.</span></div>
-                <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-600" /><span>{insights.groupWithoutConsultation} of scanned groups have no consultations yet.</span></div>
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-[color-mix(in_srgb,var(--color-border)_88%,white)] bg-[color-mix(in_srgb,var(--color-surface)_94%,white)] px-4 py-3">
+                  <span style={{ color: 'var(--color-textSecondary)' }}>Consultation logs</span>
+                  <span className="font-bold" style={{ color: 'var(--color-text)' }}>{insights.consultationLogs}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-[color-mix(in_srgb,var(--color-border)_88%,white)] bg-[color-mix(in_srgb,var(--color-surface)_94%,white)] px-4 py-3">
+                  <span style={{ color: 'var(--color-textSecondary)' }}>Journal entries</span>
+                  <span className="font-bold" style={{ color: 'var(--color-text)' }}>{insights.journalEntries}</span>
+                </div>
               </div>
             </div>
           </div>
-            )}
-
-            <div className="glass-card p-8">
-              <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent mb-8">
-                {isStudent ? 'Enrolled Courses' : 'Courses'}
-              </h2>
-              {courses.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {courses.slice(0, 9).map((course) => (
-                    <Link key={course.id} href={`/scholar/courses/${course.id}`} className="p-6 border border-gray-200 rounded-xl bg-white hover:shadow-md hover:border-blue-200 transition-all duration-300 group">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg"><BookOpen className="w-6 h-6 text-white" /></div>
-                        <span className="text-sm font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full">{course.courseSection}</span>
-                      </div>
-                      <h3 className="font-semibold text-base transition-colors group-hover:text-blue-600 mb-2" style={{ color: 'var(--color-text)' }}>{course.courseName}</h3>
-                      <p className="text-base" style={{ color: 'var(--color-textSecondary)' }}>{course.courseCode} · {course.courseTerm}</p>
-                      <div className="flex items-center gap-2 mt-4 text-sm text-gray-500"><Users className="w-5 h-5" /><span>{course.courseAmount || 0} students</span></div>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-16">
-                  <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-6" />
-                  <p className="text-gray-700 font-medium text-lg">No courses yet</p>
-                  <p className="text-base text-gray-600 mt-2">Use course enrollment or course creation to get started.</p>
-                </div>
-              )}
-            </div>
-          </>
-        )}
+        </section>
       </div>
     </SidebarLayout>
   );
