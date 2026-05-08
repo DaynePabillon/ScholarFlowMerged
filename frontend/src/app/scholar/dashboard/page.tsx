@@ -13,7 +13,6 @@ import {
   ClipboardList,
   Calendar,
   AlertTriangle,
-  Sparkles,
   CheckCircle2,
   Activity,
   UserCheck,
@@ -475,16 +474,6 @@ export default function DashboardPage() {
             icon: CheckCircle2,
             tone: 'from-emerald-500/15 to-teal-500/10',
             items: insights.actionItems.length > 0 ? insights.actionItems.slice(0, 6) : ['No action items yet. Submit or attend a consultation first.']
-          },
-          {
-            title: 'Progress snapshot',
-            icon: Sparkles,
-            tone: 'from-sky-500/15 to-cyan-500/10',
-            items: [
-              `${insights.consultationLogs} consultation log(s) recorded.`,
-              `${insights.journalEntries} journal entry/entries submitted.`,
-              `${insights.groupWithoutConsultation} scanned group(s) have no consultations yet.`
-            ]
           }
         ];
 

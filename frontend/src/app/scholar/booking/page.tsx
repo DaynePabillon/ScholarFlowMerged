@@ -85,15 +85,18 @@ interface UserGroup {
   canBookConsultation?: boolean
   memberNumber?: number | null
   courseID?: string | number
+  isLeader?: boolean
 }
 
 export default function BookingPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [userGroup, setUserGroup] = useState<UserGroup | null>(null)
+  const [userGroups, setUserGroups] = useState<UserGroup[]>([])
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [bookedSlots, setBookedSlots] = useState<number[]>([])
   const [hasBookedThisWeek, setHasBookedThisWeek] = useState(false)
+  const [hasBookedThisWeekByGroup, setHasBookedThisWeekByGroup] = useState<Record<string, boolean>>({})
   const [loading, setLoading] = useState(true)
   const [selectedCourse, setSelectedCourse] = useState<string>('')
   const [courses, setCourses] = useState<any[]>([])
@@ -102,6 +105,23 @@ export default function BookingPage() {
   const [isBooking, setIsBooking] = useState(false)
   const [canBookConsultation, setCanBookConsultation] = useState(false)
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
+
+  const normalizeCourseId = (value: unknown): string => String(value || '').trim()
+  const getGroupBookingId = (group: UserGroup | null | undefined): number | null => {
+    if (!group) return null
+    const candidate = Number(group.teamGroupID || group.bookingGroupId || group.smallgroupID)
+    return Number.isFinite(candidate) ? candidate : null
+  }
+  const getGroupKey = (group: UserGroup | null | undefined): string => {
+    const coursePart = normalizeCourseId(group?.courseID)
+    const bookingPart = String(getGroupBookingId(group) ?? '')
+    return `${coursePart}:${bookingPart}`
+  }
+  const getGroupForCourse = (courseId: unknown): UserGroup | null => {
+    const target = normalizeCourseId(courseId)
+    if (!target) return userGroup
+    return userGroups.find((g) => normalizeCourseId(g.courseID) === target) || userGroup
+  }
 
   // Auth & Load User Group
   useEffect(() => {
@@ -116,58 +136,61 @@ export default function BookingPage() {
         setBookingError('Unable to determine your account email for booking permissions.')
       }
       
-      // Fetch user's group info
-      fetchUserGroup(userEmail)
+      // Fetch user's groups and load slots/bookings across all enrolled courses.
+      fetchUserGroups(userEmail)
     } catch {
       router.push("/login")
     }
   }, [router])
 
-  const fetchUserGroup = async (email: string) => {
+  const fetchUserGroups = async (email: string) => {
     try {
       const token = localStorage.getItem("auth_token")
       const enrolledCourseIds = await fetchStudentCourseIds()
+      const normalizedEmail = String(email || '').trim().toLowerCase()
+      const resolvedGroups: UserGroup[] = []
 
-      // Pass the first enrolled courseId so the backend scopes the group lookup
-      // to that course — prevents "Group 8 in Course A" colliding with "Group 8 in Course B"
-      const courseScope = enrolledCourseIds.length === 1 ? `?courseId=${encodeURIComponent(enrolledCourseIds[0])}` : ''
-      const res = await fetch(`${API_URL}/api/group/by-member/${email}${courseScope}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      
-      if (res.ok) {
-        const data = await res.json()
-        setUserGroup(data.group)
-        const normalizedEmail = String(email || '').trim().toLowerCase()
-        const leaderEmail = String(data.group?.leaderEmail || data.group?.roleOne || '').trim().toLowerCase()
-        const isLeader = Boolean(data.group?.isLeader) || (leaderEmail !== '' && leaderEmail === normalizedEmail)
-        const computedCanBook = isLeader
+      for (const cid of enrolledCourseIds) {
+        const scopedRes = await fetch(`${API_URL}/api/group/by-member/${email}?courseId=${encodeURIComponent(cid)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!scopedRes.ok) continue
 
-        setCanBookConsultation(computedCanBook)
+        const scopedData = await scopedRes.json()
+        const g: UserGroup | undefined = scopedData?.group
+        if (!g) continue
 
-        // Load slots across all eligible courses so stale group course mappings don't hide valid slots.
-        const groupCourseId = data.group?.courseID || data.group?.course_id || data.group?.courseId
-        const normalizedGroupCourseId = groupCourseId ? String(groupCourseId) : ''
-        const candidateCourseIds = Array.from(
-          new Set([normalizedGroupCourseId, ...enrolledCourseIds].filter(Boolean))
-        )
-
-        const primaryCourseId = normalizedGroupCourseId || (enrolledCourseIds.length === 1 ? enrolledCourseIds[0] : null)
-        await fetchSlotsForCourses(
-          candidateCourseIds,
-          data.group?.bookingGroupId || data.group?.smallgroupID,
-          data.group?.groupName,
-          primaryCourseId
-        )
-      } else {
-        // If group lookup fails, still show available course slots for visibility.
-        await fetchSlotsForCourses(enrolledCourseIds, null, undefined, enrolledCourseIds[0] ?? null)
+        const leaderEmail = String((scopedData?.group?.leaderEmail || g.roleOne || '')).trim().toLowerCase()
+        const isLeader = Boolean(g.isLeader) || (leaderEmail !== '' && leaderEmail === normalizedEmail)
+        resolvedGroups.push({ ...g, isLeader, canBookConsultation: isLeader, courseID: g.courseID ?? cid })
       }
+
+      // Fallback for older data shapes where per-course lookup may fail.
+      if (resolvedGroups.length === 0) {
+        const fallbackRes = await fetch(`${API_URL}/api/group/by-member/${email}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (fallbackRes.ok) {
+          const fallbackData = await fallbackRes.json()
+          const g: UserGroup | undefined = fallbackData?.group
+          if (g) {
+            const leaderEmail = String((fallbackData?.group?.leaderEmail || g.roleOne || '')).trim().toLowerCase()
+            const isLeader = Boolean(g.isLeader) || (leaderEmail !== '' && leaderEmail === normalizedEmail)
+            resolvedGroups.push({ ...g, isLeader, canBookConsultation: isLeader })
+          }
+        }
+      }
+
+      setUserGroups(resolvedGroups)
+      setUserGroup(resolvedGroups[0] || null)
+      setCanBookConsultation(resolvedGroups.some((g) => Boolean(g.canBookConsultation)))
+
+      await fetchSlotsForCourses(enrolledCourseIds, resolvedGroups)
     } catch (err) {
       console.error('Failed to fetch user group:', err)
       try {
         const enrolledCourseIds = await fetchStudentCourseIds()
-        await fetchSlotsForCourses(enrolledCourseIds)
+        await fetchSlotsForCourses(enrolledCourseIds, [])
       } catch {
         // ignore fallback errors; loading state is handled in finally
       }
@@ -194,32 +217,54 @@ export default function BookingPage() {
     }
   }
 
-  const fetchSlotsForCourses = async (
-    courseIds: string[],
-    groupId?: number | null,
-    groupNameOverride?: string,
-    primaryCourseId?: string | null
-  ) => {
+  const fetchSlotsForCourses = async (courseIds: string[], groups: UserGroup[] = []) => {
     setLoading(true)
     try {
       const token = localStorage.getItem("auth_token")
-      const resolvedGroupName = String(groupNameOverride || userGroup?.groupName || '').trim()
-      const resolvedGroupId = Number(groupId ?? userGroup?.bookingGroupId ?? userGroup?.smallgroupID)
-      const groupFilter = resolvedGroupName ? `&groupName=${encodeURIComponent(resolvedGroupName)}` : ''
-
-      // Prefer primaryCourseId (the group's own course) for scoping to prevent cross-course slot bleed.
-      // Fall back to single-course list, then no filter (backend resolves via ss_enrollments).
-      const scopedCourseId = primaryCourseId ?? (courseIds.length === 1 ? courseIds[0] : null)
-      const courseQuery = scopedCourseId ? `&courseId=${encodeURIComponent(scopedCourseId)}` : ''
-      const res = await fetch(`${API_URL}/api/consultation/slots/me?futureOnly=true${groupFilter}${courseQuery}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
 
       const merged: ConsultationSlot[] = []
-      if (res.ok) {
+      const requests: Array<{ courseId: string; groupName?: string }> = []
+
+      if (groups.length > 0) {
+        groups.forEach((group) => {
+          const cid = normalizeCourseId(group.courseID)
+          if (!cid) return
+          requests.push({ courseId: cid, groupName: String(group.groupName || '').trim() || undefined })
+        })
+
+        // Also include enrolled courses without resolved group membership so
+        // students can still see eligible slots for every enrolled class.
+        courseIds.forEach((cid) => {
+          const normalized = normalizeCourseId(cid)
+          if (!normalized) return
+          const alreadyCovered = groups.some((g) => normalizeCourseId(g.courseID) === normalized)
+          if (!alreadyCovered) {
+            requests.push({ courseId: normalized })
+          }
+        })
+      } else {
+        courseIds.forEach((cid) => {
+          const normalized = normalizeCourseId(cid)
+          if (!normalized) return
+          requests.push({ courseId: normalized })
+        })
+      }
+
+      const dedupRequests = Array.from(new Map(
+        requests.map((req) => [`${req.courseId}:${String(req.groupName || '').toLowerCase()}`, req])
+      ).values())
+
+      for (const req of dedupRequests) {
+        const groupFilter = req.groupName ? `&groupName=${encodeURIComponent(req.groupName)}` : ''
+        const courseQuery = req.courseId ? `&courseId=${encodeURIComponent(req.courseId)}` : ''
+        const res = await fetch(`${API_URL}/api/consultation/slots/me?futureOnly=true${groupFilter}${courseQuery}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!res.ok) continue
         const data = await res.json()
         merged.push(...(data.slots || []))
       }
+
       const dedupedMap = new Map<number, ConsultationSlot>()
       merged.forEach((slot) => dedupedMap.set(slot.slot_id, slot))
       const allSlots = Array.from(dedupedMap.values()).sort((a, b) => {
@@ -231,10 +276,21 @@ export default function BookingPage() {
       setSlots(allSlots)
       setSelectedCourse(courseIds[0] || '')
 
-      const effectiveGroupId = groupId ?? userGroup?.bookingGroupId ?? userGroup?.smallgroupID
-      if (Number.isFinite(Number(effectiveGroupId))) {
-        await fetchGroupBookings(Number(effectiveGroupId), resolvedGroupName || undefined)
+      const targetGroups = groups.length > 0 ? groups : userGroup ? [userGroup] : []
+      const bookedSlotAccumulator = new Set<number>()
+      const weekByGroup: Record<string, boolean> = {}
+
+      for (const group of targetGroups) {
+        const bookingId = getGroupBookingId(group)
+        if (!Number.isFinite(Number(bookingId))) continue
+        const bookingData = await fetchGroupBookings(Number(bookingId), group.groupName)
+        bookingData.bookedSlotIds.forEach((slotId) => bookedSlotAccumulator.add(slotId))
+        weekByGroup[getGroupKey(group)] = bookingData.alreadyBookedThisWeek
       }
+
+      setBookedSlots(Array.from(bookedSlotAccumulator))
+      setHasBookedThisWeekByGroup(weekByGroup)
+      setHasBookedThisWeek(Object.values(weekByGroup).some(Boolean))
     } catch (err) {
       console.error('Failed to fetch slots:', err)
     } finally {
@@ -242,7 +298,7 @@ export default function BookingPage() {
     }
   }
 
-  const fetchGroupBookings = async (groupId: number, groupName?: string) => {
+  const fetchGroupBookings = async (groupId: number, groupName?: string): Promise<{ bookedSlotIds: number[]; alreadyBookedThisWeek: boolean }> => {
     try {
       const token = localStorage.getItem("auth_token")
       const groupNameQuery = groupName ? `?groupName=${encodeURIComponent(groupName)}` : ''
@@ -254,31 +310,35 @@ export default function BookingPage() {
         const data = await res.json()
         const bookedEntries: GroupBooking[] = (data.bookings || []).filter((b: GroupBooking) => b.status === 'BOOKED')
         const bookedSlotIds = bookedEntries.map((b: GroupBooking) => b.slot_id)
-        setBookedSlots(bookedSlotIds)
 
         const thisWeekKey = getWeekKey(new Date())
         const alreadyBookedThisWeek = bookedEntries.some(
           (b: GroupBooking) => getWeekKey(b.slot_date_only || '') === thisWeekKey
         )
-        setHasBookedThisWeek(alreadyBookedThisWeek)
+        return { bookedSlotIds, alreadyBookedThisWeek }
       }
     } catch (err) {
       console.error('Failed to fetch bookings:', err)
     }
+    return { bookedSlotIds: [], alreadyBookedThisWeek: false }
   }
 
   const handleBookSlot = async (slot: ConsultationSlot) => {
-    if (!canBookConsultation) {
+    const targetGroup = getGroupForCourse(slot.course_id)
+    const canBookForSlot = Boolean(targetGroup?.canBookConsultation)
+    if (!canBookForSlot) {
       setBookingError("Only the group leader can book consultations.")
       return
     }
 
-    if (!userGroup) {
+    if (!targetGroup) {
       setBookingError("Unable to determine your group.")
       return
     }
 
-    if (hasBookedThisWeek) {
+    const targetGroupWeekKey = getGroupKey(targetGroup)
+    const hasBookedThisWeekForTarget = Boolean(hasBookedThisWeekByGroup[targetGroupWeekKey])
+    if (hasBookedThisWeekForTarget) {
       setBookingError("Your group already has a booked consultation for this week.")
       return
     }
@@ -293,8 +353,8 @@ export default function BookingPage() {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           slotId: slot.slot_id,
-          groupId: userGroup.teamGroupID || userGroup.bookingGroupId || userGroup.smallgroupID,
-          groupName: userGroup.groupName,
+          groupId: targetGroup.teamGroupID || targetGroup.bookingGroupId || targetGroup.smallgroupID,
+          groupName: targetGroup.groupName,
           courseId: slot.course_id,
         }),
       })
@@ -302,6 +362,7 @@ export default function BookingPage() {
       if (res.ok) {
         setBookingSuccess(`Successfully booked consultation with ${slot.adviser_name} on ${new Date(slot.slot_date).toLocaleDateString()}`)
         setBookedSlots((prev) => [...prev, slot.slot_id])
+        setHasBookedThisWeekByGroup((prev) => ({ ...prev, [targetGroupWeekKey]: true }))
         setHasBookedThisWeek(true)
         setSlots((prev) =>
           prev.map((s) =>
@@ -311,16 +372,8 @@ export default function BookingPage() {
           )
         )
 
-        const effectiveGroupId = userGroup.bookingGroupId ?? userGroup.smallgroupID
-        if (Number.isFinite(Number(effectiveGroupId))) {
-          await fetchGroupBookings(Number(effectiveGroupId), userGroup.groupName)
-        }
-
-        const groupCourseId = userGroup.courseID ? String(userGroup.courseID) : ''
-        const candidateCourseIds = Array.from(
-          new Set([groupCourseId, ...courses.map((course: any) => String(course.id))].filter(Boolean))
-        )
-        await fetchSlotsForCourses(candidateCourseIds, effectiveGroupId, userGroup.groupName)
+        const candidateCourseIds = Array.from(new Set(courses.map((course: any) => String(course.id)).filter(Boolean)))
+        await fetchSlotsForCourses(candidateCourseIds, userGroups)
 
         setTimeout(() => setBookingSuccess(''), 3000)
       } else {
@@ -351,8 +404,9 @@ export default function BookingPage() {
   }
 
   const isReservedForCurrentGroup = (slot: ConsultationSlot): boolean => {
-    if (slot.slot_type !== 'SPECIFIC_GROUP' || !slot.reserved_group_name || !userGroup?.groupName) return false
-    return String(slot.reserved_group_name).trim().toLowerCase() === String(userGroup.groupName).trim().toLowerCase()
+    const group = getGroupForCourse(slot.course_id)
+    if (slot.slot_type !== 'SPECIFIC_GROUP' || !slot.reserved_group_name || !group?.groupName) return false
+    return String(slot.reserved_group_name).trim().toLowerCase() === String(group.groupName).trim().toLowerCase()
   }
 
   const visibleSlots = useMemo(() => {
@@ -374,6 +428,26 @@ export default function BookingPage() {
       }))
         .sort((a, b) => String(a.date).localeCompare(String(b.date)))
   }, [visibleSlots])
+
+    const courseLabelById = useMemo(() => {
+      const map = new Map<string, string>()
+      for (const course of courses) {
+        const id = String(course?.id || '').trim()
+        if (!id) continue
+        const code = String(course?.courseCode || '').trim()
+        const name = String(course?.courseName || '').trim()
+        if (code && name) map.set(id, `${code} - ${name}`)
+        else if (code) map.set(id, code)
+        else if (name) map.set(id, name)
+      }
+      return map
+    }, [courses])
+
+    const getCourseLabelForSlot = (slot: ConsultationSlot): string => {
+      const key = String(slot.course_id || '').trim()
+      if (!key) return 'Unassigned Course'
+      return courseLabelById.get(key) || `Course ${key}`
+    }
 
   if (!user) {
     return (
@@ -465,6 +539,9 @@ export default function BookingPage() {
                 {expandedDate === dayGroup.date && (
                   <div className="px-4 pb-4 border-t border-gray-200 space-y-2">
                     {dayGroup.slots.map((slot) => {
+                      const slotGroup = getGroupForCourse(slot.course_id)
+                      const canBookThisSlot = Boolean(slotGroup?.canBookConsultation)
+                      const slotGroupHasBookedThisWeek = Boolean(hasBookedThisWeekByGroup[getGroupKey(slotGroup)])
                       const reservedForGroup = isReservedForCurrentGroup(slot)
                       const available = isSlotAvailable(slot)
                       const isBooked = bookedSlots.includes(slot.slot_id)
@@ -490,6 +567,9 @@ export default function BookingPage() {
                                 <Clock className="w-4 h-4 text-cyan-600" />
                                 <span className="font-medium">{formatTimeRange12Hour(slot.start_time, slot.end_time)}</span>
                               </div>
+                              <p className="text-xs text-blue-700 mt-1 font-semibold">
+                                Class: {getCourseLabelForSlot(slot)}
+                              </p>
                               <p className="text-sm text-gray-600 mt-1">
                                 Adviser: <span className="font-medium">{slot.adviser_name}</span>
                               </p>
@@ -500,7 +580,7 @@ export default function BookingPage() {
                                 <p className="text-sm font-medium text-gray-700">{displayedBooked}/{slot.max_groups} groups</p>
                                 <p className="text-xs text-gray-500">
                                   {reservedForGroup
-                                    ? `Reserved for ${userGroup?.groupName}`
+                                    ? `Reserved for ${slotGroup?.groupName || 'your group'}`
                                     : slot.slot_type === 'FIRST_COME_FIRST_SERVE'
                                       ? 'First Come First Serve'
                                       : 'Reserved'}
@@ -514,10 +594,10 @@ export default function BookingPage() {
                                   <Check className="w-4 h-4" />
                                   Booked
                                 </div>
-                              ) : available && canBookConsultation ? (
+                              ) : available && canBookThisSlot ? (
                                 <button
                                   onClick={() => handleBookSlot(slot)}
-                                  disabled={isBooking || hasBookedThisWeek}
+                                  disabled={isBooking || slotGroupHasBookedThisWeek}
                                   className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 font-medium transition-colors flex items-center gap-2"
                                 >
                                   Book
@@ -525,7 +605,7 @@ export default function BookingPage() {
                                 </button>
                               ) : (
                                 <div className="px-3 py-2 bg-gray-200 text-gray-600 rounded-lg text-sm font-medium">
-                                  {hasBookedThisWeek ? 'Booked This Week' : available ? 'Available' : 'Full'}
+                                  {slotGroupHasBookedThisWeek ? 'Booked This Week' : available ? 'Available' : 'Full'}
                                 </div>
                               )}
                             </div>

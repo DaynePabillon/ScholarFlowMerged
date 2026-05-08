@@ -370,7 +370,21 @@ export default function CourseDetailsPage() {
     };
 
     const handleSubmitMemberJournal = async () => {
-        if (!course || !selectedGroup || !selectedMemberFolder) return;
+        if (!course || !selectedGroup) return;
+        
+        // Determine which member's folder this entry is for
+        let targetEmail = selectedMemberFolder?.email;
+        
+        // If no folder is selected, use the current user's email (for creating entries)
+        if (!targetEmail && isStudent) {
+            targetEmail = String(user?.email || '').toLowerCase().trim();
+        }
+        
+        if (!targetEmail) {
+            setMemberJournalError('Unable to determine member email.');
+            return;
+        }
+        
         const effectiveJournalDate = memberJournalForm.journalDate || todayJournalDate;
 
         if (!memberJournalForm.journalText.trim()) {
@@ -384,7 +398,7 @@ export default function CourseDetailsPage() {
             const data = {
                 courseID: course.id,
                 groupID: selectedGroup.id,
-                member_email: selectedMemberFolder.email,
+                member_email: targetEmail,
                 journal_date: effectiveJournalDate,
                 journal_text: memberJournalForm.journalText,
                 journal_label: memberJournalForm.journalLabel
@@ -1077,6 +1091,26 @@ export default function CourseDetailsPage() {
                                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em]">One folder per member</p>
                                             </div>
                                         </div>
+                                        {isStudent && (
+                                            <button
+                                                onClick={() => {
+                                                    const today = new Date().toISOString().slice(0, 10);
+                                                    const userEmail = String(user?.email || '').toLowerCase().trim();
+                                                    setSelectedMemberFolder({ 
+                                                        email: userEmail, 
+                                                        name: user?.name || userEmail || 'You' 
+                                                    });
+                                                    setMemberJournalForm({ journalDate: today, journalText: '', journalLabel: 'Updates' });
+                                                    setEditingMemberJournalId(null);
+                                                    setIsJournalFormOpen(true);
+                                                    setMemberJournalError(null);
+                                                }}
+                                                className="px-5 py-3 bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-[0.15em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:scale-95 flex items-center gap-2"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                Create Journal Entry
+                                            </button>
+                                        )}
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-8">
@@ -1333,33 +1367,16 @@ export default function CourseDetailsPage() {
                                 <h3 className="text-2xl font-black text-gray-900 tracking-tight">{selectedMemberFolder.name}'s Journal Folder</h3>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">{selectedMemberFolder.email}</p>
                             </div>
-                            <div className="flex items-center gap-3">
-                                {isStudent && String(user?.email || '').toLowerCase() === String(selectedMemberFolder.email).toLowerCase() && (
-                                    <button
-                                        onClick={() => {
-                                            const today = new Date().toISOString().slice(0, 10);
-                                            setMemberJournalForm({ journalDate: today, journalText: '', journalLabel: 'Updates' });
-                                            setEditingMemberJournalId(null);
-                                            setIsJournalFormOpen(true);
-                                            setMemberJournalError(null);
-                                        }}
-                                        className="px-5 py-3 bg-gray-900 text-white rounded-2xl text-xs font-black uppercase tracking-[0.15em] hover:bg-black transition-all shadow-xl shadow-gray-200 active:scale-95 flex items-center gap-2"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Create
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => {
-                                        setSelectedMemberFolder(null);
-                                        setIsJournalFormOpen(false);
-                                        setMemberJournalError(null);
-                                    }}
-                                    className="p-2 hover:bg-gray-100 rounded-2xl transition-colors"
-                                >
-                                    <X className="w-6 h-6 text-gray-400" />
-                                </button>
-                            </div>
+                            <button
+                                onClick={() => {
+                                    setSelectedMemberFolder(null);
+                                    setIsJournalFormOpen(false);
+                                    setMemberJournalError(null);
+                                }}
+                                className="p-2 hover:bg-gray-100 rounded-2xl transition-colors"
+                            >
+                                <X className="w-6 h-6 text-gray-400" />
+                            </button>
                         </div>
 
                         <div className="p-8 overflow-y-auto space-y-6">

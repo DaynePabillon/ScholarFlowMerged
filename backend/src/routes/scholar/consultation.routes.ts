@@ -609,7 +609,8 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
     if (role === 'student') {
       const requesterEmail = String(user?.email || '').trim().toLowerCase();
 
-      // Resolve all courses the student belongs to (via team_group_members OR ss_enrollments)
+      // Resolve all courses the student belongs to from BOTH sources.
+      // In merged data, one source can be incomplete for a subset of classes.
       const { rows: memberCourseRows } = await pool.query(
         `SELECT DISTINCT tg.course_id
          FROM team_group_members tgm
@@ -617,22 +618,23 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
          WHERE LOWER(tgm.email) = $1`,
         [requesterEmail]
       );
-      let studentCourseIds: number[] = memberCourseRows.map((r: any) => Number(r.course_id)).filter(Boolean);
+      const memberCourseIds: number[] = memberCourseRows.map((r: any) => Number(r.course_id)).filter(Boolean);
 
-      // Also check ss_enrollments as secondary source
-      if (studentCourseIds.length === 0) {
-        const accRes = await pool.query(
-          'SELECT account_id FROM ss_account WHERE LOWER("accountEmail") = $1 LIMIT 1',
-          [requesterEmail]
+      const accRes = await pool.query(
+        'SELECT account_id FROM ss_account WHERE LOWER("accountEmail") = $1 LIMIT 1',
+        [requesterEmail]
+      );
+
+      let enrollmentCourseIds: number[] = [];
+      if (accRes.rows[0]) {
+        const enrollRes = await pool.query(
+          'SELECT course_id FROM ss_enrollments WHERE account_id = $1',
+          [accRes.rows[0].account_id]
         );
-        if (accRes.rows[0]) {
-          const enrollRes = await pool.query(
-            'SELECT course_id FROM ss_enrollments WHERE account_id = $1',
-            [accRes.rows[0].account_id]
-          );
-          studentCourseIds = enrollRes.rows.map((r: any) => Number(r.course_id)).filter(Boolean);
-        }
+        enrollmentCourseIds = enrollRes.rows.map((r: any) => Number(r.course_id)).filter(Boolean);
       }
+
+      const studentCourseIds: number[] = Array.from(new Set([...memberCourseIds, ...enrollmentCourseIds]));
 
       // If a specific courseId was requested, scope to that ONLY if the student is actually enrolled in it.
       let effectiveCourseIds: number[] = [];
@@ -666,7 +668,10 @@ router.get('/slots/me', authenticate, async (req: Request, res: Response) => {
            JOIN team_group_members tgm ON tgm.team_group_id = tg.id
            WHERE tg.course_id = ANY($1::int[])
              AND LOWER(COALESCE(tgm.email, '')) = $2
-             AND COALESCE(TRIM(tg.adviser_name), '') <> ''`,
+             AND (
+               COALESCE(TRIM(tg.adviser_name), '') <> ''
+               OR tg.adviser_id IS NOT NULL
+             )`,
           [effectiveCourseIds, requesterEmail]
         );
 
@@ -1245,15 +1250,30 @@ router.get('/group/:groupId/logs', authenticate, async (req, res) => {
 // POST create booking for a slot
 router.post('/bookings', authenticate, async (req, res) => {
   const client = await pool.connect();
+  let bookingStage = 'request-init';
+  let bookingDebug: ((stage: string, extra?: Record<string, unknown>) => void) | null = null;
   try {
     const user: any = req.user;
     const requesterRole = String(user?.role || '').trim().toLowerCase();
     const { slotId, groupId, groupName, courseId } = req.body;
     const normalizedGroupName = String(groupName || '').trim();
+    bookingDebug = (stage: string, extra: Record<string, unknown> = {}) => {
+      console.log('[consultation-booking-debug]', {
+        stage,
+        slotId,
+        courseId,
+        groupId,
+        groupName: normalizedGroupName,
+        requesterRole,
+        ...extra,
+      });
+    };
 
     if (!slotId || !normalizedGroupName || !courseId) {
       return res.status(400).json({ error: 'Missing booking details.' });
     }
+
+    bookingDebug('validated-request');
 
     // Resolve legacy numeric group id required by ss_consultation_bookings.group_id.
     // Accept numeric incoming IDs only if they actually exist; otherwise resolve by groupName.
@@ -1270,6 +1290,7 @@ router.post('/bookings', authenticate, async (req, res) => {
     }
 
     if (!numericGroupId) {
+      bookingStage = 'resolve-legacy-group';
       const upsertLegacy = await client.query(
         `INSERT INTO ss_group ("groupName", member1, "roleOne")
          VALUES ($1, $2, $3)
@@ -1282,8 +1303,10 @@ router.post('/bookings', authenticate, async (req, res) => {
       numericGroupId = Number(upsertLegacy.rows[0].smallgroupID);
     }
 
+    bookingStage = 'begin-transaction';
     await client.query('BEGIN');
 
+    bookingStage = 'lock-slot-row';
     const slotRes = await client.query(
       `SELECT
          s.slot_id,
@@ -1352,6 +1375,11 @@ router.post('/bookings', authenticate, async (req, res) => {
 
     const now = new Date();
     const rawSlotDate = slot.slot_date;
+    bookingDebug('slot-loaded', {
+      rawSlotDate: rawSlotDate instanceof Date ? rawSlotDate.toISOString() : String(rawSlotDate ?? ''),
+      slotType: String(slot.slot_type || ''),
+      maxGroups: Number(slot.max_groups || 0),
+    });
     const slotDate = (() => {
       if (rawSlotDate instanceof Date) return rawSlotDate.toISOString().slice(0, 10);
       const direct = String(rawSlotDate || '').trim();
@@ -1394,6 +1422,7 @@ router.post('/bookings', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Unable to determine booking user email from session.' });
     }
 
+    bookingStage = 'check-already-booked';
     const alreadyBooked = await client.query(
       `SELECT booking_id
        FROM ss_consultation_bookings
@@ -1407,67 +1436,90 @@ router.post('/bookings', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Your group already booked this slot.' });
     }
 
-    const sameDayBooking = await client.query(
-      `SELECT b.booking_id,
-              s_existing.slot_date::date as booked_date,
-              s_target.slot_date::date as target_date
-       FROM ss_consultation_bookings b
-       JOIN ss_consultation_slots s_existing ON s_existing.slot_id = b.slot_id
-       JOIN ss_consultation_slots s_target ON s_target.slot_id = $4
-       WHERE (
-         b.group_id = $1
-         OR LOWER(TRIM(COALESCE(b.group_name, ''))) = LOWER($2)
-         OR LOWER(TRIM(COALESCE(b.booked_by_email, ''))) = LOWER($3)
-       )
-         AND b.status = 'BOOKED'
-         AND (
-           s_existing.slot_date::date = s_target.slot_date::date
+    bookingStage = 'check-same-day-booking';
+    try {
+      await client.query('SAVEPOINT booking_debug_same_day');
+      const sameDayBooking = await client.query(
+        `WITH booked_slots AS (
+           SELECT
+             slot_id,
+             CASE
+               WHEN TRIM(COALESCE(slot_date::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(slot_date::text)::date
+               ELSE NULL
+             END AS booked_date
+           FROM ss_consultation_slots
+         ),
+         target_slot AS (
+           SELECT
+             slot_id,
+             CASE
+               WHEN TRIM(COALESCE(slot_date::text, '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(slot_date::text)::date
+               ELSE NULL
+             END AS target_date
+           FROM ss_consultation_slots
+           WHERE slot_id = $4
          )
-       LIMIT 1`,
-      [numericGroupId, normalizedGroupName, bookerEmail, slotId]
-    );
+         SELECT b.booking_id,
+                booked_slots.booked_date,
+                target_slot.target_date
+         FROM ss_consultation_bookings b
+         JOIN booked_slots ON booked_slots.slot_id = b.slot_id
+         JOIN target_slot ON target_slot.slot_id = $4
+         WHERE (
+           b.group_id = $1
+           OR LOWER(TRIM(COALESCE(b.group_name, ''))) = LOWER($2)
+           OR LOWER(TRIM(COALESCE(b.booked_by_email, ''))) = LOWER($3)
+         )
+           AND b.status = 'BOOKED'
+           AND (
+             booked_slots.booked_date IS NOT NULL
+             AND target_slot.target_date IS NOT NULL
+             AND booked_slots.booked_date = target_slot.target_date
+           )
+         LIMIT 1`,
+        [numericGroupId, normalizedGroupName, bookerEmail, slotId]
+      );
 
-    if (sameDayBooking.rows.length > 0) {
+      if (sameDayBooking.rows.length > 0) {
+        await client.query('ROLLBACK TO SAVEPOINT booking_debug_same_day');
+        await client.query('RELEASE SAVEPOINT booking_debug_same_day');
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Your group already has a booked consultation on this day.' });
+      }
+
+      await client.query('RELEASE SAVEPOINT booking_debug_same_day');
+    } catch (sameDayErr: any) {
+      await client.query('ROLLBACK TO SAVEPOINT booking_debug_same_day');
+      await client.query('RELEASE SAVEPOINT booking_debug_same_day');
+      bookingDebug('same-day-check-error', {
+        errorCode: sameDayErr?.code,
+        detail: sameDayErr?.detail,
+        hint: sameDayErr?.hint,
+        message: sameDayErr?.message,
+      });
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'Your group already has a booked consultation on this day.' });
+      return res.status(500).json({ error: 'Same-day booking check failed. See backend log for details.' });
     }
 
     // Also block rebooking when a consultation record already exists on this day,
     // even if its original slot/booking row was deleted later.
     const consultationHistoryCheck = await client.query(
-      `SELECT
-         c."conID",
-         CASE
-           WHEN TRIM(COALESCE(c."conDate", '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(c."conDate")::date
-           ELSE NULL
-         END as consultation_date
+      `SELECT c."conID", c."conDate" as consultation_date
        FROM ss_consultation c
        WHERE LOWER(TRIM(COALESCE(c."groupName", ''))) = LOWER($1)
          AND c.status IN ('SUBMITTED', 'COMPLETED')
-         AND (
-           CASE
-             WHEN TRIM(COALESCE(c."conDate", '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(c."conDate")::date
-             ELSE NULL
-           END
-         ) IS NOT NULL
-         AND (
-           (
-             CASE
-               WHEN TRIM(COALESCE(c."conDate", '')) ~ '^\\d{4}-\\d{2}-\\d{2}$' THEN TRIM(c."conDate")::date
-               ELSE NULL
-             END
-           ) = $2::date
-         )
+         AND c."conDate" IS NOT NULL
+         AND c."conDate" = $2::date
        LIMIT 1`,
       [normalizedGroupName, slotDate]
     );
 
     if (consultationHistoryCheck.rows.length > 0) {
-      const consultationDate = String(consultationHistoryCheck.rows[0].consultation_date || '').slice(0, 10);
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Your group already completed a consultation record on this day.' });
     }
 
+    bookingStage = 'count-current-groups';
     const currentCountRes = await client.query(
       `SELECT COUNT(*)::int AS current_groups
        FROM ss_consultation_bookings
@@ -1481,6 +1533,7 @@ router.post('/bookings', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'This slot is already full.' });
     }
 
+    bookingStage = 'insert-booking';
     const insertRes = await client.query(
       `INSERT INTO ss_consultation_bookings (slot_id, course_id, group_id, group_name, booked_by_email, status)
        VALUES ($1, $2, $3, $4, $5, 'BOOKED')
@@ -1491,6 +1544,13 @@ router.post('/bookings', authenticate, async (req, res) => {
     await client.query('COMMIT');
     return res.json({ success: true, booking: insertRes.rows[0] });
   } catch (error: any) {
+    bookingDebug?.('error', {
+      bookingStage,
+      errorCode: error?.code,
+      detail: error?.detail,
+      hint: error?.hint,
+      message: error?.message,
+    });
     await client.query('ROLLBACK');
     console.error('Error creating consultation booking:', error);
     const message = error?.detail || error?.message || 'Failed to create booking';
@@ -1612,7 +1672,13 @@ router.post('/feedback', authenticate, async (req, res) => {
           Number(booking.course_id),
           canonicalGroupName,
           Number(slot_id),
-          String(conDate || '').slice(0, 10),
+          ((): string | null => {
+            const d = String(conDate || '').trim();
+            if (!d) return null;
+            const p = new Date(d);
+            if (Number.isNaN(p.getTime())) return null;
+            return p.toISOString().slice(0, 10);
+          })(),
           String(conMil || ''),
           String(conSum || adviser_notes || ''),
           String(conAction || ''),
@@ -1636,7 +1702,13 @@ router.post('/feedback', authenticate, async (req, res) => {
           Number(booking.course_id),
           canonicalGroupName,
           Number(slot_id),
-          String(conDate || '').slice(0, 10),
+          ((): string | null => {
+            const d = String(conDate || '').trim();
+            if (!d) return null;
+            const p = new Date(d);
+            if (Number.isNaN(p.getTime())) return null;
+            return p.toISOString().slice(0, 10);
+          })(),
           String(conMil || ''),
           String(conSum || adviser_notes || ''),
           String(conAction || ''),

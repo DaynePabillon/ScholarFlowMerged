@@ -299,7 +299,7 @@ export default function GroupPage() {
                             <div className="bg-[#4FB6DF] p-4 border-b border-gray-100 flex justify-between items-center">
                                 <h2 className="font-bold text-white text-lg">Members ({membersList.length}/5)</h2>
                             </div>
-                            <div className="p-4 flex-1 overflow-y-auto w-full">
+                            <div className="p-4 flex-1 w-full">
                                 {membersList.length > 0 ? (
                                     <div className="flex flex-col gap-3">
                                         {membersList.map((member, idx) => (
@@ -365,7 +365,7 @@ export default function GroupPage() {
                                 )}
                             </div>
 
-                            <div className="p-6 flex-1 overflow-y-auto w-full max-h-[600px]">
+                            <div className="p-6 flex-1 w-full">
                                 {activeTab === 'tasks' && (
                                     tasks.length > 0 ? (
                                         <div className="grid gap-4">

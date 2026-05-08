@@ -942,7 +942,17 @@ router.get('/courses', async (req: Request, res: Response) => {
       const { rows: allCourses } = await pool.query(
         `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
          FROM ss_courses c
-         LEFT JOIN (SELECT course_id, COUNT(*)::int AS enrolled_count FROM ss_enrollments GROUP BY course_id) ec ON ec.course_id = c.id
+         LEFT JOIN (
+           SELECT course_id, COUNT(DISTINCT student_email)::int AS enrolled_count
+           FROM (
+             SELECT se.course_id, sa."accountEmail" as student_email FROM ss_enrollments se
+             LEFT JOIN ss_account sa ON sa.account_id = se.account_id
+             UNION ALL
+             SELECT tg.course_id, tgm.email FROM team_group_members tgm
+             JOIN team_groups tg ON tg.id = tgm.team_group_id
+           ) combined
+           GROUP BY course_id
+         ) ec ON ec.course_id = c.id
          ORDER BY c.id DESC`
       );
       return res.json(allCourses);
@@ -962,7 +972,17 @@ router.get('/courses', async (req: Request, res: Response) => {
       const { rows: allCourses } = await pool.query(
         `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
          FROM ss_courses c
-         LEFT JOIN (SELECT course_id, COUNT(*)::int AS enrolled_count FROM ss_enrollments GROUP BY course_id) ec ON ec.course_id = c.id
+         LEFT JOIN (
+           SELECT course_id, COUNT(DISTINCT student_email)::int AS enrolled_count
+           FROM (
+             SELECT se.course_id, sa."accountEmail" as student_email FROM ss_enrollments se
+             LEFT JOIN ss_account sa ON sa.account_id = se.account_id
+             UNION ALL
+             SELECT tg.course_id, tgm.email FROM team_group_members tgm
+             JOIN team_groups tg ON tg.id = tgm.team_group_id
+           ) combined
+           GROUP BY course_id
+         ) ec ON ec.course_id = c.id
          ORDER BY c.id DESC`
       );
       return res.json(allCourses);
@@ -975,7 +995,17 @@ router.get('/courses', async (req: Request, res: Response) => {
       const { rows } = await pool.query(
         `SELECT DISTINCT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
          FROM ss_courses c
-         LEFT JOIN (SELECT course_id, COUNT(*)::int AS enrolled_count FROM ss_enrollments GROUP BY course_id) ec ON ec.course_id = c.id
+         LEFT JOIN (
+           SELECT course_id, COUNT(DISTINCT student_email)::int AS enrolled_count
+           FROM (
+             SELECT se.course_id, sa."accountEmail" as student_email FROM ss_enrollments se
+             LEFT JOIN ss_account sa ON sa.account_id = se.account_id
+             UNION ALL
+             SELECT tg.course_id, tgm.email FROM team_group_members tgm
+             JOIN team_groups tg ON tg.id = tgm.team_group_id
+           ) combined
+           GROUP BY course_id
+         ) ec ON ec.course_id = c.id
          LEFT JOIN team_groups tg ON tg.course_id = c.id
          WHERE LOWER(COALESCE(c."courseAdviser", '')) = $1
             OR LOWER(COALESCE(tg.adviser_name, '')) = $1
@@ -1012,7 +1042,17 @@ router.get('/courses', async (req: Request, res: Response) => {
       const { rows } = await pool.query(
         `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
          FROM ss_courses c
-         LEFT JOIN (SELECT course_id, COUNT(*)::int AS enrolled_count FROM ss_enrollments GROUP BY course_id) ec ON ec.course_id = c.id
+         LEFT JOIN (
+           SELECT course_id, COUNT(DISTINCT student_email)::int AS enrolled_count
+           FROM (
+             SELECT se.course_id, sa."accountEmail" as student_email FROM ss_enrollments se
+             LEFT JOIN ss_account sa ON sa.account_id = se.account_id
+             UNION ALL
+             SELECT tg.course_id, tgm.email FROM team_group_members tgm
+             JOIN team_groups tg ON tg.id = tgm.team_group_id
+           ) combined
+           GROUP BY course_id
+         ) ec ON ec.course_id = c.id
          WHERE c.id = ANY($1::int[])
          ORDER BY c.id DESC`,
         [enrolledCourseIds]
@@ -1036,7 +1076,17 @@ router.get('/courses/:id', async (req: Request, res: Response) => {
     const { rows } = await pool.query(
       `SELECT c.*, COALESCE(ec.enrolled_count, 0)::int AS "courseAmount"
        FROM ss_courses c
-       LEFT JOIN (SELECT course_id, COUNT(*)::int AS enrolled_count FROM ss_enrollments GROUP BY course_id) ec ON ec.course_id = c.id
+       LEFT JOIN (
+         SELECT course_id, COUNT(DISTINCT student_email)::int AS enrolled_count
+         FROM (
+           SELECT se.course_id, sa."accountEmail" as student_email FROM ss_enrollments se
+           LEFT JOIN ss_account sa ON sa.account_id = se.account_id
+           UNION ALL
+           SELECT tg.course_id, tgm.email FROM team_group_members tgm
+           JOIN team_groups tg ON tg.id = tgm.team_group_id
+         ) combined
+         GROUP BY course_id
+       ) ec ON ec.course_id = c.id
        WHERE c.id = $1`,
       [req.params.id]
     );
@@ -1601,11 +1651,18 @@ router.post('/scholar/team-groups/:id/comments', async (req: Request, res: Respo
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 router.post('/consultations', verifyToken, async (req: Request, res: Response) => {
   const { courseID, groupName, conDate, conType, conMil, conSum, conAction, conAtt, isDraft, conStat, conNotes } = req.body;
+  const safeConDate = ((): string | null => {
+    const d = String(conDate || '').trim();
+    if (!d) return null;
+    const p = new Date(d);
+    if (Number.isNaN(p.getTime())) return null;
+    return p.toISOString().slice(0, 10);
+  })();
   try {
     const { rows } = await pool.query(
       `INSERT INTO ss_consultation ("courseID", "groupName", "conDate", "conType", "conMil", "conSum", "conAction", "conAtt", "isDraft", "conStat", "conNotes")
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
-      [courseID, groupName, conDate, conType, conMil, conSum, conAction, conAtt, isDraft, conStat, conNotes]
+      [courseID, groupName, safeConDate, conType, conMil, conSum, conAction, conAtt, isDraft, conStat, conNotes]
     );
     res.json(rows[0]);
   } catch (err: any) {

@@ -286,9 +286,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             <div className="flex relative z-30">
                 {/* Desktop Sidebar */}
-                <aside className={`hidden lg:flex lg:flex-col sticky top-[81px] h-[calc(100vh-81px)] backdrop-blur-2xl transition-all duration-300 shadow-xl w-[19rem] overflow-x-hidden scholar-sidebar-compact`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-surface) 92%, transparent)', borderRight: '1px solid color-mix(in srgb, var(--color-border) 92%, white)' }}>
+                <aside className={`hidden lg:flex lg:flex-col sticky top-[81px] min-h-[calc(100vh-81px)] backdrop-blur-2xl transition-all duration-300 shadow-xl w-[19rem] overflow-x-hidden scholar-sidebar-compact`} style={{ backgroundColor: 'color-mix(in srgb, var(--color-surface) 92%, transparent)', borderRight: '1px solid color-mix(in srgb, var(--color-border) 92%, white)' }}>
                     <div className="p-4 flex flex-col h-full gap-4 overflow-x-hidden min-w-0">
-                        <nav ref={navScrollRef} onScroll={handleNavScroll} className="flex-1 overflow-y-hidden overflow-x-hidden custom-scrollbar min-w-0">
+                        <nav ref={navScrollRef} onScroll={handleNavScroll} className="flex-1 min-w-0">
                             <div className="scholar-sidebar-list min-w-0">
                                 <div className="scholar-sidebar-group">
                                     <div className="scholar-sidebar-group-heading">
@@ -408,7 +408,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 )}
 
                 {/* Main Content Area */}
-                <main ref={mainRef as any} tabIndex={-1} className="flex-1 h-[calc(100vh-81px)] overflow-y-auto">
+                <main ref={mainRef as any} tabIndex={-1} className="flex-1 min-h-[calc(100vh-81px)]">
                     <div className="p-4 sm:p-6 lg:p-8">
                         {children}
                     </div>
