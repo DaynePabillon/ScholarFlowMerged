@@ -1,0 +1,560 @@
+/* ScholarSync Design System — academic-first portal styling */
+
+@keyframes scholar-aurora {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+  50% { transform: translate3d(0, -12px, 0) scale(1.04); opacity: 0.78; }
+}
+
+@keyframes scholar-drift {
+  0% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(16px, -10px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+@keyframes scholar-glow {
+  0%, 100% { box-shadow: 0 18px 36px -24px color-mix(in srgb, var(--color-primary) 36%, transparent); }
+  50% { box-shadow: 0 28px 52px -28px color-mix(in srgb, var(--color-primary) 48%, transparent); }
+}
+
+@keyframes cloud-float {
+  0%, 100% { transform: translateX(0px) translateY(0px); }
+  25% { transform: translateX(20px) translateY(-10px); }
+  50% { transform: translateX(40px) translateY(0px); }
+  75% { transform: translateX(20px) translateY(10px); }
+}
+
+@keyframes cloud-drift-1 {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(calc(100vw + 100%)); }
+}
+
+@keyframes cloud-drift-2 {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(calc(100vw + 100%)); }
+}
+
+@keyframes cloud-drift-3 {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(calc(100vw + 100%)); }
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) translateX(0px); }
+  33% { transform: translateY(-20px) translateX(10px); }
+  66% { transform: translateY(10px) translateX(-10px); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-cloud-float { animation: cloud-float 10s ease-in-out infinite; }
+.animate-float-slow { animation: float-slow 8s ease-in-out infinite; }
+.animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+.animate-slide-up { animation: slide-up 0.6s ease-out forwards; }
+
+.animate-cloud-1 { animation: cloud-drift-1 60s linear infinite; left: -200px; }
+.animate-cloud-2 { animation: cloud-drift-2 80s linear infinite; animation-delay: -20s; left: -200px; }
+.animate-cloud-3 { animation: cloud-drift-3 70s linear infinite; animation-delay: -35s; left: -200px; }
+.animate-cloud-4 { animation: cloud-drift-1 50s linear infinite; animation-delay: -10s; left: -200px; }
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.portal-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-primary) 20%, transparent), transparent 28%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-secondary) 14%, transparent), transparent 26%),
+    radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-background) 96%, white) 0%, var(--color-background) 44%, color-mix(in srgb, var(--color-background) 92%, black) 100%);
+}
+
+.dark .portal-shell {
+  background:
+    radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--color-primary) 26%, transparent), transparent 28%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--color-secondary) 18%, transparent), transparent 26%),
+    radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-background) 95%, white) 0%, var(--color-background) 42%, color-mix(in srgb, var(--color-background) 90%, black) 100%);
+}
+
+.scholar-theme {
+  position: relative;
+  min-height: 100vh;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+.scholar-theme::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--color-primary) 12%, transparent), transparent 32%),
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--color-secondary) 10%, transparent), transparent 18%),
+    radial-gradient(circle at 84% 10%, color-mix(in srgb, var(--color-accent) 8%, transparent), transparent 18%);
+  opacity: 0.72;
+  z-index: -1;
+}
+
+.scholar-theme::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 100% 28px, 28px 100%;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.4), transparent 85%);
+  opacity: 0.08;
+  z-index: -1;
+}
+
+.portal-panel,
+.glass-card {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 90%, transparent) 100%);
+  backdrop-filter: blur(20px) saturate(1.08);
+  border: 1px solid color-mix(in srgb, var(--color-border) 86%, white);
+  border-radius: 1.5rem;
+  box-shadow:
+    0 22px 44px -30px rgba(15, 23, 42, 0.32),
+    0 1px 0 0 rgba(255, 255, 255, 0.56) inset;
+  transition: box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease, background 220ms ease, opacity 220ms ease;
+}
+
+.dark .portal-panel,
+.dark .glass-card {
+  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+  box-shadow:
+    0 24px 44px -28px rgba(0, 0, 0, 0.45),
+    0 1px 0 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+.portal-panel:hover,
+.glass-card:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 68%, white);
+  box-shadow:
+    0 28px 50px -28px color-mix(in srgb, var(--color-primary) 36%, transparent),
+    0 12px 24px -18px rgba(15, 23, 42, 0.20),
+    0 1px 0 0 rgba(255, 255, 255, 0.72) inset;
+  transform: translateY(-2px);
+}
+
+.portal-panel-strong {
+  background:
+    radial-gradient(circle at top right, color-mix(in srgb, var(--color-secondary) 10%, transparent), transparent 26%),
+    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 98%, white) 0%, color-mix(in srgb, var(--color-surface) 92%, transparent) 100%);
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white);
+  border-radius: 1.75rem;
+  box-shadow:
+    0 30px 60px -40px rgba(15, 23, 42, 0.42),
+    0 1px 0 0 rgba(255, 255, 255, 0.58) inset;
+}
+
+.portal-surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+}
+
+.portal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.42rem 0.84rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 88%, transparent) 100%);
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.portal-input {
+  width: 100%;
+  background: color-mix(in srgb, var(--color-surface) 96%, white);
+  color: var(--color-text);
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white);
+  border-radius: 1rem;
+  padding: 0.9rem 1rem;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+}
+
+.portal-input::placeholder {
+  color: var(--color-textSecondary);
+  opacity: 0.75;
+}
+
+.portal-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+
+.portal-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  padding: 0.9rem 1.15rem;
+  font-weight: 700;
+  transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease, border-color 180ms ease;
+}
+
+.portal-button:hover {
+  transform: translateY(-1px);
+}
+
+.portal-button-primary {
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: white;
+  box-shadow: 0 20px 36px -22px color-mix(in srgb, var(--color-primary) 84%, black);
+}
+
+.portal-button-secondary {
+  background: color-mix(in srgb, var(--color-surface) 92%, white);
+  color: var(--color-text);
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white);
+}
+
+.portal-stat {
+  padding: 1rem 1.1rem;
+  border-radius: 1.3rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 88%, white);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 90%, transparent) 100%);
+}
+
+.scholar-hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.82rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, transparent);
+  color: var(--color-primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.scholar-display {
+  font-family: var(--font-lilita), var(--font-inter), sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.scholar-section-heading {
+  font-family: var(--font-lilita), var(--font-inter), sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.scholar-nav-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.8rem;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 1rem;
+  padding: 0.88rem 1rem;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-textSecondary);
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.scholar-nav-item-compact {
+  justify-content: center !important;
+  gap: 0 !important;
+  padding-left: 0.5rem !important;
+  padding-right: 0.5rem !important;
+}
+
+.scholar-nav-item-compact > span:last-child {
+  display: none !important;
+}
+
+.scholar-nav-item-compact > span:first-child {
+  margin-left: auto;
+  margin-right: auto;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 18%, white);
+  opacity: 1;
+}
+
+.scholar-nav-item-compact.scholar-nav-item-active > span:first-child {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 24%, white);
+}
+
+.scholar-nav-item-compact svg {
+  display: block;
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke-width: 2;
+  color: inherit;
+  stroke: currentColor;
+}
+
+.scholar-nav-item-compact svg path,
+.scholar-nav-item-compact svg circle,
+.scholar-nav-item-compact svg rect,
+.scholar-nav-item-compact svg line,
+.scholar-nav-item-compact svg polyline,
+.scholar-nav-item-compact svg polygon {
+  stroke: currentColor;
+  fill: none !important;
+  opacity: 1;
+}
+
+/* Ensure collapsed icons are clearly visible across themes. */
+/* Use text color for compact icons; active items keep the primary/white appearance. */
+.scholar-nav-item-compact svg {
+  color: var(--color-text) !important;
+  stroke: currentColor !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.scholar-nav-item-compact.scholar-nav-item-active svg {
+  color: white !important;
+  stroke: currentColor !important;
+}
+
+/* Extra safeguard: force stroke on all svg child shapes under compact nav items. */
+.scholar-nav-item-compact svg * {
+  stroke: currentColor !important;
+  fill: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.scholar-nav-item:hover {
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  border-color: color-mix(in srgb, var(--color-border) 78%, white);
+  color: var(--color-text);
+  transform: translateY(-1px);
+}
+
+/* Compact sidebar mode: reduce paddings, gaps, and font sizes so all links fit without scrolling */
+.scholar-sidebar-compact .portal-panel { padding: 0.45rem !important; }
+.scholar-sidebar-compact .scholar-sidebar-list { display: flex; flex-direction: column; gap: 0.35rem; }
+.scholar-sidebar-compact .scholar-sidebar-group { padding: 0.15rem 0; }
+.scholar-sidebar-compact .scholar-sidebar-group-divider { border-top: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent); }
+.scholar-sidebar-compact .scholar-sidebar-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
+.scholar-sidebar-compact .scholar-hero-kicker { padding: 0.18rem 0.36rem; font-size: 0.60rem; }
+.scholar-sidebar-compact .scholar-section-heading { font-size: 0.95rem; margin-top: 0.15rem; }
+.scholar-sidebar-compact .portal-panel p, .scholar-sidebar-compact .portal-panel h2 { margin: 0; }
+.scholar-sidebar-compact .scholar-nav-item { padding: 0.3rem 0.42rem !important; gap: 0.45rem !important; border-radius: 0.75rem; }
+.scholar-sidebar-compact .scholar-nav-icon { height: 1.55rem !important; width: 1.55rem !important; border-radius: 0.55rem; }
+.scholar-sidebar-compact .scholar-nav-item span { font-size: 0.74rem !important; line-height: 1 !important; }
+.scholar-sidebar-compact aside { width: 19rem; }
+
+/* Ensure panels don't introduce extra height */
+.scholar-sidebar-compact .portal-panel { border-radius: 0.7rem; }
+
+/* Reduce gaps for grid/list items to fit more items */
+.scholar-sidebar-compact .space-y-2 > * + * { margin-top: 0.16rem !important; }
+.scholar-sidebar-compact .space-y-3 > * + * { margin-top: 0.22rem !important; }
+.scholar-sidebar-compact .grid { gap: 0.5rem !important; }
+.scholar-sidebar-compact .grid > * { min-width: 0; }
+.scholar-sidebar-compact .grid .scholar-nav-item { min-height: 2.2rem; }
+.scholar-sidebar-compact .grid .scholar-nav-item span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Give section cards a little internal rhythm without taking too much vertical space */
+.scholar-sidebar-compact .portal-panel > .mb-2 { margin-bottom: 0.35rem !important; }
+
+
+
+.scholar-nav-item-active {
+  color: white;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  box-shadow: 0 16px 32px -22px color-mix(in srgb, var(--color-primary) 80%, black);
+}
+
+.scholar-nav-item-active:hover {
+  color: white;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+}
+
+.scholar-metric {
+  padding: 1rem 1.05rem;
+  border-radius: 1.3rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 86%, white);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 90%, transparent) 100%);
+  animation: scholar-glow 7s ease-in-out infinite;
+}
+
+.scholar-metric-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-textSecondary);
+}
+
+.scholar-metric-value {
+  margin-top: 0.35rem;
+  font-size: 2rem;
+  line-height: 1;
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.portal-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.portal-table thead th {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 90%, transparent) 100%);
+  color: var(--color-textSecondary);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.portal-empty {
+  border: 1px dashed color-mix(in srgb, var(--color-border) 88%, white);
+  background: color-mix(in srgb, var(--color-surface) 88%, white);
+}
+
+/* Glass card utility */
+
+body {
+  font-family: var(--font-inter), var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* Dark-mode compatibility for legacy utility classes inside Scholar routes. */
+.dark .scholar-theme .bg-white,
+.dark .scholar-theme .bg-slate-50,
+.dark .scholar-theme .bg-gray-50,
+.dark .scholar-theme .bg-gray-100 {
+  background-color: var(--color-surface) !important;
+}
+
+.dark .scholar-theme .border-gray-100,
+.dark .scholar-theme .border-gray-200,
+.dark .scholar-theme .border-gray-300,
+.dark .scholar-theme .border-slate-100,
+.dark .scholar-theme .border-slate-200,
+.dark .scholar-theme .border-slate-300 {
+  border-color: var(--color-border) !important;
+}
+
+.dark .scholar-theme .text-black,
+.dark .scholar-theme .text-gray-900,
+.dark .scholar-theme .text-gray-800,
+.dark .scholar-theme .text-gray-700,
+.dark .scholar-theme .text-slate-900,
+.dark .scholar-theme .text-slate-800,
+.dark .scholar-theme .text-slate-700 {
+  color: var(--color-text) !important;
+}
+
+.dark .scholar-theme .text-gray-600,
+.dark .scholar-theme .text-gray-500,
+.dark .scholar-theme .text-gray-400,
+.dark .scholar-theme .text-slate-600,
+.dark .scholar-theme .text-slate-500,
+.dark .scholar-theme .text-slate-400 {
+  color: var(--color-textSecondary) !important;
+}
+
+.dark .scholar-theme input.bg-white,
+.dark .scholar-theme textarea.bg-white,
+.dark .scholar-theme select.bg-white,
+.dark .scholar-theme input[class*='bg-white'],
+.dark .scholar-theme textarea[class*='bg-white'],
+.dark .scholar-theme select[class*='bg-white'] {
+  background-color: var(--color-surface) !important;
+  color: var(--color-text) !important;
+  border-color: var(--color-border) !important;
+}
+
+.dark .scholar-theme input::placeholder,
+.dark .scholar-theme textarea::placeholder {
+  color: var(--color-textSecondary);
+  opacity: 0.82;
+}
+
+.dark .scholar-theme .hover\:bg-gray-50:hover,
+.dark .scholar-theme .hover\:bg-blue-50:hover,
+.dark .scholar-theme .hover\:bg-slate-50:hover {
+  background-color: color-mix(in srgb, var(--color-surface) 82%, transparent) !important;
+}
+
+.dark .scholar-theme.scholar-role-manager .bg-purple-50,
+.dark .scholar-theme.scholar-role-manager .bg-purple-100 {
+  background-color: color-mix(in srgb, var(--color-primary) 12%, transparent) !important;
+}
+
+.dark .scholar-theme.scholar-role-manager .text-purple-500,
+.dark .scholar-theme.scholar-role-manager .text-purple-600,
+.dark .scholar-theme.scholar-role-manager .text-purple-700 {
+  color: var(--color-primary) !important;
+}
+
+.dark .scholar-theme.scholar-role-manager .border-purple-100,
+.dark .scholar-theme.scholar-role-manager .border-purple-200,
+.dark .scholar-theme.scholar-role-manager .border-purple-300 {
+  border-color: color-mix(in srgb, var(--color-primary) 26%, transparent) !important;
+}
+
+.dark .scholar-theme.scholar-role-manager .hover\:bg-purple-50:hover,
+.dark .scholar-theme.scholar-role-manager .hover\:bg-purple-100:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 16%, transparent) !important;
+}
+
+.dark .scholar-theme.scholar-role-manager .from-purple-500,
+.dark .scholar-theme.scholar-role-manager .from-purple-600,
+.dark .scholar-theme.scholar-role-manager .to-pink-500,
+.dark .scholar-theme.scholar-role-manager .to-pink-600,
+.dark .scholar-theme.scholar-role-manager .to-violet-500,
+.dark .scholar-theme.scholar-role-manager .to-violet-600 {
+  --tw-gradient-from: var(--color-primary) !important;
+  --tw-gradient-to: var(--color-secondary) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+.scholar-theme h1,
+.scholar-theme h2,
+.scholar-theme h3,
+.scholar-theme h4,
+.scholar-theme h5,
+.scholar-theme h6 {
+  letter-spacing: -0.025em;
+}

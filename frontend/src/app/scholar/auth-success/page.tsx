@@ -1,0 +1,62 @@
+'use client';
+
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { GraduationCap } from 'lucide-react';
+import apiClient from '@/lib/api/client';
+
+function AuthSuccessContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const token = searchParams.get('token');
+    if (token) {
+      // Ensure account switching starts from a clean local session state.
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('scholar_profile');
+      localStorage.removeItem('ss_user');
+
+      localStorage.setItem('auth_token', token);
+      localStorage.setItem('token', token);
+
+      apiClient.get('/auth/me')
+        .then((res) => {
+          localStorage.setItem('scholar_profile', JSON.stringify(res.data));
+        })
+        .catch(() => {
+          // Continue to the dashboard even if the profile cache cannot be seeded.
+        })
+        .finally(() => {
+          router.push('/scholar/dashboard');
+        });
+    } else {
+      router.push('/login');
+    }
+  }, [searchParams, router]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+          <GraduationCap className="w-8 h-8 text-white" />
+        </div>
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto mb-4" />
+        <p className="text-gray-600 font-medium">Signing you in...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function AuthSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-cyan-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent" />
+      </div>
+    }>
+      <AuthSuccessContent />
+    </Suspense>
+  );
+}

@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+out/
+
+# Environment files - NEVER commit these
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+!.env.example
+
+# Documents & Reports (keep local only)
+Documents/
+sdd_diagrams/
+
+# Build/Generate scripts (not part of the app)
+build_*.py
+generate_paper.py
+export_db_to_csv.py
+
+# One-off scratch/debug/test/fix/check scripts
+scratch_*.js
+scratch_*.ts
+debug-*.js
+debug-*.ts
+test-*.js
+test-*.ts
+check-*.js
+check-*.ts
+fix-*.js
+fix-*.ts
+run-*.js
+run-*.ts
+
+# Database dumps and exports
+*.dump
+*.sql.bak
+Database_Exports/
+
+# Research paper / doc artifacts (root level only)
+/paper_raw_xml.txt
+/paper_text.txt
+/pubform_extract.txt
+/team_std_extract.txt
+/codebase_audit.txt
+/folder-tree.txt
+/*.docx
+
+# Random images at root (not frontend assets)
+/*.png
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Secrets
+*.pem
+*.key
+*.cert

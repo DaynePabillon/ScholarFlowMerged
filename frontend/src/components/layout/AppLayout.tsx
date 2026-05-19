@@ -1,0 +1,399 @@
+"use client"
+
+import { useState, useEffect, useRef } from "react"
+import { Cloud, LogOut, Menu, X, Calendar, FileText, FolderOpen, BarChart3, Users, FolderKanban, CheckSquare, Building2, ChevronDown, Plus, UserPlus, Settings, LayoutDashboard, RefreshCw, Bug } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useTheme } from "@/contexts/ThemeContext"
+import NotificationBell from "@/components/notifications/NotificationBell"
+import BugReportModal from "@/components/reports/BugReportModal"
+import ThemeToggle from "@/components/shared/ThemeToggle"
+import InteractiveGuide, { RateUsButton } from "@/components/onboarding/InteractiveGuide"
+import AnnouncementBanner from "@/components/announcements/AnnouncementBanner"
+
+interface Organization {
+  id: string
+  name: string
+  role: 'admin' | 'manager' | 'member'
+}
+
+interface AppLayoutProps {
+  user: any
+  organizations: Organization[]
+  selectedOrg: Organization | null
+  onOrgChange: (org: Organization) => void
+  children: React.ReactNode
+}
+
+export default function AppLayout({ user, organizations, selectedOrg, onOrgChange, children }: AppLayoutProps) {
+  const router = useRouter()
+  const { setRole } = useTheme()
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false)
+  const [showBugReport, setShowBugReport] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Update theme role when organization changes
+  useEffect(() => {
+    if (selectedOrg) {
+      setRole(selectedOrg.role)
+    }
+  }, [selectedOrg, setRole])
+
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!isOrgDropdownOpen) return
+
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOrgDropdownOpen(false)
+      }
+    }
+
+    // Use 'click' instead of 'mousedown' to avoid interfering with button onClick
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [isOrgDropdownOpen])
+
+  const handleLogout = () => {
+    // Clear all authentication data
+    localStorage.removeItem("token")
+    localStorage.removeItem("user")
+    localStorage.removeItem("organizations")
+    localStorage.removeItem("selectedOrganization")
+
+    // Redirect to login page
+    router.push("/login")
+  }
+
+  const getRoleBadge = (role: string) => {
+    const badges = {
+      admin: { label: 'Admin', color: 'bg-red-100 text-red-700' },
+      manager: { label: 'Manager', color: 'bg-blue-100 text-blue-700' },
+      member: { label: 'Member', color: 'bg-green-100 text-green-700' }
+    }
+    return badges[role as keyof typeof badges] || badges.member
+  }
+
+  return (
+    <div className="min-h-screen relative overflow-hidden transition-colors duration-500 bg-white/50 dark:bg-slate-950/20">
+      <AnnouncementBanner />
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-10 w-72 h-72 rounded-full blur-3xl animate-float-slow opacity-20" style={{ backgroundColor: 'var(--color-primary)' }}></div>
+        <div className="absolute top-40 right-20 w-96 h-96 rounded-full blur-3xl animate-bounce-slow opacity-20" style={{ backgroundColor: 'var(--color-secondary)' }}></div>
+        <div className="absolute bottom-20 left-1/3 w-80 h-80 rounded-full blur-3xl animate-wave opacity-10" style={{ backgroundColor: 'var(--color-accent)' }}></div>
+      </div>
+
+      {/* Header */}
+      <header className="sticky top-0 z-20 shadow-lg backdrop-blur-xl transition-colors duration-300" style={{ 
+        backgroundColor: 'var(--color-surface)', 
+        borderBottom: `1px solid var(--color-border)` 
+      }}>
+        <div className="px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform duration-300"
+                style={{
+                  background: `linear-gradient(135deg, var(--color-primary), var(--color-secondary))`
+                }}
+              >
+                <Cloud className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex flex-col">
+                <h1 className="text-2xl font-bold bg-clip-text text-transparent"
+                  style={{
+                    backgroundImage: `linear-gradient(90deg, var(--color-primary), var(--color-secondary))`
+                  }}
+                >ScholarFlow</h1>
+                <p className="text-xs font-medium" style={{ color: 'var(--color-textSecondary)' }}>Unified Platform</p>
+              </div>
+            </div>
+
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center gap-6">
+              {organizations.length > 0 && (
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
+                    className="flex items-center gap-2 px-4 py-2 bg-white/70 dark:bg-slate-800/70 rounded-xl border border-white/40 dark:border-slate-700 hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-300 shadow-md hover:shadow-lg"
+                  >
+                    <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
+                      {selectedOrg?.name || 'Select Team'}
+                    </span>
+                    {selectedOrg && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${getRoleBadge(selectedOrg.role).color}`}>
+                        {getRoleBadge(selectedOrg.role).label}
+                      </span>
+                    )}
+                    <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                  </button>
+
+                  {isOrgDropdownOpen && (
+                    <div className="absolute top-full mt-2 right-0 w-64 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 dark:border-slate-700 py-2 z-[9999]">
+                      <div className="px-3 py-2 border-b border-gray-200 dark:border-slate-700">
+                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Your Teams</p>
+                      </div>
+                      {organizations
+                        .filter(org => org.id !== selectedOrg?.id)
+                        .map((org) => (
+                        <button
+                          key={org.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            localStorage.setItem('selectedOrganization', JSON.stringify(org))
+                            onOrgChange(org)
+                            setIsOrgDropdownOpen(false)
+                          }}
+                          className="w-full flex items-center gap-3 px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors rounded-lg mx-1"
+                        >
+                          <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <div className="flex-1 text-left">
+                            <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{org.name}</p>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${getRoleBadge(org.role).color}`}>
+                            {getRoleBadge(org.role).label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Notification Bell */}
+              <NotificationBell />
+
+              {/* Theme Toggle */}
+              <ThemeToggle />
+            </div>
+
+
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-[100] md:hidden">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)} />
+          <nav className="fixed top-0 left-0 bottom-0 w-72 bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out p-6">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
+                  <Cloud className="w-5 h-5 text-white" />
+                </div>
+                <span className="font-bold text-lg dark:text-white">SkyFlow</span>
+              </div>
+              <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg">
+                <X className="w-6 h-6 dark:text-gray-400" />
+              </button>
+            </div>
+
+            {/* Organizations in Mobile Menu */}
+            <div className="mb-8">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">Your Teams</p>
+              <div className="space-y-1">
+                {organizations
+                  .filter(org => org.id !== selectedOrg?.id)
+                  .map((org) => (
+                  <button
+                    key={org.id}
+                    onClick={() => {
+                      localStorage.setItem('selectedOrganization', JSON.stringify(org))
+                      onOrgChange(org)
+                      setIsMenuOpen(false)
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800"
+                  >
+                    <Building2 className="w-4 h-4" />
+                    <span className="text-sm font-medium flex-1 text-left">{org.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${getRoleBadge(org.role).color}`}>
+                      {org.role}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Navigation links */}
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">Navigation</p>
+              <a href="/" className="flex items-center gap-3 px-3 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+                <LayoutDashboard className="w-5 h-5" />
+                <span className="text-sm font-medium">Portal</span>
+              </a>
+              <a href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+                <BarChart3 className="w-5 h-5" />
+                <span className="text-sm font-medium">Dashboard</span>
+              </a>
+
+              <a href="/boards" className="flex items-center gap-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl transition-all">
+                <FolderKanban className="w-5 h-5" />
+                <span className="text-sm font-medium">Boards</span>
+              </a>
+              <a href="/tasks" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+                <CheckSquare className="w-5 h-5" />
+                <span className="text-sm font-medium">Tasks</span>
+              </a>
+              <a href="/team" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+                <Users className="w-5 h-5" />
+                <span className="text-sm font-medium">Team</span>
+              </a>
+              
+              <div className="h-px bg-gray-100 dark:bg-slate-800 my-4" />
+              
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="text-sm font-medium">Log Out</span>
+              </button>
+            </div>
+          </nav>
+        </div>
+      )}
+
+      {/* Main Layout with Sidebar */}
+      <div className="flex relative z-10">
+        {/* Sidebar */}
+        <aside className="hidden lg:flex lg:flex-col w-64 backdrop-blur-xl min-h-[calc(100vh-73px)] sticky top-[73px] shadow-lg transition-colors duration-300" style={{
+          backgroundColor: 'var(--color-surface)',
+          borderRight: `1px solid var(--color-border)`
+        }}>
+          <div className="p-6 flex flex-col h-full">
+            {/* Navigation Section */}
+            <nav className="mb-6 space-y-2">
+              <a href="/" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
+                style={{ color: 'var(--color-text)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundImage = 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundImage = 'none';
+                }}
+              >
+                <LayoutDashboard className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                <span>Portal Home</span>
+              </a>
+              <a href="/dashboard" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
+                style={{ color: 'var(--color-text)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundImage = 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundImage = 'none';
+                }}
+              >
+                <BarChart3 className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                <span>Dashboard</span>
+              </a>
+            </nav>
+
+            {/* Workspace Section */}
+            <div className="pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 px-2" style={{ color: 'var(--color-textSecondary)' }}>Workspace</h2>
+              <nav className="space-y-2">
+
+                <a href="/boards" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                  <FolderKanban className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                  <span>Boards</span>
+                </a>
+                <a href="/tasks" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-emerald-500 hover:to-teal-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                  <CheckSquare className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                  <span>Tasks</span>
+                </a>
+                <a href="/team" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                  <Users className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                  <span>Team</span>
+                </a>
+              </nav>
+            </div>
+
+            {/* Google Workspace Section */}
+            <div className="mt-8 pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 px-2" style={{ color: 'var(--color-textSecondary)' }}>Google Workspace</h2>
+              <nav className="space-y-2">
+                <a href="/calendar" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                  <Calendar className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                  <span>Calendar</span>
+                </a>
+                <a href="/drive" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                  <FolderOpen className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                  <span>Drive</span>
+                </a>
+                {selectedOrg?.role !== 'member' && (
+                  <>
+                    <a href="/sheets" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <FileText className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Sheets</span>
+                    </a>
+
+                    <a href="/analytics" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <BarChart3 className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Analytics</span>
+                    </a>
+                  </>
+                )}
+
+                {/* Settings - Hide for members as per task permission rules */}
+                {selectedOrg?.role !== 'member' && (
+                  <>
+                    <div className="my-2 mx-2" style={{ borderTop: `1px solid var(--color-border)` }} />
+                    <a href="/settings" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <Settings className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Settings</span>
+                    </a>
+                  </>
+                )}
+
+                {/* Creator Notes - only visible to creator */}
+                {user?.email === 'waynepabillon667@gmail.com' && (
+                  <a href="/creator-notes" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-purple-700 rounded-xl hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md bg-purple-50">
+                    <Bug className="w-5 h-5 group-hover:text-white transition-colors" />
+                    <span>Creator Notes</span>
+                  </a>
+                )}
+              </nav>
+            </div>
+
+            {/* User Info Footer */}
+            <div className="mt-auto pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <div className="flex flex-col">
+                <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{user?.name || 'Loading...'}</p>
+                {selectedOrg && (
+                  <span className={`text-xs px-2 py-1 rounded-md inline-block w-fit mt-2 ${getRoleBadge(selectedOrg.role).color}`}>
+                    {getRoleBadge(selectedOrg.role).label}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1">
+          {children}
+        </main>
+      </div>
+
+      {/* Floating Bug Report Button */}
+      <button
+        onClick={() => setShowBugReport(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-full shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center z-50 group"
+        title="Report a bug or issue"
+      >
+        <Bug className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+      </button>
+
+      {/* RPG-Style Interactive Guide */}
+      <InteractiveGuide />
+      <RateUsButton />
+
+      {/* Bug Report Modal */}
+      <BugReportModal isOpen={showBugReport} onClose={() => setShowBugReport(false)} />
+    </div>
+  )
+}

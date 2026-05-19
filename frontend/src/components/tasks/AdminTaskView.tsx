@@ -1,0 +1,982 @@
+"use client"
+
+import { API_URL } from '@/lib/api/client'
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { CheckSquare, Plus, Search, Filter, Calendar, User, Users, AlertCircle, Clock, X, LayoutGrid, Table, Archive, ChevronDown, ChevronRight, RotateCcw, Edit3, FileText } from "lucide-react"
+import ProfessionalTaskCard from "./ProfessionalTaskCard"
+import ProfessionalKanban from "./ProfessionalKanban"
+import TaskTimeline from "./TaskTimeline"
+import MultiAssigneeSelect from "./MultiAssigneeSelect"
+import GoogleSheetImportModal from "./GoogleSheetImportModal"
+import TeamSelector from "../shared/TeamSelector"
+import { FileSpreadsheet, ShieldCheck } from "lucide-react"
+
+interface Task {
+  id: string
+  title: string
+  description: string
+  status: 'todo' | 'in-progress' | 'review' | 'done' | 'archived'
+  priority: 'low' | 'medium' | 'high'
+  assigned_to: string | null
+  assigned_to_name?: string
+  assignees?: { user_id: string, name: string }[]
+  due_date: string | null
+  start_date?: string | null
+  is_absolute?: boolean
+  complexity_weight?: number
+  wbs_code?: string
+  parent_task_id?: string | null
+  created_at: string
+  project_id: string | null
+  project_name?: string
+}
+
+interface Member {
+  user_id: string
+  name: string
+  email: string
+}
+
+interface AdminTaskViewProps {
+  user: any
+  organization: {
+    id: string
+    name: string
+    role: string
+  }
+}
+
+export default function AdminTaskView({ user, organization }: AdminTaskViewProps) {
+  const router = useRouter()
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [filterPriority, setFilterPriority] = useState<string>("all")
+  const [viewMode, setViewMode] = useState<'board' | 'table'>('board')
+  const [isArchiveExpanded, setIsArchiveExpanded] = useState(false)
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as 'low' | 'medium' | 'high',
+    due_date: '',
+    start_date: '',
+    complexity_weight: 1,
+    is_absolute: false,
+    wbs_code: '',
+    parent_task_id: null as string | null
+  })
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [members, setMembers] = useState<Member[]>([])
+  const [isGoogleSyncModalOpen, setIsGoogleSyncModalOpen] = useState(false)
+  const [boardSubView, setBoardSubView] = useState<'team' | 'advisor'>('team')
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchTasks()
+    fetchMembers()
+  }, [organization.id, selectedTeam])
+
+  const fetchTasks = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const url = selectedTeam 
+        ? `${API_URL}/api/organizations/${organization.id}/tasks?team_id=${selectedTeam}`
+        : `${API_URL}/api/organizations/${organization.id}/tasks`
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        setTasks([])
+        setIsLoading(false)
+        return
+      }
+
+      const data = await response.json()
+
+      // Normalize status values from database format to frontend format
+      const normalizedTasks = (data.tasks || []).map((task: Task) => ({
+        ...task,
+        status: normalizeStatus(task.status)
+      }))
+
+      setTasks(normalizedTasks)
+    } catch (error) {
+      console.error('Error fetching tasks:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchMembers = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/organizations/${organization.id}/members`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        const allMembers: Member[] = data.members || []
+
+        if (selectedTeam) {
+          // Fetch team detail to get team-specific members
+          const teamRes = await fetch(`${API_URL}/api/team-groups/${selectedTeam}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          if (teamRes.ok) {
+            const teamData = await teamRes.json()
+            const teamEmails = new Set(
+              (teamData.members || []).map((m: any) => m.email?.toLowerCase()).filter(Boolean)
+            )
+            const filtered = allMembers.filter(m => teamEmails.has(m.email?.toLowerCase()))
+            setMembers(filtered)
+            return
+          }
+        }
+
+        setMembers(allMembers)
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error)
+    }
+  }
+
+  // Normalize database status values to frontend format
+  const normalizeStatus = (status: string): Task['status'] => {
+    const statusMap: Record<string, Task['status']> = {
+      'in_progress': 'in-progress',
+      'in-progress': 'in-progress',
+      'in progress': 'in-progress',
+      'todo': 'todo',
+      'review': 'review',
+      'done': 'done',
+      'completed': 'done',
+      'archived': 'archived'
+    }
+    return statusMap[status] || status as Task['status']
+  }
+
+  const handleCreateTask = async () => {
+    if (!newTask.title) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/organizations/${organization.id}/tasks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          ...newTask,
+          status: 'todo',
+          team_id: selectedTeam
+        })
+      })
+
+      if (response.ok) {
+        fetchTasks()
+        setIsCreateModalOpen(false)
+        setNewTask({
+          title: '',
+          description: '',
+          priority: 'medium',
+          due_date: '',
+          start_date: '',
+          complexity_weight: 1,
+          is_absolute: false,
+          wbs_code: '',
+          parent_task_id: null
+        })
+      }
+    } catch (error) {
+      console.error('Error creating task:', error)
+    }
+  }
+
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData('taskId', taskId)
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+  }
+
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+    // Optimistic update
+    const taskToUpdate = tasks.find(t => t.id === taskId)
+    if (!taskToUpdate) return
+
+    const previousTasks = [...tasks]
+    const updatedTasks = tasks.map(t => 
+      t.id === taskId ? { ...t, status: normalizeStatus(newStatus) as any } : t
+    )
+    setTasks(updatedTasks)
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      })
+
+      if (!response.ok) {
+        // Revert on failure
+        setTasks(previousTasks)
+        const errorData = await response.json()
+        alert(errorData.error || 'Failed to update task status')
+      } else {
+        // Refresh to sync any other changes
+        fetchTasks()
+      }
+    } catch (error) {
+      console.error('Error updating task:', error)
+      setTasks(previousTasks)
+    }
+  }
+
+  const handleDeleteTask = async (taskId: string) => {
+    const taskToDelete = tasks.find(t => t.id === taskId)
+    
+    // Check if it's a synced task
+    const isSynced = taskToDelete && ((taskToDelete as any).source_type === 'sheet' || (taskToDelete as any).google_sheet_id)
+
+    if (isSynced) {
+      alert('This task is synced from Google Sheets. To delete it, please remove it from the source Google Sheet. It will then be removed from SkyFlow upon the next synchronization.')
+      return
+    }
+
+    if (!confirm('Are you sure you want to delete this task?')) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        // Optimistic UI update
+        setTasks(tasks.filter(t => t.id !== taskId))
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Failed to delete task')
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error)
+      alert('Network error while deleting task')
+    }
+  }
+
+  const handleArchiveTask = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`${API_URL}/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'archived' })
+      })
+
+      fetchTasks()
+    } catch (error) {
+      console.error('Error archiving task:', error)
+    }
+  }
+
+  const handleRestoreTask = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`${API_URL}/api/tasks/${taskId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'todo' })
+      })
+
+      fetchTasks()
+    } catch (error) {
+      console.error('Error restoring task:', error)
+    }
+  }
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task)
+    setIsEditModalOpen(true)
+  }
+
+  const handleUpdateTask = async () => {
+    if (!editingTask) return
+
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/tasks/${editingTask.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: editingTask.title,
+          description: editingTask.description,
+          priority: editingTask.priority,
+          due_date: editingTask.due_date,
+          start_date: editingTask.start_date,
+          complexity_weight: editingTask.complexity_weight,
+          is_absolute: editingTask.is_absolute,
+          wbs_code: editingTask.wbs_code,
+          assigned_to: editingTask.assigned_to
+        })
+      })
+      if (response.ok) {
+        setIsEditModalOpen(false)
+        setEditingTask(null)
+        fetchTasks()
+      } else {
+        console.error('Failed to update task')
+      }
+    } catch (error) {
+      console.error('Error updating task:', error)
+    }
+  }
+
+  const getStatusColumn = (status: Task['status']) => {
+    return tasks.filter(task => {
+      const matchesStatus = task.status === status
+      const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
+      return matchesStatus && matchesSearch && matchesPriority
+    })
+  }
+
+  if (isLoading) {
+    return null
+  }
+
+  return (
+    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+              Task Management
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Manage tasks in {organization.name}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Team Selector */}
+            <TeamSelector
+              organizationId={organization.id}
+              selectedTeamId={selectedTeam}
+              onTeamChange={setSelectedTeam}
+              userRole={organization.role as 'admin' | 'manager' | 'member'}
+            />
+            {/* View Toggle */}
+            <div className="flex bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm rounded-xl border border-gray-200 dark:border-slate-700 p-1">
+              <button
+                onClick={() => setViewMode('board')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'board'
+                  ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700/50'
+                  }`}
+                title="Board View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === 'table'
+                  ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-md'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-slate-700/50'
+                  }`}
+                title="Table View"
+              >
+                <Table className="w-4 h-4" />
+              </button>
+            </div>
+
+            <button
+              onClick={() => setIsGoogleSyncModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800/90 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+              title="Sync tasks from Google Sheet"
+            >
+              <FileSpreadsheet className="w-5 h-5 text-green-500" />
+              <span className="font-medium">Sync Google Sheet</span>
+            </button>
+
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span className="font-medium">New Task</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent dark:text-white"
+            />
+          </div>
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 dark:text-white"
+          >
+            <option value="all">All Priorities</option>
+            <option value="high">🔴 High Priority</option>
+            <option value="medium">🟡 Medium</option>
+            <option value="low">🟢 Low Priority</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Board View */}
+      {viewMode === 'board' && (
+        <div className="space-y-6">
+          {/* Board Toggle */}
+          <div className="flex bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800/50 p-1 w-fit mb-6">
+            <button
+              onClick={() => setBoardSubView('team')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${boardSubView === 'team'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/50'
+                }`}
+            >
+              <Users className="w-4 h-4" />
+              Team Board
+            </button>
+            <button
+              onClick={() => setBoardSubView('advisor')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${boardSubView === 'advisor'
+                ? 'bg-amber-600 text-white shadow-md'
+                : 'text-amber-700 hover:bg-amber-100 dark:text-amber-400 dark:hover:bg-amber-900/50'
+                }`}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              Advisor Board
+            </button>
+          </div>
+
+          {boardSubView === 'advisor' ? (
+            /* === ADVISOR MASTER BOARD (Absolute Tasks) === */
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-700/50 rounded-full">
+                  <ShieldCheck className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                  <span className="text-sm font-bold text-amber-700 dark:text-amber-400">Advisor Master Board</span>
+                  <span className="text-xs bg-amber-500 text-white rounded-full px-2 py-0.5">
+                    {tasks.filter(t => t.is_absolute && t.status !== 'archived').length}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Synced and administrative tasks — Locked for regular members</p>
+              </div>
+              <ProfessionalKanban
+                tasks={tasks.filter(t => t.is_absolute && t.status !== 'archived') as any}
+                onTaskClick={(task) => handleEditTask(task as Task)}
+                onAddTask={() => setIsCreateModalOpen(true)}
+                onStatusChange={handleStatusChange}
+                onDeleteTask={handleDeleteTask}
+                onArchiveTask={handleArchiveTask}
+                theme="admin"
+                role="admin"
+              />
+            </div>
+          ) : (
+            /* === TEAM BOARD (Regular Tasks) === */
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-700/50 rounded-full">
+                  <Users className="w-4 h-4 text-blue-700 dark:text-blue-400" />
+                  <span className="text-sm font-bold text-blue-700 dark:text-blue-400">Team Board</span>
+                  <span className="text-xs bg-blue-500 text-white rounded-full px-2 py-0.5">
+                    {tasks.filter(t => !t.is_absolute && t.status !== 'archived').length}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">Internal tasks that team members can freely manage</p>
+              </div>
+              <ProfessionalKanban
+                tasks={tasks.filter(t => !t.is_absolute && t.status !== 'archived') as any}
+                onTaskClick={(task) => handleEditTask(task as Task)}
+                onAddTask={() => setIsCreateModalOpen(true)}
+                onStatusChange={handleStatusChange}
+                onDeleteTask={handleDeleteTask}
+                onArchiveTask={handleArchiveTask}
+                theme="manager"
+                role="admin"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Archived Section */}
+      {getStatusColumn('archived').length > 0 && (
+        <div className="mt-8">
+          <button
+            onClick={() => setIsArchiveExpanded(!isArchiveExpanded)}
+            className="flex items-center gap-3 w-full text-left p-4 bg-white/50 backdrop-blur-sm rounded-xl border border-gray-200 hover:bg-white/70 transition-colors"
+          >
+            {isArchiveExpanded ? (
+              <ChevronDown className="w-5 h-5 text-gray-500" />
+            ) : (
+              <ChevronRight className="w-5 h-5 text-gray-500" />
+            )}
+            <Archive className="w-5 h-5 text-amber-500" />
+            <span className="font-semibold text-gray-700">
+              📦 Archived Tasks
+            </span>
+            <span className="text-sm text-gray-500 ml-2">
+              ({getStatusColumn('archived').length} {getStatusColumn('archived').length === 1 ? 'task' : 'tasks'})
+            </span>
+          </button>
+
+          {isArchiveExpanded && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {getStatusColumn('archived').map((task) => (
+                <div key={task.id} className="relative">
+                  <div className="absolute top-2 right-2 z-20">
+                    <button
+                      onClick={() => handleRestoreTask(task.id)}
+                      className="p-1.5 bg-blue-500 hover:bg-blue-600 rounded-lg shadow-md transition-all"
+                      title="Restore to Todo"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+                  <div className="opacity-70 grayscale hover:opacity-100 hover:grayscale-0 transition-all duration-300">
+                    <ProfessionalTaskCard
+                      task={task as any}
+                      onClick={() => handleEditTask(task as Task)}
+                      onDelete={handleDeleteTask}
+                      onArchive={handleArchiveTask}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Table View */}
+      {viewMode === 'table' && (
+        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-blue-500 to-cyan-500">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Task</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Status</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Priority</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Created</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Due Date</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Assignee</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {tasks.filter(task => {
+                const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase())
+                const matchesPriority = filterPriority === 'all' || task.priority === filterPriority
+                return matchesSearch && matchesPriority
+              }).map((task) => (
+                <tr key={task.id} className="hover:bg-blue-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-gray-500">SF-{task.id.slice(-4).toUpperCase()}</span>
+                      <span className="font-medium text-gray-800">{task.title}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${task.status === 'done' ? 'bg-green-100 text-green-700' :
+                      task.status === 'review' ? 'bg-yellow-100 text-yellow-700' :
+                        task.status === 'in-progress' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-700'
+                      }`}>
+                      {task.status === 'todo' && '📋'}
+                      {task.status === 'in-progress' && '🔄'}
+                      {task.status === 'review' && '👀'}
+                      {task.status === 'done' && '✅'}
+                      {task.status.replace('-', ' ')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                      task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                      {task.priority === 'high' ? '🔴 High' :
+                        task.priority === 'medium' ? '🟡 Medium' : '🟢 Low'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {new Date(task.created_at).toLocaleDateString()}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {task.due_date ? new Date(task.due_date).toLocaleDateString() : '---'}
+                  </td>
+                  <td className="px-6 py-4">
+                    {task.assigned_to_name ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-medium">
+                          {task.assigned_to_name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm text-gray-600">{task.assigned_to_name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">Unassigned</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {tasks.length === 0 && (
+            <div className="text-center py-12">
+              <CheckSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-600">No tasks yet</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create Task Modal */}
+      {isCreateModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-white/40">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                📋 Create New Task
+              </h2>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  Task Title *
+                </label>
+                <input
+                  type="text"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  placeholder="Enter task title"
+                  className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  placeholder="Enter task description"
+                  rows={3}
+                  className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Priority
+                  </label>
+                  <select
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value as 'low' | 'medium' | 'high' })}
+                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="low">🟢 Low Priority</option>
+                    <option value="medium">🟡 Medium Priority</option>
+                    <option value="high">🔴 High Priority</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newTask.due_date}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setNewTask({ ...newTask, due_date: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newTask.start_date}
+                    onChange={(e) => setNewTask({ ...newTask, start_date: e.target.value })}
+                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">
+                    Weight (Complexity)
+                  </label>
+                  <input
+                    type="number"
+                    value={newTask.complexity_weight}
+                    min="1"
+                    max="13"
+                    onChange={(e) => setNewTask({ ...newTask, complexity_weight: parseInt(e.target.value) || 1 })}
+                    className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  Parent Task (Optional)
+                </label>
+                <select
+                  value={newTask.parent_task_id || ''}
+                  onChange={(e) => setNewTask({ ...newTask, parent_task_id: e.target.value || null })}
+                  className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">No Parent (Root Task)</option>
+                  {tasks.filter(t => t.status !== 'archived' && (t as any).source_type === 'sheet').map(t => (
+                    <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                <input
+                  type="checkbox"
+                  id="is_absolute"
+                  checked={newTask.is_absolute}
+                  onChange={(e) => setNewTask({ ...newTask, is_absolute: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                />
+                <label htmlFor="is_absolute" className="text-sm font-medium text-blue-800">
+                  Mark as Absolute Task (Lock for students)
+                </label>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => setIsCreateModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-gray-600 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreateTask}
+                  disabled={!newTask.title}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Create Task ✓
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {isEditModalOpen && editingTask && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                ✏️ Edit Task
+              </h2>
+              <button onClick={() => { setIsEditModalOpen(false); setEditingTask(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Two-column layout */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left: Edit Form */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Task Title
+                  </label>
+                  <input
+                    type="text"
+                    value={editingTask.title}
+                    onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                  <textarea
+                    value={editingTask.description || ''}
+                    onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Priority
+                    </label>
+                    <select
+                      value={editingTask.priority}
+                      onChange={(e) => setEditingTask({ ...editingTask, priority: e.target.value as any })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="high">High Priority</option>
+                      <option value="medium">Medium Priority</option>
+                      <option value="low">Low Priority</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+                    <input
+                      type="date"
+                      value={editingTask.due_date ? editingTask.due_date.split('T')[0] : ''}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setEditingTask({ ...editingTask, due_date: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={editingTask.start_date ? editingTask.start_date.split('T')[0] : ''}
+                      onChange={(e) => setEditingTask({ ...editingTask, start_date: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Weight (Complexity)</label>
+                    <input
+                      type="number"
+                      value={editingTask.complexity_weight || 1}
+                      min="1"
+                      max="13"
+                      onChange={(e) => setEditingTask({ ...editingTask, complexity_weight: parseInt(e.target.value) || 1 })}
+                      className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Parent Task (Optional)
+                  </label>
+                  <select
+                    value={editingTask.parent_task_id || ''}
+                    onChange={(e) => setEditingTask({ ...editingTask, parent_task_id: e.target.value || null })}
+                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="">No Parent (Root Task)</option>
+                    {tasks.filter(t => t.status !== 'archived' && t.id !== editingTask.id && (t as any).source_type === 'sheet').map(t => (
+                      <option key={t.id} value={t.id}>{t.wbs_code ? `${t.wbs_code} — ` : ''}{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Assignees (Primary & Others)</label>
+                  <MultiAssigneeSelect
+                    taskId={editingTask.id}
+                    currentAssignees={editingTask.assignees || []}
+                    members={members}
+                    onAssigneesChange={(newAssignees) => setEditingTask({ ...editingTask, assignees: newAssignees })}
+                  />
+                </div>
+
+                <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
+                  <input
+                    type="checkbox"
+                    id="edit_is_absolute"
+                    checked={editingTask.is_absolute || false}
+                    onChange={(e) => setEditingTask({ ...editingTask, is_absolute: e.target.checked })}
+                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                  />
+                  <label htmlFor="edit_is_absolute" className="text-sm font-medium text-blue-800">
+                    Mark as Absolute Task (Lock for students)
+                  </label>
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={() => { setIsEditModalOpen(false); setEditingTask(null); }}
+                    className="flex-1 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleUpdateTask}
+                    disabled={!editingTask.title.trim()}
+                    className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium disabled:opacity-50 hover:from-blue-600 hover:to-cyan-600"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </div>
+
+              {/* Right: Task Timeline */}
+              <div>
+                <TaskTimeline
+                  taskId={editingTask.id}
+                  currentUserId={user?.id}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Google Sheet Sync Modal */}
+      <GoogleSheetImportModal
+        isOpen={isGoogleSyncModalOpen}
+        onClose={() => setIsGoogleSyncModalOpen(false)}
+        organizationId={organization.id}
+        onImportComplete={() => fetchTasks()}
+        teamId={selectedTeam}
+      />
+    </div>
+  )
+}

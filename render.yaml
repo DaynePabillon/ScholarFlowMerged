@@ -1,0 +1,46 @@
+services:
+  # 1. Backend Service
+  - type: web
+    name: scholarflow-api
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        sync: false # Set this in Render dashboard (Supabase URL)
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        value: https://api.wildcatinnovationlabs.com/api/auth/google/callback
+      - key: FRONTEND_URL
+        value: https://scholarflow.wildcatinnovationlabs.com
+      - key: JWT_SECRET
+        generateValue: true # Generates a random secret automatically
+      - key: RESEND_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BACKEND_URL
+        value: https://api.wildcatinnovationlabs.com
+
+  # 2. Frontend Service
+  - type: web
+    name: scholarflow-web
+    env: node
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://api.wildcatinnovationlabs.com
+      - key: PORT
+        value: 3000
