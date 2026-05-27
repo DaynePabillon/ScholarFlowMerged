@@ -1205,6 +1205,171 @@ async function runMigrations(): Promise<void> {
         ALTER TABLE announcements
           ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
       `
+    },
+    // ─── SDD SkyFlow-ScholarSynch 2.0 Modules ───
+    {
+      name: '043_task_dependencies',
+      sql: `
+        CREATE TABLE IF NOT EXISTS task_dependencies (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          depends_on_task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          dependency_type VARCHAR(20) NOT NULL DEFAULT 'finish_to_start',
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (task_id, depends_on_task_id),
+          CHECK (task_id <> depends_on_task_id),
+          CHECK (dependency_type IN ('finish_to_start','start_to_start','finish_to_finish','start_to_finish'))
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_task_dependencies_task_id ON task_dependencies(task_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_task_dependencies_depends_on ON task_dependencies(depends_on_task_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '044_column_mappings',
+      sql: `
+        CREATE TABLE IF NOT EXISTS column_mappings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          synced_sheet_id UUID REFERENCES synced_sheets(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          sheet_column VARCHAR(255) NOT NULL,
+          kanban_column VARCHAR(100) NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (synced_sheet_id, sheet_column)
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_column_mappings_sheet ON column_mappings(synced_sheet_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_column_mappings_project ON column_mappings(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '045_sync_and_conflict_logs',
+      sql: `
+        CREATE TABLE IF NOT EXISTS sync_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          triggered_by UUID REFERENCES users(id),
+          status VARCHAR(20) NOT NULL DEFAULT 'success',
+          synced_count INTEGER DEFAULT 0,
+          error_message TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          CHECK (status IN ('success','failed','rate_limited','in_progress'))
+        );
+        CREATE TABLE IF NOT EXISTS conflict_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          field_name VARCHAR(100) NOT NULL,
+          sheet_value TEXT,
+          kanban_value TEXT,
+          merged_value TEXT,
+          resolution VARCHAR(20) NOT NULL,
+          resolved_by UUID REFERENCES users(id),
+          resolved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          CHECK (resolution IN ('keep_sheet','keep_kanban','merged'))
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sync_logs_project ON sync_logs(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_conflict_logs_task ON conflict_logs(task_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '046_billing_subscriptions',
+      sql: `
+        CREATE TABLE IF NOT EXISTS subscriptions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          stripe_customer_id VARCHAR(255),
+          stripe_subscription_id VARCHAR(255),
+          plan VARCHAR(20) NOT NULL DEFAULT 'free',
+          status VARCHAR(20) NOT NULL DEFAULT 'active',
+          seat_count INTEGER DEFAULT 5,
+          billing_cycle VARCHAR(10) DEFAULT 'monthly',
+          current_period_start TIMESTAMP WITH TIME ZONE,
+          current_period_end TIMESTAMP WITH TIME ZONE,
+          cancel_at_period_end BOOLEAN DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (organization_id),
+          CHECK (plan IN ('free','standard','pro','enterprise')),
+          CHECK (status IN ('active','past_due','canceled','trialing','incomplete')),
+          CHECK (billing_cycle IN ('monthly','annual'))
+        );
+        CREATE TABLE IF NOT EXISTS billing_events (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          stripe_event_id VARCHAR(255) UNIQUE,
+          event_type VARCHAR(100) NOT NULL,
+          amount_cents INTEGER,
+          currency VARCHAR(10) DEFAULT 'usd',
+          invoice_url TEXT,
+          receipt_url TEXT,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `
+    },
+    {
+      name: '047_report_history',
+      sql: `
+        CREATE TABLE IF NOT EXISTS report_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          generated_by UUID REFERENCES users(id),
+          report_type VARCHAR(50) NOT NULL,
+          format VARCHAR(10) NOT NULL DEFAULT 'pdf',
+          title VARCHAR(255) NOT NULL,
+          sprint_label VARCHAR(100),
+          date_range_start DATE,
+          date_range_end DATE,
+          google_doc_id VARCHAR(255),
+          google_doc_url TEXT,
+          pdf_url TEXT,
+          status VARCHAR(20) DEFAULT 'completed',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          CHECK (format IN ('pdf','google_doc')),
+          CHECK (status IN ('pending','completed','failed'))
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_report_history_project ON report_history(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '048_ms365_tokens',
+      sql: `
+        CREATE TABLE IF NOT EXISTS ms365_tokens (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          expires_at TIMESTAMP WITH TIME ZONE,
+          scope TEXT,
+          ms_user_id VARCHAR(255),
+          ms_user_email VARCHAR(255),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (user_id, organization_id)
+        );
+        CREATE TABLE IF NOT EXISTS ms365_sync_configs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id),
+          workbook_id VARCHAR(255),
+          workbook_name VARCHAR(255),
+          worksheet_id VARCHAR(255),
+          worksheet_name VARCHAR(255),
+          field_mappings JSONB DEFAULT '{}',
+          auto_sync_enabled BOOLEAN DEFAULT false,
+          sync_interval_minutes INTEGER DEFAULT 60,
+          last_synced_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (project_id)
+        );
+      `
     }
   ];
 

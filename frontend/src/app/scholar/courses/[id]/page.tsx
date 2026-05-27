@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
@@ -143,6 +143,8 @@ export default function CourseDetailsPage() {
 
     // AI & Tab State
     const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
     const [activeModalTab, setActiveModalTab] = useState<'discussion' | 'journals' | 'consultations' | 'ai'>('discussion');
     const [journals, setJournals] = useState<any[]>([]);
     const [consultationLogs, setConsultationLogs] = useState<ConsultationLog[]>([]);
@@ -184,7 +186,15 @@ export default function CourseDetailsPage() {
 
     const skyflowUrl = '/boards';
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         setTodayJournalDate(new Date().toISOString().slice(0, 10));
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
@@ -219,7 +229,15 @@ export default function CourseDetailsPage() {
         fetchGroups();
     }, [courseId, router]);
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         if (!requestedGroupId) {
             suppressAutoOpenRef.current = false;
             return;
@@ -725,17 +743,17 @@ export default function CourseDetailsPage() {
 
     if (loading) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex items-center justify-center h-[60vh]">
                     <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
     if (error || !course) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-gray-400">
                     <BookOpen className="w-14 h-14 opacity-30" />
                     <p className="text-lg font-medium">{error || 'Course not found'}</p>
@@ -743,12 +761,12 @@ export default function CourseDetailsPage() {
                         ← Back to Courses
                     </button>
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex items-center gap-3 mb-6">
                     <button onClick={() => router.push('/scholar/courses')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
@@ -1501,6 +1519,6 @@ export default function CourseDetailsPage() {
                     </div>
                 </div>
             )}
-        </SidebarLayout>
+        </AppLayout>
     );
 }

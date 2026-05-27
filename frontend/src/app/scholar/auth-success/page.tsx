@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,6 +8,7 @@ import apiClient from '@/lib/api/client';
 function AuthSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
 
   useEffect(() => {
     const token = searchParams.get('token');

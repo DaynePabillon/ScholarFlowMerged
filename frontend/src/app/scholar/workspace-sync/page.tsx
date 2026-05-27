@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import { apiClient, API_URL } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
@@ -54,6 +54,8 @@ interface Course {
 export default function WorkspaceSyncPage() {
     const router = useRouter();
     const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
     const [loading, setLoading] = useState(true);
 
     const [courses, setCourses] = useState<Course[]>([]);
@@ -84,7 +86,15 @@ export default function WorkspaceSyncPage() {
         setTimeout(() => setToast(null), 4000);
     };
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         
@@ -230,16 +240,16 @@ export default function WorkspaceSyncPage() {
 
     if (loading) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex items-center justify-center h-[60vh]">
                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
                 {/* Header */}
@@ -582,6 +592,6 @@ export default function WorkspaceSyncPage() {
                     {toast.message}
                 </div>
             )}
-        </SidebarLayout>
+        </AppLayout>
     );
 }

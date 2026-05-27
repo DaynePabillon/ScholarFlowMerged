@@ -1,9 +1,12 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
+  const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
 import { CheckCircle2, AlertTriangle, Calendar, ClipboardList, Users } from 'lucide-react';
 
@@ -104,6 +107,16 @@ export default function SemesterReadinessPage() {
     }
   };
 
+
+// Load user + org context for unified AppLayout sidebar
+  useEffect(() => {
+    const u = localStorage.getItem('user')
+    if (u) { try { setUser(JSON.parse(u)) } catch {} }
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const init = async () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -131,11 +144,11 @@ export default function SemesterReadinessPage() {
 
   if (loading) {
     return (
-      <SidebarLayout>
+      <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
         <div className="flex items-center justify-center h-[60vh]">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
         </div>
-      </SidebarLayout>
+      </AppLayout>
     );
   }
 
@@ -190,7 +203,7 @@ export default function SemesterReadinessPage() {
   ];
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
         <div className="portal-panel-strong p-6 sm:p-8 mb-6">
           <span className="portal-chip mb-3">Semester Planning</span>
@@ -321,6 +334,6 @@ export default function SemesterReadinessPage() {
           )}
         </div>
       </div>
-    </SidebarLayout>
+    </AppLayout>
   );
 }

@@ -37,8 +37,8 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
 
   // Load theme preference from localStorage
   useEffect(() => {
-    const savedMode = localStorage.getItem('themeMode') as ThemeMode;
-    if (savedMode) {
+    const savedMode = localStorage.getItem('themeMode');
+    if (savedMode === 'light' || savedMode === 'dark') {
       setMode(savedMode);
     } else {
       // Check system preference

@@ -1,7 +1,9 @@
-"use client"
+﻿"use client"
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import {
   CalendarIcon,
   Plus,
@@ -18,7 +20,7 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
-import SidebarLayout from "@/components/scholar/SidebarLayout"
+import AppLayout from '@/components/layout/AppLayout'
 
 // ─────────────────────────────────────────────
 //  Types
@@ -272,6 +274,14 @@ export default function CalendarPage() {
   const [formData, setFormData] = useState<EventFormData>(blankForm())
 
   // ── Auth ──
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const token = localStorage.getItem("auth_token")
     if (!token) { router.push("/login"); return }
@@ -285,6 +295,14 @@ export default function CalendarPage() {
     }
   }, [router])
 
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => { if (user) fetchEvents() }, [user])
 
   // ── Fetch Events ──
@@ -582,7 +600,7 @@ export default function CalendarPage() {
   }
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* ── Header ── */}
@@ -1186,6 +1204,6 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
-    </SidebarLayout>
+    </AppLayout>
   )
 }

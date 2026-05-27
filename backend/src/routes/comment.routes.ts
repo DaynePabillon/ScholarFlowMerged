@@ -4,6 +4,7 @@ import { authenticateToken } from '../middleware/auth.middleware';
 import activityService from '../services/activity.service';
 import notificationService from '../services/notification.service';
 import { sseService } from '../services/sse.service';
+import { sendCommentAlertEmail } from '../services/email.service';
 
 const router = Router();
 
@@ -104,6 +105,38 @@ router.post('/tasks/:taskId/comments', authenticateToken, async (req: Request, r
         // Notify task assignee if different from commenter (only for regular tasks with UUID assignee)
         if (task.source_type === 'app' && task.assigned_to && task.assigned_to !== user.id) {
             await notificationService.notifyNewComment(taskId, task.title, task.assigned_to, user.name);
+
+            // Module 1.4: Send email alert to assignee
+            const assigneeResult = await pool.query(
+                `SELECT email FROM users WHERE id = $1`, [task.assigned_to]
+            );
+            if (assigneeResult.rows.length > 0) {
+                sendCommentAlertEmail({
+                    to: assigneeResult.rows[0].email,
+                    commenterName: user.name,
+                    taskTitle: task.title,
+                    taskId,
+                    commentText: commentText.trim()
+                }).catch(() => {}); // fire-and-forget, don't block response
+            }
+        }
+
+        // Also notify all multi-assignees (assigned_to_ids) except the commenter
+        if (task.source_type === 'app' && Array.isArray(task.assigned_to_ids)) {
+            const otherAssignees = (task.assigned_to_ids as string[]).filter((id: string) => id !== user.id && id !== task.assigned_to);
+            for (const assigneeId of otherAssignees) {
+                await notificationService.notifyNewComment(taskId, task.title, assigneeId, user.name);
+                const aResult = await pool.query(`SELECT email FROM users WHERE id = $1`, [assigneeId]);
+                if (aResult.rows.length > 0) {
+                    sendCommentAlertEmail({
+                        to: aResult.rows[0].email,
+                        commenterName: user.name,
+                        taskTitle: task.title,
+                        taskId,
+                        commentText: commentText.trim()
+                    }).catch(() => {});
+                }
+            }
         }
 
         sseService.broadcastComment(taskId, result.rows[0]);

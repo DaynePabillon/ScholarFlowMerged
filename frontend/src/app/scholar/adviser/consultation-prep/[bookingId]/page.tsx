@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
 import {
   X,
@@ -77,6 +77,9 @@ export default function ConsultationPrepPage() {
   const router = useRouter();
   const bookingId = String(params?.bookingId || '');
 
+  const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
   const [data, setData] = useState<PrepData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -100,6 +103,16 @@ export default function ConsultationPrepPage() {
     members: true,
   });
 
+
+  // Load user + org context for unified AppLayout sidebar
+  useEffect(() => {
+    const u = localStorage.getItem('user')
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (u) { try { setUser(JSON.parse(u)) } catch {} }
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const fetchPrepData = async () => {
       try {
@@ -120,6 +133,14 @@ export default function ConsultationPrepPage() {
     }
   }, [bookingId]);
 
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     if (!data) return;
 
@@ -227,20 +248,20 @@ export default function ConsultationPrepPage() {
 
   if (loading) {
     return (
-      <SidebarLayout>
+      <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
             <p className="text-gray-600">Loading consultation prep...</p>
           </div>
         </div>
-      </SidebarLayout>
+      </AppLayout>
     );
   }
 
   if (error || !data) {
     return (
-      <SidebarLayout>
+      <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
         <div className="max-w-2xl mx-auto px-4 py-8">
           <div className="bg-red-50 border border-red-200 rounded-2xl p-6 flex items-center gap-3">
             <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0" />
@@ -252,7 +273,7 @@ export default function ConsultationPrepPage() {
             </div>
           </div>
         </div>
-      </SidebarLayout>
+      </AppLayout>
     );
   }
 
@@ -267,7 +288,7 @@ export default function ConsultationPrepPage() {
   };
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -709,7 +730,7 @@ export default function ConsultationPrepPage() {
           </div>
         )}
       </div>
-    </SidebarLayout>
+    </AppLayout>
   );
 }
 

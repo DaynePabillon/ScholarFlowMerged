@@ -130,9 +130,10 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
 };
 
 export const getThemeForRole = (role: UserRole, mode: ThemeMode): ThemeColors => {
-  return roleThemes[role][mode];
+  const roleTheme = roleThemes[role] ?? roleThemes.member;
+  return roleTheme[mode] ?? roleTheme.light;
 };
 
 export const getRoleThemeName = (role: UserRole): string => {
-  return roleThemes[role].name;
+  return (roleThemes[role] ?? roleThemes.member).name;
 };

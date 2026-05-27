@@ -81,4 +81,49 @@ Status: ${data.conStat}
     // Logic for exporting all records to a new doc
     return { success: true };
   }
+
+  async createReport(userId: number, reportTitle: string, tasks: any[]): Promise<{ docId: string; docUrl: string }> {
+    const { rows: users } = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+    const userEmail = users[0]?.email;
+    if (!userEmail) throw new Error('User not found');
+
+    const { rows: accounts } = await pool.query(
+      'SELECT "googleAccessToken" FROM ss_account WHERE "accountEmail" = $1',
+      [userEmail]
+    );
+    const accessToken = accounts[0]?.googleAccessToken;
+    if (!accessToken) throw new Error('No Google token found for user');
+
+    const auth = new google.auth.OAuth2(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET
+    );
+    auth.setCredentials({ access_token: accessToken });
+
+    const docs = google.docs({ version: 'v1', auth });
+
+    const createRes = await docs.documents.create({
+      requestBody: { title: reportTitle }
+    });
+    const docId = createRes.data.documentId!;
+
+    const lines: string[] = [`${reportTitle}\n`, `Generated: ${new Date().toLocaleString()}\n\n`];
+    for (const t of tasks) {
+      lines.push(
+        `[${t.wbs_code || '—'}] ${t.title} | ${t.status} | ${t.priority || '—'} | Due: ${t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}\n`
+      );
+    }
+
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: {
+        requests: [{ insertText: { location: { index: 1 }, text: lines.join('') } }]
+      }
+    });
+
+    return {
+      docId,
+      docUrl: `https://docs.google.com/document/d/${docId}/edit`
+    };
+  }
 }

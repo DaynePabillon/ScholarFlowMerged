@@ -1,8 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import Link from 'next/link';
 import apiClient from '@/lib/api/client';
 import {
@@ -152,6 +154,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     let isMounted = true;
 
@@ -364,11 +374,11 @@ export default function DashboardPage() {
 
   if (!user || loading) {
     return (
-      <SidebarLayout>
+      <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
         <div className="flex items-center justify-center h-[60vh]">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
         </div>
-      </SidebarLayout>
+      </AppLayout>
     );
   }
 
@@ -491,7 +501,7 @@ export default function DashboardPage() {
   const coursePreview = courses.slice(0, 9);
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 py-8 sm:py-10 space-y-8">
         <section className="portal-panel-strong relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-white/55 via-transparent to-transparent dark:from-white/8" />
@@ -695,6 +705,6 @@ export default function DashboardPage() {
           </div>
         </section>
       </div>
-    </SidebarLayout>
+    </AppLayout>
   );
 }

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 
@@ -9,7 +9,8 @@ export default function CourseDetailError({
     error: Error & { digest?: string };
     reset: () => void;
 }) {
-    useEffect(() => {
+  
+  useEffect(() => {
         console.error('Course detail page error:', error);
     }, [error]);
 

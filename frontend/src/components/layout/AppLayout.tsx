@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Cloud, LogOut, Menu, X, Calendar, FileText, FolderOpen, BarChart3, Users, FolderKanban, CheckSquare, Building2, ChevronDown, Plus, UserPlus, Settings, LayoutDashboard, RefreshCw, Bug } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Cloud, LogOut, Menu, X, Calendar, FileText, FolderOpen, BarChart3, Users, FolderKanban, CheckSquare, Building2, ChevronDown, Plus, UserPlus, Settings, LayoutDashboard, RefreshCw, Bug, Plug, CreditCard, GraduationCap, BookOpen, ClipboardList, Shield, AlertTriangle } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
 import { useTheme } from "@/contexts/ThemeContext"
 import NotificationBell from "@/components/notifications/NotificationBell"
 import BugReportModal from "@/components/reports/BugReportModal"
@@ -17,20 +17,27 @@ interface Organization {
 }
 
 interface AppLayoutProps {
-  user: any
-  organizations: Organization[]
-  selectedOrg: Organization | null
-  onOrgChange: (org: Organization) => void
+  user?: any
+  organizations?: Organization[]
+  selectedOrg?: Organization | null
+  onOrgChange?: (org: Organization) => void
   children: React.ReactNode
 }
 
-export default function AppLayout({ user, organizations, selectedOrg, onOrgChange, children }: AppLayoutProps) {
+export default function AppLayout({ user, organizations = [], selectedOrg = null, onOrgChange = () => {}, children }: AppLayoutProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { setRole } = useTheme()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false)
   const [showBugReport, setShowBugReport] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const onScholarPath = pathname?.startsWith('/scholar') ?? false
+  const [skyflowOpen, setSkyflowOpen] = useState(!onScholarPath)
+  const [scholarOpen, setScholarOpen] = useState(onScholarPath)
+  const [workspaceOpen, setWorkspaceOpen] = useState(true)
+  const [scholarRole, setScholarRole] = useState('')
 
   // Update theme role when organization changes
   useEffect(() => {
@@ -38,6 +45,17 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
       setRole(selectedOrg.role)
     }
   }, [selectedOrg, setRole])
+
+  // Read ScholarSync role from cached profile
+  useEffect(() => {
+    const profile = localStorage.getItem('scholar_profile')
+    if (profile) {
+      try {
+        const p = JSON.parse(profile)
+        setScholarRole(p.scholarsyncRole || p.role || '')
+      } catch {}
+    }
+  }, [])
 
 
   // Close dropdown when clicking outside
@@ -184,7 +202,7 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
                   <Cloud className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold text-lg dark:text-white">SkyFlow</span>
+                <span className="font-bold text-lg dark:text-white">ScholarFlow</span>
               </div>
               <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg">
                 <X className="w-6 h-6 dark:text-gray-400" />
@@ -219,7 +237,6 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
 
             {/* Navigation links */}
             <div className="space-y-1">
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">Navigation</p>
               <a href="/" className="flex items-center gap-3 px-3 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
                 <LayoutDashboard className="w-5 h-5" />
                 <span className="text-sm font-medium">Portal</span>
@@ -229,22 +246,109 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
                 <span className="text-sm font-medium">Dashboard</span>
               </a>
 
-              <a href="/boards" className="flex items-center gap-3 px-3 py-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl transition-all">
-                <FolderKanban className="w-5 h-5" />
-                <span className="text-sm font-medium">Boards</span>
-              </a>
-              <a href="/tasks" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
-                <CheckSquare className="w-5 h-5" />
-                <span className="text-sm font-medium">Tasks</span>
-              </a>
-              <a href="/team" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
-                <Users className="w-5 h-5" />
-                <span className="text-sm font-medium">Team</span>
-              </a>
-              
+              {/* Mobile SkyFlow group */}
+              <button onClick={() => setSkyflowOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                <span className="flex items-center gap-1.5"><Cloud className="w-3.5 h-3.5"/>SkyFlow</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${skyflowOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {skyflowOpen && (
+                <>
+                  <a href="/boards" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <FolderKanban className="w-4 h-4" /><span className="text-sm font-medium">Boards</span>
+                  </a>
+                  <a href="/tasks" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <CheckSquare className="w-4 h-4" /><span className="text-sm font-medium">Tasks</span>
+                  </a>
+                  <a href="/team" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <Users className="w-4 h-4" /><span className="text-sm font-medium">Team</span>
+                  </a>
+                  <a href="/gantt" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <BarChart3 className="w-4 h-4" /><span className="text-sm font-medium">Timeline</span>
+                  </a>
+                  <a href="/reports" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <FileText className="w-4 h-4" /><span className="text-sm font-medium">Reports</span>
+                  </a>
+                  <a href="/integrations" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <Plug className="w-4 h-4" /><span className="text-sm font-medium">Integrations</span>
+                  </a>
+                  {selectedOrg?.role !== 'member' && (
+                    <a href="/billing" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                      <CreditCard className="w-4 h-4" /><span className="text-sm font-medium">Billing</span>
+                    </a>
+                  )}
+                </>
+              )}
+
+              {/* Mobile ScholarSync group */}
+              <button onClick={() => setScholarOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5"/>ScholarSync</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${scholarOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {scholarOpen && (
+                <>
+                  <a href="/scholar/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <LayoutDashboard className="w-4 h-4" /><span className="text-sm font-medium">Academic Dashboard</span>
+                  </a>
+                  <a href="/scholar/courses" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <BookOpen className="w-4 h-4" /><span className="text-sm font-medium">Courses</span>
+                  </a>
+                  {scholarRole === 'Student' ? (
+                    <a href="/scholar/booking" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                      <Calendar className="w-4 h-4" /><span className="text-sm font-medium">Consultation</span>
+                    </a>
+                  ) : (
+                    <a href="/scholar/schedule" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                      <Calendar className="w-4 h-4" /><span className="text-sm font-medium">Schedule</span>
+                    </a>
+                  )}
+                  <a href="/scholar/workspace-sync" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <RefreshCw className="w-4 h-4" /><span className="text-sm font-medium">Workspace Sync</span>
+                  </a>
+                  {scholarRole === 'Admin' && (
+                    <>
+                      <a href="/scholar/admin/accounts" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                        <Shield className="w-4 h-4" /><span className="text-sm font-medium">Accounts</span>
+                      </a>
+                      <a href="/scholar/admin/adviser-availability" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                        <Users className="w-4 h-4" /><span className="text-sm font-medium">Adviser Availability</span>
+                      </a>
+                      <a href="/scholar/admin/semester-readiness" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                        <ClipboardList className="w-4 h-4" /><span className="text-sm font-medium">Semester Readiness</span>
+                      </a>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* Mobile Google Workspace group */}
+              <button onClick={() => setWorkspaceOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                <span className="flex items-center gap-1.5"><FolderOpen className="w-3.5 h-3.5"/>Google Workspace</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${workspaceOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {workspaceOpen && (
+                <>
+                  <a href="/calendar" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <Calendar className="w-4 h-4" /><span className="text-sm font-medium">Calendar</span>
+                  </a>
+                  <a href="/drive" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <FolderOpen className="w-4 h-4" /><span className="text-sm font-medium">Drive</span>
+                  </a>
+                  {selectedOrg?.role !== 'member' && (
+                    <>
+                      <a href="/sheets" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                        <FileText className="w-4 h-4" /><span className="text-sm font-medium">Sheets</span>
+                      </a>
+                      <a href="/analytics" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                        <BarChart3 className="w-4 h-4" /><span className="text-sm font-medium">Analytics</span>
+                      </a>
+                    </>
+                  )}
+                </>
+              )}
+
               <div className="h-px bg-gray-100 dark:bg-slate-800 my-4" />
-              
-              <button 
+
+              <button
                 onClick={handleLogout}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition-all"
               >
@@ -292,72 +396,170 @@ export default function AppLayout({ user, organizations, selectedOrg, onOrgChang
               </a>
             </nav>
 
-            {/* Workspace Section */}
-            <div className="pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
-              <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 px-2" style={{ color: 'var(--color-textSecondary)' }}>Workspace</h2>
-              <nav className="space-y-2">
-
-                <a href="/boards" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                  <FolderKanban className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                  <span>Boards</span>
-                </a>
-                <a href="/tasks" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-emerald-500 hover:to-teal-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                  <CheckSquare className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                  <span>Tasks</span>
-                </a>
-                <a href="/team" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                  <Users className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                  <span>Team</span>
-                </a>
-              </nav>
-            </div>
-
-            {/* Google Workspace Section */}
-            <div className="mt-8 pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>
-              <h2 className="text-xs font-semibold uppercase tracking-wider mb-4 px-2" style={{ color: 'var(--color-textSecondary)' }}>Google Workspace</h2>
-              <nav className="space-y-2">
-                <a href="/calendar" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                  <Calendar className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                  <span>Calendar</span>
-                </a>
-                <a href="/drive" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                  <FolderOpen className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                  <span>Drive</span>
-                </a>
-                {selectedOrg?.role !== 'member' && (
-                  <>
-                    <a href="/sheets" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                      <FileText className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                      <span>Sheets</span>
-                    </a>
-
-                    <a href="/analytics" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                      <BarChart3 className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                      <span>Analytics</span>
-                    </a>
-                  </>
-                )}
-
-                {/* Settings - Hide for members as per task permission rules */}
-                {selectedOrg?.role !== 'member' && (
-                  <>
-                    <div className="my-2 mx-2" style={{ borderTop: `1px solid var(--color-border)` }} />
-                    <a href="/settings" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                      <Settings className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                      <span>Settings</span>
-                    </a>
-                  </>
-                )}
-
-                {/* Creator Notes - only visible to creator */}
-                {user?.email === 'waynepabillon667@gmail.com' && (
-                  <a href="/creator-notes" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-purple-700 rounded-xl hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md bg-purple-50">
-                    <Bug className="w-5 h-5 group-hover:text-white transition-colors" />
-                    <span>Creator Notes</span>
+            {/* ── SkyFlow Section ── */}
+            <div className="pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <button
+                onClick={() => setSkyflowOpen(o => !o)}
+                className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200 group"
+                style={{ color: 'var(--color-textSecondary)' }}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
+                  <Cloud className="w-3.5 h-3.5" /> SkyFlow
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${skyflowOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {skyflowOpen && (
+                <nav className="space-y-1 mt-1 ml-1">
+                  <a href="/boards" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <FolderKanban className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Boards</span>
                   </a>
-                )}
-              </nav>
+                  <a href="/tasks" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-emerald-500 hover:to-teal-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <CheckSquare className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Tasks</span>
+                  </a>
+                  <a href="/team" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <Users className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Team</span>
+                  </a>
+                  <a href="/gantt" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <BarChart3 className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Timeline</span>
+                  </a>
+                  <a href="/reports" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <FileText className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Reports</span>
+                  </a>
+                  <a href="/integrations" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <Plug className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Integrations</span>
+                  </a>
+                  {selectedOrg?.role !== 'member' && (
+                    <a href="/billing" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <CreditCard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Billing</span>
+                    </a>
+                  )}
+                </nav>
+              )}
             </div>
+
+            {/* ── ScholarSync Section ── */}
+            <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <button
+                onClick={() => setScholarOpen(o => !o)}
+                className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200"
+                style={{ color: 'var(--color-textSecondary)' }}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
+                  <GraduationCap className="w-3.5 h-3.5" /> ScholarSync
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${scholarOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {scholarOpen && (
+                <nav className="space-y-1 mt-1 ml-1">
+                  <a href="/scholar/dashboard" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <LayoutDashboard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Academic Dashboard</span>
+                  </a>
+                  <a href="/scholar/courses" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <BookOpen className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Courses</span>
+                  </a>
+                  {scholarRole === 'Student' ? (
+                    <a href="/scholar/booking" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <Calendar className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Consultation</span>
+                    </a>
+                  ) : (
+                    <a href="/scholar/schedule" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <Calendar className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Schedule</span>
+                    </a>
+                  )}
+                  <a href="/scholar/workspace-sync" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <RefreshCw className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Workspace Sync</span>
+                  </a>
+                  {scholarRole === 'Admin' && (
+                    <>
+                      <a href="/scholar/admin/accounts" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <Shield className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Accounts</span>
+                      </a>
+                      <a href="/scholar/admin/data-integrity" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <AlertTriangle className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Data Integrity</span>
+                      </a>
+                      <a href="/scholar/admin/adviser-availability" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <Users className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Adviser Availability</span>
+                      </a>
+                      <a href="/scholar/admin/semester-readiness" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <ClipboardList className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Semester Readiness</span>
+                      </a>
+                    </>
+                  )}
+                </nav>
+              )}
+            </div>
+
+            {/* ── Google Workspace Section ── */}
+            <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <button
+                onClick={() => setWorkspaceOpen(o => !o)}
+                className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200"
+                style={{ color: 'var(--color-textSecondary)' }}
+              >
+                <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
+                  <FolderOpen className="w-3.5 h-3.5" /> Google Workspace
+                </span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${workspaceOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {workspaceOpen && (
+                <nav className="space-y-1 mt-1 ml-1">
+                  <a href="/calendar" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <Calendar className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Calendar</span>
+                  </a>
+                  <a href="/drive" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <FolderOpen className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Drive</span>
+                  </a>
+                  {selectedOrg?.role !== 'member' && (
+                    <>
+                      <a href="/sheets" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <FileText className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Sheets</span>
+                      </a>
+                      <a href="/analytics" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <BarChart3 className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Analytics</span>
+                      </a>
+                    </>
+                  )}
+                </nav>
+              )}
+            </div>
+
+            {/* Settings + Creator Notes */}
+            {selectedOrg?.role !== 'member' && (
+              <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
+                <nav className="space-y-1">
+                  <a href="/settings" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <Settings className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Settings</span>
+                  </a>
+                  {user?.email === 'waynepabillon667@gmail.com' && (
+                    <a href="/creator-notes" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-purple-700 rounded-xl hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md bg-purple-50">
+                      <Bug className="w-4 h-4 group-hover:text-white transition-colors" />
+                      <span>Creator Notes</span>
+                    </a>
+                  )}
+                </nav>
+              </div>
+            )}
 
             {/* User Info Footer */}
             <div className="mt-auto pt-6" style={{ borderTop: `1px solid var(--color-border)` }}>

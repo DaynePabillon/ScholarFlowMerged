@@ -1,7 +1,9 @@
-"use client"
+﻿"use client"
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect, useMemo, useRef, Suspense } from "react"
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import {
   Calendar,
   Plus,
@@ -15,7 +17,7 @@ import {
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
-import SidebarLayout from "@/components/scholar/SidebarLayout"
+import AppLayout from '@/components/layout/AppLayout'
 
 interface ConsultationSlot {
   slot_id: number
@@ -194,6 +196,14 @@ function ScheduleContent() {
   const autoCourseId = Number(searchParams.get('courseId') || 0)
 
   // Auth
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const token = localStorage.getItem("auth_token")
     if (!token) { router.push("/login"); return }
@@ -223,6 +233,14 @@ function ScheduleContent() {
   }, [router])
 
   // Fetch slots and courses
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     if (user?.id) {
       fetchSlots()
@@ -230,6 +248,14 @@ function ScheduleContent() {
     }
   }, [user])
 
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     if (!user?.id) return
 
@@ -245,6 +271,14 @@ function ScheduleContent() {
   }, [user?.id])
 
   // Close menu when clicking outside
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     if (!openActionMenu) return
 
@@ -336,6 +370,14 @@ function ScheduleContent() {
   }
 
   // Fetch groups when course changes
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     if (formData.courseId) {
       fetchGroups(formData.courseId)
@@ -770,6 +812,14 @@ function ScheduleContent() {
     setShowConsultationForm(true)
   }
 
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     if (!user?.id || !autoOpenRecord || autoRecordHandledRef.current) return
     if (!Number.isFinite(autoSlotId) || autoSlotId <= 0) return
@@ -1182,7 +1232,7 @@ function ScheduleContent() {
   }
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
         {/* Header */}
@@ -2091,7 +2141,7 @@ function ScheduleContent() {
           </div>
         )}
       </div>
-    </SidebarLayout>
+    </AppLayout>
   )
 }
 

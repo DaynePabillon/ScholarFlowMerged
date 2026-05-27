@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import { apiClient } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
@@ -30,13 +30,23 @@ type DriveFile = {
 
 export default function DrivePage() {
     const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
     const [files, setFiles] = useState<DriveFile[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
     const router = useRouter();
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         try { setUser(jwtDecode(token)); } catch { router.push('/login'); return; }
@@ -91,7 +101,7 @@ export default function DrivePage() {
     const filtered = files.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 {/* Header */}
                 <div className="flex items-start justify-between mb-8">
@@ -180,6 +190,6 @@ export default function DrivePage() {
                     </p>
                 )}
             </div>
-        </SidebarLayout>
+        </AppLayout>
     );
 }

@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import AIResultModal from '@/components/scholar/AIResultModal';
 import { useAIStore } from '@/store/scholar/ai.store';
 import { apiClient } from '@/lib/api/client';
@@ -36,6 +36,8 @@ export default function GroupPage() {
     const groupId = params.groupId as string;
 
     const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
     const [group, setGroup] = useState<Group | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [journals, setJournals] = useState<any[]>([]);
@@ -122,7 +124,15 @@ export default function GroupPage() {
         }
     };
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) {
             router.push('/login');
@@ -140,7 +150,15 @@ export default function GroupPage() {
         fetchGroupData();
     }, [groupId, router]);
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const fetchDetails = async () => {
             if (!selectedJournal) {
                 setJournalAttendance({});
@@ -231,12 +249,12 @@ export default function GroupPage() {
 
     if (error || !group) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="min-h-screen bg-white text-gray-900 font-sans p-8 flex flex-col items-center justify-center">
                     <div className="text-red-500 font-bold mb-4">{error || "Group not found"}</div>
                     <button onClick={() => router.push(`/scholar/courses/${courseId}`)} className="text-blue-600 hover:underline">Return to Course</button>
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
@@ -255,7 +273,7 @@ export default function GroupPage() {
     const canCreateTasks = isLeader || isAdmin;
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="h-full bg-slate-50 flex flex-col min-h-screen">
                 <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
                     
@@ -832,6 +850,6 @@ export default function GroupPage() {
                 {canUseAI && showAIModal && <AIResultModal onClose={() => setShowAIModal(false)} />}
                 </main>
             </div>
-        </SidebarLayout>
+        </AppLayout>
     );
 }

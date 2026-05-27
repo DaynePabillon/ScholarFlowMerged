@@ -1,9 +1,12 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+  const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
 import { AlertTriangle, CheckCircle2, Shield, Users, BookOpen, ArrowRight } from 'lucide-react';
 
@@ -42,6 +45,16 @@ export default function AdminDataIntegrityPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [issues, setIssues] = useState<IntegrityIssue[]>([]);
 
+
+// Load user + org context for unified AppLayout sidebar
+  useEffect(() => {
+    const u = localStorage.getItem('user')
+    if (u) { try { setUser(JSON.parse(u)) } catch {} }
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const load = async () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
@@ -89,16 +102,16 @@ export default function AdminDataIntegrityPage() {
 
   if (loading) {
     return (
-      <SidebarLayout>
+      <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
         <div className="flex items-center justify-center h-[60vh]">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
         </div>
-      </SidebarLayout>
+      </AppLayout>
     );
   }
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
         <div className="portal-panel-strong p-6 sm:p-8 mb-8">
           <span className="portal-chip mb-3">Admin Review</span>
@@ -197,6 +210,6 @@ export default function AdminDataIntegrityPage() {
           </div>
         </div>
       </div>
-    </SidebarLayout>
+    </AppLayout>
   );
 }

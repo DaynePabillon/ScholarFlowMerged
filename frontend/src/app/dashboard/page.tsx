@@ -2,7 +2,7 @@
 
 import { apiClient, API_URL } from '@/lib/api/client'
 import { useState, useEffect, useCallback } from "react"
-import { TrendingUp, Users, FolderKanban, CheckSquare, Calendar, X, FileText, BarChart3, Target, Sparkles, Building2, ArrowRight, Loader2, ExternalLink, MessageSquare, Award, RefreshCw } from "lucide-react"
+import { TrendingUp, Users, FolderKanban, CheckSquare, Calendar, X, FileText, BarChart3, Target, Sparkles, Building2, ArrowRight, Loader2, ExternalLink, MessageSquare, Award, RefreshCw, Plug, CreditCard } from "lucide-react"
 import { useRouter } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
 import OrganizationGateway from "@/components/organization/OrganizationGateway"
@@ -290,6 +290,10 @@ export default function Home() {
           {isTeacher && <QuickAction href="/analytics" icon={<BarChart3 className="w-4 h-4" />} label="AI Analytics" color="indigo" />}
           {isTeacher && <QuickAction href="/scholar/dashboard" icon={<ExternalLink className="w-4 h-4" />} label="Academic Portal" color="purple" />}
           <QuickAction href="/team" icon={<Users className="w-4 h-4" />} label="Team Members" color="cyan" />
+          <QuickAction href="/gantt" icon={<Calendar className="w-4 h-4" />} label="Timeline" color="cyan" />
+          <QuickAction href="/reports" icon={<FileText className="w-4 h-4" />} label="Reports" color="orange" />
+          <QuickAction href="/integrations" icon={<Plug className="w-4 h-4" />} label="Integrations" color="violet" />
+          {isTeacher && <QuickAction href="/billing" icon={<CreditCard className="w-4 h-4" />} label="Billing" color="indigo" />}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -444,6 +448,45 @@ export default function Home() {
               </div>
             )}
 
+            {/* What's New */}
+            <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
+              <h3 className="font-bold flex items-center gap-2 mb-4" style={{ color: 'var(--color-text)' }}>
+                <Sparkles className="w-5 h-5 text-indigo-500" /> What's New
+              </h3>
+              <div className="space-y-1">
+                <a href="/gantt" className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50/80 transition-colors group">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-sky-500" />
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Gantt Timeline</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-500 transition-colors" />
+                </a>
+                <a href="/reports" className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50/80 transition-colors group">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-amber-500" />
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Report Exports</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-amber-500 transition-colors" />
+                </a>
+                <a href="/integrations" className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50/80 transition-colors group">
+                  <div className="flex items-center gap-2">
+                    <Plug className="w-4 h-4 text-violet-500" />
+                    <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Integrations</span>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-violet-500 transition-colors" />
+                </a>
+                {isTeacher && (
+                  <a href="/billing" className="flex items-center justify-between p-2.5 rounded-xl hover:bg-gray-50/80 transition-colors group">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-4 h-4 text-emerald-500" />
+                      <span className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>Billing & Plans</span>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-emerald-500 transition-colors" />
+                  </a>
+                )}
+              </div>
+            </div>
+
             {/* Checkpoint Summary */}
             {teamData && teamData.checkpoints.total > 0 && (
               <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
@@ -549,6 +592,8 @@ function QuickAction({ href, icon, label, color, external }: { href: string; ico
     indigo: 'linear-gradient(to right, #6366f1, #a855f7)',
     purple: 'linear-gradient(to right, #a855f7, #ec4899)',
     cyan: 'linear-gradient(to right, #06b6d4, #14b8a6)',
+    orange: 'linear-gradient(to right, #f97316, #ef4444)',
+    violet: 'linear-gradient(to right, #7c3aed, #a855f7)',
   }
   const gradient = gradientMap[color] ?? gradientMap.blue
   return (
