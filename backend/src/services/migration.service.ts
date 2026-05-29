@@ -1450,6 +1450,16 @@ async function runMigrations(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_task_assignees_task_id ON task_assignees(task_id);
         CREATE INDEX IF NOT EXISTS idx_task_assignees_user_id ON task_assignees(user_id);
       `
+    },
+    {
+      name: '052_sheet_tasks_missing_columns',
+      sql: `
+        -- workspace.service.ts syncSheet() inserts progress_percent and luxury_weight into
+        -- sheet_tasks but these columns were never added to that table (migration 025 only
+        -- added complexity_weight, is_absolute, wbs_code, start_date, team_id).
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS progress_percent NUMERIC DEFAULT 0;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS luxury_weight INTEGER DEFAULT 1;
+      `
     }
   ];
 

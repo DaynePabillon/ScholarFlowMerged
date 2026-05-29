@@ -23,6 +23,20 @@ router.get('/classroom/courses', authenticateToken, async (req: AuthRequest, res
     res.json({ courses });
   } catch (error: any) {
     console.error('Error fetching classroom courses:', error);
+    // Detect Google "insufficient scopes" — user's token was issued before Classroom
+    // scopes were added; they must reconnect to grant those scopes.
+    const isScope =
+      error?.code === 403 ||
+      error?.status === 403 ||
+      error?.message?.toLowerCase().includes('insufficient') ||
+      error?.message?.toLowerCase().includes('permission') ||
+      (error?.errors && error.errors[0]?.domain === 'global' && error.errors[0]?.reason === 'forbidden');
+    if (isScope) {
+      return res.status(403).json({
+        error: 'Google Classroom permissions are required. Please reconnect your Google account to grant Classroom access.',
+        reconnect_required: true
+      });
+    }
     res.status(500).json({ error: 'Failed to fetch courses', details: error.message });
   }
 });
@@ -45,6 +59,17 @@ router.get('/classroom/courses/:courseId/students', authenticateToken, async (re
     res.json({ students });
   } catch (error: any) {
     console.error('Error fetching classroom students:', error);
+    const isScope =
+      error?.code === 403 ||
+      error?.status === 403 ||
+      error?.message?.toLowerCase().includes('insufficient') ||
+      error?.message?.toLowerCase().includes('permission');
+    if (isScope) {
+      return res.status(403).json({
+        error: 'Google Classroom permissions are required. Please reconnect your Google account.',
+        reconnect_required: true
+      });
+    }
     res.status(500).json({ error: 'Failed to fetch students', details: error.message });
   }
 });

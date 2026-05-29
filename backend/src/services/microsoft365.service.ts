@@ -85,11 +85,27 @@ const getValidToken = async (userId: string, organizationId: string): Promise<st
 
 export const listWorkbooks = async (userId: string, organizationId: string) => {
   const token = await getValidToken(userId, organizationId);
+  // Use drive-level search (not /root/search) with a simple query term.
+  // Avoid $select — webUrl is not always a top-level field in search results
+  // (it can be nested under remoteItem for shared-drive items), which causes
+  // a 400 Bad Request from Graph when explicitly selected.
   const response = await axios.get(
-    'https://graph.microsoft.com/v1.0/me/drive/root/search(q=\'.xlsx\')?$select=id,name,webUrl',
+    `https://graph.microsoft.com/v1.0/me/drive/search(q='xlsx')?$top=200&$orderby=lastModifiedDateTime%20desc`,
     { headers: { Authorization: `Bearer ${token}` } }
   );
-  return response.data.value || [];
+  const allItems: any[] = response.data.value || [];
+  // Filter client-side to Excel extensions and normalise the shape the
+  // frontend expects: { id, name, webUrl }
+  return allItems
+    .filter(f => {
+      const name: string = (f.name ?? '').toLowerCase();
+      return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.xlsm');
+    })
+    .map(f => ({
+      id: f.id,
+      name: f.name,
+      webUrl: f.webUrl ?? f.remoteItem?.webUrl ?? null,
+    }));
 };
 
 export const listWorksheets = async (userId: string, organizationId: string, workbookId: string) => {
