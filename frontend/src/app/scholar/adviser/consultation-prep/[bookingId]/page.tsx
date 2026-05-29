@@ -12,7 +12,10 @@ import {
   BookOpen,
   TrendingUp,
   Calendar,
-  Loader2
+  Loader2,
+  CheckCircle,
+  XCircle,
+  Send,
 } from 'lucide-react';
 
 interface PrepData {
@@ -60,6 +63,9 @@ interface PrepData {
     attendance: string;
     submitted_at: string;
     created_at: string;
+    validation_status?: string;
+    validated_by?: string | null;
+    validated_at?: string | null;
   }>;
   participationSummary: Array<{
     member_id: string;
@@ -102,6 +108,8 @@ export default function ConsultationPrepPage() {
     groupInfo: true,
     members: true,
   });
+  const [requestingValId, setRequestingValId] = useState('');
+  const [validationError, setValidationError] = useState('');
 
 
   // Load user + org context for unified AppLayout sidebar
@@ -246,6 +254,27 @@ export default function ConsultationPrepPage() {
     }
   };
 
+  const handleRequestValidation = async (conID: string) => {
+    setRequestingValId(conID);
+    setValidationError('');
+    try {
+      await apiClient.post(`/consultation/${conID}/request-validation`);
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          recentConsultations: prev.recentConsultations.map((item) =>
+            item.conID === conID ? { ...item, validation_status: 'pending' } : item
+          ),
+        };
+      });
+    } catch (err: any) {
+      setValidationError(err?.response?.data?.error || 'Failed to request validation.');
+    } finally {
+      setRequestingValId('');
+    }
+  };
+
   if (loading) {
     return (
       <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
@@ -387,36 +416,83 @@ export default function ConsultationPrepPage() {
               </div>
               <span className="text-xs font-bold uppercase tracking-widest text-gray-400">{data.recentConsultations.length} records</span>
             </div>
+
+            {validationError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between">
+                <span className="flex items-center gap-2"><AlertCircle className="w-4 h-4" />{validationError}</span>
+                <button onClick={() => setValidationError('')} className="text-red-500 hover:text-red-700">×</button>
+              </div>
+            )}
+
             <div className="space-y-4">
               {data.recentConsultations.length > 0 ? (
-                data.recentConsultations.map((consultation, idx) => (
-                  <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">Consultation {idx + 1}</p>
-                        <p className="text-xs text-gray-500">{formatDate(consultation.consultation_date)}</p>
+                data.recentConsultations.map((consultation, idx) => {
+                  const valStatus = consultation.validation_status || 'not_requested';
+                  return (
+                    <div key={idx} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">Consultation {idx + 1}</p>
+                          <p className="text-xs text-gray-500">{formatDate(consultation.consultation_date)}</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Validation status badge */}
+                          {valStatus === 'validated' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                              <CheckCircle className="w-3 h-3" /> Validated
+                            </span>
+                          )}
+                          {valStatus === 'rejected' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-red-100 text-red-700">
+                              <XCircle className="w-3 h-3" /> Rejected
+                            </span>
+                          )}
+                          {valStatus === 'pending' && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                              <Clock className="w-3 h-3" /> Awaiting Validation
+                            </span>
+                          )}
+                          {valStatus === 'not_requested' && (
+                            <button
+                              onClick={() => handleRequestValidation(consultation.conID)}
+                              disabled={requestingValId === consultation.conID}
+                              className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-50 transition-colors"
+                            >
+                              <Send className="w-3 h-3" />
+                              {requestingValId === consultation.conID ? 'Requesting...' : 'Request Validation'}
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full bg-blue-100 text-blue-700">
-                        History
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-gray-400 font-black mb-1">Summary</p>
-                        <p className="text-gray-700">{consultation.summary || 'No summary provided.'}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-gray-400 font-black mb-1">Summary</p>
+                          <p className="text-gray-700">{consultation.summary || 'No summary provided.'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-gray-400 font-black mb-1">Action Items</p>
+                          <p className="text-gray-700">{consultation.action || 'No action items provided.'}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs uppercase tracking-wider text-gray-400 font-black mb-1">Concerns</p>
+                          <p className="text-gray-700">{consultation.concerns || 'No concerns provided.'}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-gray-400 font-black mb-1">Action Items</p>
-                        <p className="text-gray-700">{consultation.action || 'No action items provided.'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase tracking-wider text-gray-400 font-black mb-1">Concerns</p>
-                        <p className="text-gray-700">{consultation.concerns || 'No concerns provided.'}</p>
-                      </div>
+
+                      {/* Validator info */}
+                      {consultation.validated_by && (
+                        <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-500">
+                          {valStatus === 'validated' ? 'Validated' : 'Reviewed'} by{' '}
+                          <span className="font-medium text-gray-700">{consultation.validated_by}</span>
+                          {consultation.validated_at && (
+                            <> on {formatDate(consultation.validated_at)}</>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-5 text-sm text-gray-500">
                   No consultation history yet for this group.

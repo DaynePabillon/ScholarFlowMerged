@@ -2,8 +2,6 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect, useMemo, useRef, Suspense } from "react"
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import {
   Calendar,
   Plus,
@@ -123,6 +121,8 @@ function ScheduleContent() {
   const searchParams = useSearchParams()
   const autoRecordHandledRef = useRef(false)
   const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [courses, setCourses] = useState<any[]>([])
   const [groups, setGroups] = useState<any[]>([])
@@ -233,14 +233,6 @@ function ScheduleContent() {
   }, [router])
 
   // Fetch slots and courses
-
-  // Load org context for unified AppLayout sidebar
-  useEffect(() => {
-    const orgs = localStorage.getItem('organizations')
-    const sel = localStorage.getItem('selectedOrganization')
-    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
-    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
-  }, [])
   useEffect(() => {
     if (user?.id) {
       fetchSlots()
@@ -248,14 +240,6 @@ function ScheduleContent() {
     }
   }, [user])
 
-
-  // Load org context for unified AppLayout sidebar
-  useEffect(() => {
-    const orgs = localStorage.getItem('organizations')
-    const sel = localStorage.getItem('selectedOrganization')
-    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
-    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
-  }, [])
   useEffect(() => {
     if (!user?.id) return
 
@@ -271,14 +255,6 @@ function ScheduleContent() {
   }, [user?.id])
 
   // Close menu when clicking outside
-
-  // Load org context for unified AppLayout sidebar
-  useEffect(() => {
-    const orgs = localStorage.getItem('organizations')
-    const sel = localStorage.getItem('selectedOrganization')
-    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
-    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
-  }, [])
   useEffect(() => {
     if (!openActionMenu) return
 
@@ -370,14 +346,6 @@ function ScheduleContent() {
   }
 
   // Fetch groups when course changes
-
-  // Load org context for unified AppLayout sidebar
-  useEffect(() => {
-    const orgs = localStorage.getItem('organizations')
-    const sel = localStorage.getItem('selectedOrganization')
-    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
-    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
-  }, [])
   useEffect(() => {
     if (formData.courseId) {
       fetchGroups(formData.courseId)
@@ -813,13 +781,6 @@ function ScheduleContent() {
   }
 
 
-  // Load org context for unified AppLayout sidebar
-  useEffect(() => {
-    const orgs = localStorage.getItem('organizations')
-    const sel = localStorage.getItem('selectedOrganization')
-    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
-    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
-  }, [])
   useEffect(() => {
     if (!user?.id || !autoOpenRecord || autoRecordHandledRef.current) return
     if (!Number.isFinite(autoSlotId) || autoSlotId <= 0) return

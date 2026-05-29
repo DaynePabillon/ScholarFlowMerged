@@ -276,7 +276,7 @@ router.put('/accounts/:id/role', verifyAdmin, async (req: Request, res: Response
     // Cascade: sync the role change to organization_members via user_id bridge
     const userId = rows[0].user_id;
     if (userId) {
-      const orgRole = role === 'Admin' ? 'admin' : (role === 'Advisers' || role === 'Adviser') ? 'manager' : 'member';
+      const orgRole = role === 'Admin' ? 'admin' : (role === 'Advisers' || role === 'Adviser') ? 'adviser' : 'member';
       await pool.query(
         `UPDATE organization_members SET role = $1 WHERE user_id = $2 AND status = 'active'`,
         [orgRole, userId]

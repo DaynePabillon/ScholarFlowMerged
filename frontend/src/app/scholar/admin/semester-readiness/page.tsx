@@ -1,9 +1,6 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-  const [user, setUser] = useState<any>(null)
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppLayout from '@/components/layout/AppLayout'
@@ -81,6 +78,9 @@ const normalizeRole = (value: unknown): 'Admin' | 'Adviser' | 'Student' => {
 
 export default function SemesterReadinessPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [data, setData] = useState<ReadinessData>(emptyData);

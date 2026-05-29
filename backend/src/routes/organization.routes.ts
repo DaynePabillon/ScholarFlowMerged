@@ -181,7 +181,7 @@ router.post('/:id/invite', authenticateToken, async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: 'Email and role are required' });
     }
 
-    if (!['admin', 'manager', 'member'].includes(role)) {
+    if (!['admin', 'manager', 'member', 'adviser'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
@@ -411,6 +411,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
               t.created_at, t.updated_at, t.is_absolute, t.complexity_weight, t.wbs_code, t.parent_task_id,
               t.progress_percent, t.luxury_weight,
               p.name as project_name,
+              tg.name as team_name,
               u1.name as assigned_to_name,
               u1.email as assigned_to_email,
               u2.name as created_by_name,
@@ -420,6 +421,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
               (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id)::integer as comment_count
        FROM tasks t
        LEFT JOIN projects p ON t.project_id = p.id
+       LEFT JOIN team_groups tg ON t.team_id = tg.id
        LEFT JOIN users u1 ON t.assigned_to = u1.id
        LEFT JOIN users u2 ON t.created_by = u2.id
        WHERE p.organization_id = $1 ${teamFilter}
@@ -448,6 +450,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
          st.progress_percent,
          st.luxury_weight,
          COALESCE(p.name, NULL) as project_name,
+         NULL as team_name,
          st.assignee_email as assigned_to_name,
          st.assignee_email as assigned_to_email,
          'Google Sheets' as created_by_name,
@@ -464,6 +467,26 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
        ORDER BY created_at DESC`,
       queryParams
     );
+
+    // Attach assignees from junction table to each app task
+    const taskIds = result.rows.filter(t => t.source_type === 'app').map((t: any) => t.id);
+    if (taskIds.length > 0) {
+      const assigneesResult = await query(
+        `SELECT ta.task_id, ta.user_id, u.name, u.email, u.profile_picture
+         FROM task_assignees ta
+         JOIN users u ON ta.user_id = u.id
+         WHERE ta.task_id = ANY($1)`,
+        [taskIds]
+      );
+      const byTask: Record<string, any[]> = {};
+      for (const a of assigneesResult.rows) {
+        if (!byTask[a.task_id]) byTask[a.task_id] = [];
+        byTask[a.task_id].push({ user_id: a.user_id, name: a.name, email: a.email, profile_picture: a.profile_picture });
+      }
+      for (const task of result.rows) {
+        task.assignees = byTask[task.id] || [];
+      }
+    }
 
     logger.debug(`Found ${result.rows.length} tasks for organization: ${id}`);
     res.json({ tasks: result.rows });
@@ -624,7 +647,7 @@ router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respo
       RETURNING *`,
       [
         projectId, team_id || null, title, description, status || 'todo', priority || 'medium',
-        due_date, start_date, assigned_to, userId,
+        due_date || null, start_date || null, assigned_to || null, userId,
         is_absolute || false, complexity_weight || 1, finalWbsCode, effectiveParentTaskId
       ]
     );
@@ -821,8 +844,8 @@ router.patch('/:orgId/members/:memberId/role', authenticateToken, async (req: Au
     const { role } = req.body;
     const userId = req.user!.id;
 
-    if (!['admin', 'manager', 'member'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role. Must be admin, manager, or member' });
+    if (!['admin', 'manager', 'member', 'adviser'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be admin, manager, member, or adviser' });
     }
 
     // Check if current user is admin
@@ -854,6 +877,24 @@ router.patch('/:orgId/members/:memberId/role', authenticateToken, async (req: Au
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // If the new role is 'adviser', sync to ss_account so ScholarSync recognises them
+    if (role === 'adviser') {
+      try {
+        const memberUser = await query('SELECT name, email FROM users WHERE id = $1', [memberId]);
+        const mu = memberUser.rows[0];
+        if (mu?.email) {
+          await query(
+            `INSERT INTO ss_account ("accountName", "accountEmail", "accountRole")
+             VALUES ($1, $2, 'Adviser')
+             ON CONFLICT ("accountEmail") DO UPDATE SET "accountRole" = 'Adviser'`,
+            [mu.name || '', mu.email]
+          );
+        }
+      } catch (ssErr) {
+        logger.warn('Could not upsert ss_account for adviser role change (table may not exist):', ssErr);
+      }
     }
 
     logger.info(`Role updated: user ${memberId} is now ${role} in org ${orgId}`);

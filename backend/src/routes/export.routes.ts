@@ -17,7 +17,7 @@ router.get('/export/reports', authenticateToken, async (req: AuthRequest, res: R
        LEFT JOIN users u ON rh.generated_by = u.id
        WHERE rh.project_id = $1
        ORDER BY rh.created_at DESC
-       LIMIT 50`,
+       LIMIT 10`,
       [project_id]
     );
 
@@ -41,12 +41,16 @@ router.post('/export/generate', authenticateToken, async (req: AuthRequest, res:
       return res.status(400).json({ error: 'project_id, report_type, and format are required' });
     }
 
-    // Gather report data
-    let taskQuery = `SELECT t.id, t.title, t.status, t.priority, t.wbs_code, t.due_date, t.progress,
-                            t.estimated_hours, t.assigned_to_ids,
-                            array_agg(DISTINCT u.name) FILTER (WHERE u.id IS NOT NULL) as assignee_names
+    // Gather report data — assignees live in task_assignees junction table, not a column on tasks
+    let taskQuery = `SELECT t.id, t.title, t.status, t.priority, t.wbs_code, t.due_date,
+                            t.progress_percent, t.estimated_hours, t.actual_hours,
+                            t.start_date, t.created_at, t.updated_at,
+                            u_primary.name as assigned_to_name,
+                            array_agg(DISTINCT u.name) FILTER (WHERE u.name IS NOT NULL) as assignee_names
                      FROM tasks t
-                     LEFT JOIN users u ON u.id = ANY(t.assigned_to_ids)
+                     LEFT JOIN users u_primary ON u_primary.id = t.assigned_to
+                     LEFT JOIN task_assignees ta ON ta.task_id = t.id
+                     LEFT JOIN users u ON u.id = ta.user_id
                      WHERE t.project_id = $1`;
     const taskParams: any[] = [project_id];
     let pCount = 1;
@@ -54,10 +58,30 @@ router.post('/export/generate', authenticateToken, async (req: AuthRequest, res:
     if (date_range_start) { pCount++; taskQuery += ` AND t.created_at >= $${pCount}`; taskParams.push(date_range_start); }
     if (date_range_end)   { pCount++; taskQuery += ` AND t.created_at <= $${pCount}`; taskParams.push(date_range_end); }
 
-    taskQuery += ' GROUP BY t.id ORDER BY t.wbs_code NULLS LAST, t.created_at';
+    taskQuery += ` GROUP BY t.id, u_primary.name
+                   ORDER BY
+                     CASE WHEN t.wbs_code ~ '^\\d+$' THEN t.wbs_code::integer ELSE NULL END NULLS LAST,
+                     t.wbs_code NULLS LAST, t.created_at`;
 
     const tasksResult = await query(taskQuery, taskParams);
     const tasks = tasksResult.rows;
+
+    // For dependency reports fetch the actual links between tasks
+    let dependencies: any[] = [];
+    if (report_type === 'dependency_report') {
+      const depsResult = await query(
+        `SELECT td.dependency_type,
+                ta.title AS from_title, ta.wbs_code AS from_wbs, ta.status AS from_status,
+                tb.title AS to_title,   tb.wbs_code AS to_wbs,   tb.status AS to_status
+         FROM task_dependencies td
+         JOIN tasks ta ON td.depends_on_task_id = ta.id
+         JOIN tasks tb ON td.task_id            = tb.id
+         WHERE ta.project_id = $1
+         ORDER BY ta.wbs_code NULLS LAST, tb.wbs_code NULLS LAST`,
+        [project_id]
+      );
+      dependencies = depsResult.rows;
+    }
 
     const reportTitle = title || `${report_type.replace(/_/g, ' ')} – ${new Date().toLocaleDateString()}`;
 
@@ -88,7 +112,7 @@ router.post('/export/generate', authenticateToken, async (req: AuthRequest, res:
 
     res.json({
       report: insertResult.rows[0],
-      data: { tasks, title: reportTitle },
+      data: { tasks, dependencies, title: reportTitle },
       googleDocUrl
     });
   } catch (error: any) {

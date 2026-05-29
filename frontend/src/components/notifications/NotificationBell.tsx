@@ -1,20 +1,21 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { 
-    Bell, 
-    Check, 
-    Trash2, 
-    ExternalLink, 
-    Mail, 
-    Info, 
-    AlertTriangle, 
-    CheckCircle, 
-    Clock, 
-    CheckCheck, 
-    MessageSquare, 
-    AlertCircle, 
-    User 
+import { useRouter } from 'next/navigation'
+import {
+    Bell,
+    Check,
+    Trash2,
+    ExternalLink,
+    Mail,
+    Info,
+    AlertTriangle,
+    CheckCircle,
+    Clock,
+    CheckCheck,
+    MessageSquare,
+    AlertCircle,
+    User
 } from 'lucide-react'
 import apiClient, { API_URL } from '@/lib/api/client'
 
@@ -30,6 +31,7 @@ interface Notification {
 }
 
 export default function NotificationBell() {
+    const router = useRouter()
     const [notifications, setNotifications] = useState<Notification[]>([])
     const [unreadCount, setUnreadCount] = useState(0)
     const [isOpen, setIsOpen] = useState(false)
@@ -176,7 +178,13 @@ export default function NotificationBell() {
                                     key={notification.id}
                                     className={`flex items-start gap-3 px-4 py-3 hover:bg-gray-50 border-b border-gray-100 cursor-pointer ${!notification.is_read ? 'bg-blue-50/50' : ''
                                         }`}
-                                    onClick={() => !notification.is_read && markAsRead(notification.id)}
+                                    onClick={async () => {
+                                        if (!notification.is_read) await markAsRead(notification.id)
+                                        if (notification.task_id) {
+                                            setIsOpen(false)
+                                            router.push(`/tasks`)
+                                        }
+                                    }}
                                 >
                                     <div className="mt-0.5">
                                         {getIcon(notification.type)}

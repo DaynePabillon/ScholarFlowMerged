@@ -16,7 +16,15 @@ interface Props {
 }
 
 export default function ColumnMappingPanel({ projectId, syncedSheetId, sheetColumns, onSaved }: Props) {
-  const [mappings, setMappings] = useState<Mapping[]>([{ sheet_column: '', kanban_column: 'todo' }]);
+  // Default rows shown when no saved mappings exist — covers the most common sheet status labels
+  const DEFAULT_MAPPINGS: Mapping[] = [
+    { sheet_column: 'Not Started',  kanban_column: 'todo' },
+    { sheet_column: 'In Progress',  kanban_column: 'in_progress' },
+    { sheet_column: 'In Review',    kanban_column: 'review' },
+    { sheet_column: 'Done',         kanban_column: 'done' },
+    { sheet_column: 'Blocked',      kanban_column: 'blocked' },
+  ];
+  const [mappings, setMappings] = useState<Mapping[]>(DEFAULT_MAPPINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -117,9 +125,14 @@ export default function ColumnMappingPanel({ projectId, syncedSheetId, sheetColu
       </div>
 
       <div className="p-4 space-y-3">
+        {/* Helper text */}
+        <div className="bg-sky-50/80 dark:bg-sky-900/20 rounded-xl px-3 py-2 text-xs text-sky-700 dark:text-sky-300">
+          Type the <strong>exact status value</strong> from your Google Sheet's Status column (e.g. <em>Not Started</em>, <em>In Progress</em>, <em>Done</em>), then choose which Kanban column it should map to.
+        </div>
+
         {/* Column headers */}
         <div className="grid grid-cols-[1fr_1fr_32px] gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-1">
-          <span>Sheet Column</span>
+          <span>Sheet Status Value</span>
           <span>Kanban Column</span>
           <span />
         </div>
@@ -146,7 +159,7 @@ export default function ColumnMappingPanel({ projectId, syncedSheetId, sheetColu
                   <input
                     value={m.sheet_column}
                     onChange={e => updateRow(i, 'sheet_column', e.target.value)}
-                    placeholder="e.g. Status"
+                    placeholder="e.g. Not Started"
                     className="border border-slate-200 dark:border-slate-600 rounded px-2 py-1.5 text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
                   />
                 )}

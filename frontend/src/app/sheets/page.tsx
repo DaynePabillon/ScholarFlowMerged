@@ -19,7 +19,7 @@ interface Spreadsheet {
 interface Organization {
   id: string
   name: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
 }
 
 export default function SheetsPage() {

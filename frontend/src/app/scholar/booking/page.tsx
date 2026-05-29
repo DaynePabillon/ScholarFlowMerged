@@ -2,8 +2,6 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect, useMemo } from "react"
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import {
   Calendar,
   Clock,
@@ -92,6 +90,8 @@ interface UserGroup {
 export default function BookingPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
   const [userGroup, setUserGroup] = useState<UserGroup | null>(null)
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [bookedSlots, setBookedSlots] = useState<number[]>([])

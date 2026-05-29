@@ -38,6 +38,7 @@ import syncRoutes from './routes/sync.routes';
 import billingRoutes from './routes/billing.routes';
 import ms365Routes from './routes/ms365.routes';
 import exportRoutes from './routes/export.routes';
+import classroomRoutes from './routes/classroom.routes';
 import consultationRoutes from './routes/scholar/consultation.routes';
 import aiRoutes from './routes/scholar/ai.routes';
 import memberJournalsRoutes from './routes/scholar/member-journals.routes';
@@ -138,6 +139,7 @@ app.use('/api', syncRoutes);
 app.use('/api', billingRoutes);
 app.use('/api', ms365Routes);
 app.use('/api', exportRoutes);
+app.use('/api', classroomRoutes);
 
 // --- CONVENIENCE REDIRECTS ---
 // These handle cases where the /api prefix is omitted (common for manual testing)

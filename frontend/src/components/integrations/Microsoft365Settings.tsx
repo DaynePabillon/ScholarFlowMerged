@@ -33,6 +33,22 @@ export default function Microsoft365Settings({ organizationId, projectId }: Prop
         setSelectedWorkbook(c.workbook_id || '');
         setSelectedWorksheet(c.worksheet_id || '');
         setFieldMappings(c.field_mappings || { title: '', status: '', due_date: '' });
+
+        // Auto-restore worksheets + headers from the saved config so the UI is
+        // immediately usable without the user needing to re-click everything.
+        if (c.workbook_id) {
+          apiClient
+            .get(`/ms365/worksheets?organization_id=${organizationId}&workbook_id=${c.workbook_id}`)
+            .then(r => setWorksheets(r.data.worksheets || []))
+            .catch(() => {});
+
+          if (c.worksheet_id) {
+            apiClient
+              .get(`/ms365/headers?organization_id=${organizationId}&workbook_id=${c.workbook_id}&worksheet_id=${c.worksheet_id}`)
+              .then(r => setHeaders(r.data.headers || []))
+              .catch(() => {});
+          }
+        }
       }
     }).finally(() => setLoading(false));
   }, [organizationId, projectId]);
@@ -66,6 +82,7 @@ export default function Microsoft365Settings({ organizationId, projectId }: Prop
   const handleWorkbookChange = async (id: string) => {
     setSelectedWorkbook(id);
     setSelectedWorksheet('');
+    setWorksheets([]);   // clear stale worksheets immediately
     setHeaders([]);
     if (!id) return;
     try {
@@ -95,9 +112,19 @@ export default function Microsoft365Settings({ organizationId, projectId }: Prop
         worksheet_id: selectedWorksheet,
         field_mappings: fieldMappings
       });
-      setFeedback({ type: 'success', message: `Synced ${res.data.synced} task(s) from Excel` });
+      const { synced, errors } = res.data;
+      if (synced === 0) {
+        const hint = errors?.length
+          ? `No tasks synced — ${errors[0]}`
+          : 'No tasks synced. Make sure the "Task Title" mapping matches a column header in your Excel sheet, and the sheet has data rows.';
+        setFeedback({ type: 'error', message: hint });
+      } else {
+        const warn = errors?.length ? ` (${errors.length} row(s) skipped)` : '';
+        setFeedback({ type: 'success', message: `Synced ${synced} task(s) from Excel${warn}` });
+      }
     } catch (err: any) {
-      setFeedback({ type: 'error', message: err.response?.data?.error || 'Sync failed' });
+      const detail = err.response?.data?.error || err.response?.data?.ms_error?.error_description;
+      setFeedback({ type: 'error', message: detail || 'Sync failed. Check the backend logs for details.' });
     } finally {
       setSyncing(false);
     }
@@ -163,7 +190,9 @@ export default function Microsoft365Settings({ organizationId, projectId }: Prop
                 disabled={workbooks.length === 0}
                 className="w-full border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200"
               >
-                <option value="">Select a workbook…</option>
+                {/* When workbooks haven't been fetched yet but an ID is saved, show a placeholder */}
+                {workbooks.length === 0 && !selectedWorkbook && <option value="">Select a workbook…</option>}
+                {workbooks.length === 0 && selectedWorkbook  && <option value={selectedWorkbook}>Workbook configured — click "Load workbooks" to change</option>}
                 {workbooks.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
 
@@ -214,7 +243,7 @@ export default function Microsoft365Settings({ organizationId, projectId }: Prop
 
             <button
               onClick={handleSync}
-              disabled={!selectedWorkbook || !selectedWorksheet || !fieldMappings.title || syncing}
+              disabled={!selectedWorkbook || !selectedWorksheet || (!fieldMappings.title && headers.length === 0) || syncing}
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:shadow-lg hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 disabled:hover:shadow-none text-white text-sm font-medium py-2.5 rounded-xl transition-all duration-300"
             >
               <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />

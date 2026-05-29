@@ -7,7 +7,7 @@ interface Member {
     id: string
     name: string
     email: string
-    role: 'admin' | 'manager' | 'member'
+    role: 'admin' | 'manager' | 'member' | 'adviser'
     profile_picture?: string
 }
 
@@ -40,6 +40,13 @@ const ROLE_CONFIG = {
         color: 'text-green-600',
         bgColor: 'bg-green-100',
         description: 'Can view and update assigned tasks'
+    },
+    adviser: {
+        label: 'Adviser',
+        icon: User,
+        color: 'text-purple-600',
+        bgColor: 'bg-purple-100',
+        description: 'Can view all teams and manage tasks'
     }
 }
 

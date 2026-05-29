@@ -2,14 +2,15 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock } from "lucide-react"
+import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock, FolderKanban } from "lucide-react"
 import RoleManagement from "./RoleManagement"
+import ProjectTeamsSection from "./ProjectTeamsSection"
 
 interface TeamMember {
   id: string
   name: string
   email: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
   profile_picture?: string | null
   joined_at: string
   status: string
@@ -35,6 +36,8 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'members' | 'project-teams'>('members')
 
   useEffect(() => {
     fetchMembers()
@@ -82,6 +85,16 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
 
       if (response.ok) {
         fetchMembers() // Refresh member list
+        // If the current user's own role changed, update localStorage so AppLayout
+        // reflects the new role immediately (otherwise requires logout/login).
+        if (memberId === user.id) {
+          const stored = localStorage.getItem('selectedOrganization')
+          if (stored) {
+            const org = JSON.parse(stored)
+            localStorage.setItem('selectedOrganization', JSON.stringify({ ...org, role: newRole }))
+          }
+          window.location.reload()
+        }
       }
     } catch (error) {
       console.error('Error changing role:', error)
@@ -185,7 +198,7 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onClick={() => setOpenActionMenu(null)}>
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -202,8 +215,36 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit mb-6">
+          <button
+            onClick={() => setActiveTab('members')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'members'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Members
+          </button>
+          <button
+            onClick={() => setActiveTab('project-teams')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'project-teams'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <FolderKanban className="w-4 h-4" />
+            Project Teams
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'members' && (<>
         {/* Search and Filter */}
-        <div className="flex gap-4">
+        <div className="mb-8 flex gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -223,10 +264,10 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
             <option value="member">Member</option>
+            <option value="adviser">Adviser</option>
             <option value="invited">Invited</option>
           </select>
         </div>
-      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -358,9 +399,44 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {!isInvited && (
-                      <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-                        <MoreVertical className="w-5 h-5 text-gray-500" />
-                      </button>
+                      <div className="relative flex justify-end">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpenActionMenu(prev => prev === member.id ? null : member.id)
+                          }}
+                          className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                        >
+                          <MoreVertical className="w-5 h-5 text-gray-500" />
+                        </button>
+                        {openActionMenu === member.id && (
+                          <div className="absolute right-0 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[160px]">
+                            <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                              Change Role
+                            </div>
+                            {(['admin', 'manager', 'member', 'adviser'] as const)
+                              .filter(r => r !== member.role)
+                              .map(r => (
+                                <button
+                                  key={r}
+                                  onClick={() => { handleRoleChange(member.id, r); setOpenActionMenu(null) }}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 capitalize transition-colors"
+                                >
+                                  Set as {r.charAt(0).toUpperCase() + r.slice(1)}
+                                </button>
+                              ))
+                            }
+                            <div className="border-t border-gray-100 mt-1">
+                              <button
+                                onClick={() => { handleRemoveMember(member.id); setOpenActionMenu(null) }}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                Remove Member
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -393,6 +469,17 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
           onRemoveMember={handleRemoveMember}
         />
       </div>
+      </>)}
+
+      {activeTab === 'project-teams' && (
+        <ProjectTeamsSection
+          organizationId={organization.id}
+          orgMembers={members
+            .filter(m => m.status !== 'invited')
+            .map(m => ({ id: m.id, name: m.name, email: m.email, role: m.role }))}
+          canManage={true}
+        />
+      )}
 
       {/* Invite Member Modal */}
       {isInviteModalOpen && (
@@ -433,6 +520,7 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                     <option value="member">👤 Member</option>
                     <option value="manager">💼 Manager</option>
                     <option value="admin">👑 Admin</option>
+                    <option value="adviser">🎓 Adviser</option>
                   </select>
                 </div>
                 <div className="flex gap-3 pt-4">

@@ -10,8 +10,7 @@ const REDIRECT_URI = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/aut
 const SCOPES = [
   'offline_access',
   'User.Read',
-  'Files.ReadWrite',
-  'Sites.ReadWrite.All'
+  'Files.ReadWrite'
 ].join(' ');
 
 export const isMS365Configured = () => !!(MS_CLIENT_ID && MS_CLIENT_SECRET);
@@ -143,30 +142,80 @@ export const syncWorksheetToTasks = async (
 
   const titleField = fieldMappings['title'] || headers[0];
 
+  if (!titleField) {
+    return { synced: 0, errors: ['No title column found in worksheet. Make sure your Excel sheet has data.'] };
+  }
+
+  // Map common Excel / spreadsheet status labels → valid task status values
+  const normalizeStatus = (val: string | undefined): string => {
+    if (!val) return 'todo';
+    const s = val.toLowerCase().replace(/[\s_\-]+/g, '');
+    if (['todo', 'notstarted', 'new', 'open', 'backlog', 'pending', 'planned'].includes(s)) return 'todo';
+    if (['inprogress', 'doing', 'active', 'started', 'working', 'ongoing'].includes(s)) return 'in_progress';
+    if (['review', 'inreview', 'underreview', 'pendingapproval'].includes(s)) return 'review';
+    if (['done', 'closed', 'resolved', 'finished'].includes(s)) return 'done';
+    if (['completed', 'complete'].includes(s)) return 'completed';
+    if (['blocked', 'onhold', 'waiting', 'paused'].includes(s)) return 'blocked';
+    if (['archived', 'cancelled', 'canceled', 'cancelled'].includes(s)) return 'archived';
+    // Unknown value — default to 'todo' so the constraint is never violated
+    return 'todo';
+  };
+
+  // Normalise Excel serial-date numbers → ISO strings Postgres can parse
+  const parseExcelDate = (val: string): string | null => {
+    if (!val) return null;
+    // Already a recognisable date string?
+    if (isNaN(Number(val))) return val;
+    // Excel serial date: days since 1900-01-00 (with the leap-year bug offset)
+    const serial = Number(val);
+    if (serial < 1 || serial > 2958465) return null; // sanity range
+    const date = new Date((serial - 25569) * 86400 * 1000);
+    return isNaN(date.getTime()) ? null : date.toISOString();
+  };
+
   for (const row of rows) {
     const title = row[titleField];
     if (!title) continue;
 
     try {
-      const status = fieldMappings['status'] ? row[fieldMappings['status']] : undefined;
-      const dueDate = fieldMappings['due_date'] ? row[fieldMappings['due_date']] : undefined;
+      const rawStatus = fieldMappings['status']   ? row[fieldMappings['status']]   : undefined;
+      const rawDate   = fieldMappings['due_date']  ? row[fieldMappings['due_date']] : undefined;
+      const status    = normalizeStatus(rawStatus);
+      const dueDate   = rawDate ? parseExcelDate(rawDate) : null;
+      const priority  = fieldMappings['priority']  ? row[fieldMappings['priority']] : undefined;
 
-      const existing = await query(`SELECT id FROM tasks WHERE project_id = $1 AND title = $2`, [projectId, title]);
+      const existing = await query(
+        `SELECT id FROM tasks WHERE project_id = $1 AND title = $2`,
+        [projectId, title]
+      );
 
       if (existing.rows.length > 0) {
         const updates: string[] = [];
         const vals: any[] = [];
         let n = 1;
-        if (status) { updates.push(`status = $${n++}`); vals.push(status); }
-        if (dueDate) { updates.push(`due_date = $${n++}`); vals.push(dueDate); }
-        if (updates.length > 0) {
-          vals.push(existing.rows[0].id);
-          await query(`UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${n}`, vals);
-        }
-      } else {
+        updates.push(`status = $${n++}`);   vals.push(status);
+        if (dueDate)  { updates.push(`due_date = $${n++}`); vals.push(dueDate); }
+        if (priority) { updates.push(`priority = $${n++}`); vals.push(priority); }
+        vals.push(existing.rows[0].id);
         await query(
-          `INSERT INTO tasks (project_id, title, status, due_date, created_at) VALUES ($1, $2, $3, $4, NOW())`,
-          [projectId, title, status || 'todo', dueDate || null]
+          `UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${n}`,
+          vals
+        );
+      } else {
+        // Insert with the same defaults that manual task creation uses
+        await query(
+          `INSERT INTO tasks (
+             project_id, title, status, priority, due_date,
+             created_by, is_absolute, complexity_weight, luxury_weight, created_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, false, 1, 1, NOW())`,
+          [
+            projectId,
+            title,
+            status,
+            priority || 'medium',
+            dueDate  || null,
+            userId
+          ]
         );
       }
       synced++;

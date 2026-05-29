@@ -3,6 +3,7 @@ import GoogleAuthService from '../services/google/auth.service';
 import { AuthRequest, authenticateToken } from '../middleware/auth.middleware';
 import { EqualizerService } from '../services/equalizer.service';
 import logger from '../config/logger';
+import { query } from '../config/database';
 
 const router = Router();
 
@@ -160,7 +161,8 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           );
 
           // Map ScholarSync role → SkyFlow role
-          const skyflowRole = (ssRole === 'Admin' || ssRole === 'Advisers') ? 'admin' : 'member';
+          // Advisers get the dedicated 'adviser' role (manager-level access, distinct badge)
+          const skyflowRole = ssRole === 'Admin' ? 'admin' : ssRole === 'Advisers' ? 'adviser' : 'member';
 
           // Find or create the ScholarSync organization
           let orgResult = await dbQuery(
@@ -204,7 +206,7 @@ router.get('/google/callback', async (req: Request, res: Response) => {
           inviteToken = 'scholarsync-auto'; // triggers the "invited=true" path which skips onboarding
 
           // Keep organization_members role in sync with ss_account academic role
-          const mappedRole = ssRole === 'Admin' ? 'admin' : ssRole === 'Advisers' ? 'manager' : 'member';
+          const mappedRole = ssRole === 'Admin' ? 'admin' : ssRole === 'Advisers' ? 'adviser' : 'member';
           await dbQuery(
             `UPDATE organization_members SET role = $1 WHERE user_id = $2 AND status = 'active'`,
             [mappedRole, user.id]
@@ -324,7 +326,7 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res: Response) => 
 
         // Back-fill users.role for existing users who were onboarded before the role fix
         if (!user.role && scholarsyncRole) {
-          const backfillRole = (scholarsyncRole === 'Admin' || scholarsyncRole === 'Advisers') ? 'admin' : 'member';
+          const backfillRole = scholarsyncRole === 'Admin' ? 'admin' : scholarsyncRole === 'Advisers' ? 'adviser' : 'member';
           await dbQuery('UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2', [backfillRole, user.id]);
           user.role = backfillRole;
         }
@@ -404,6 +406,25 @@ router.post('/logout', authenticateToken, (req: AuthRequest, res: Response) => {
   // Optionally, you could blacklist the token here
   logger.info(`User ${req.user!.id} logged out`);
   res.json({ message: 'Logged out successfully' });
+});
+
+/**
+ * GET /api/auth/google/status
+ * Check whether the current user has a connected Google account (has stored tokens)
+ */
+router.get('/google/status', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const result = await query(
+      'SELECT access_token, refresh_token FROM users WHERE id = $1',
+      [userId]
+    );
+    const user = result.rows[0];
+    const connected = !!(user?.access_token && user?.refresh_token);
+    res.json({ connected });
+  } catch (error) {
+    res.status(500).json({ connected: false, error: 'Failed to check Google connection status' });
+  }
 });
 
 export default router;

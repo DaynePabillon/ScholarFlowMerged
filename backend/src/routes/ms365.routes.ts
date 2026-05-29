@@ -82,8 +82,14 @@ router.post('/ms365/callback', authenticateToken, async (req: AuthRequest, res: 
 
     res.json({ success: true, email: profile.data.mail || profile.data.userPrincipalName });
   } catch (error: any) {
-    logger.error('MS365 callback error:', error);
-    res.status(500).json({ error: 'Failed to connect Microsoft 365 account' });
+    // Surface the real Microsoft error so it's visible in both the backend log and the frontend
+    const msError = error.response?.data;          // Microsoft token/Graph error body
+    const msMsg   = msError?.error_description || msError?.error || null;
+    logger.error('MS365 callback error — Microsoft response:', msError || error.message || error);
+    res.status(500).json({
+      error: msMsg || error.message || 'Failed to connect Microsoft 365 account',
+      ms_error: msError || undefined
+    });
   }
 });
 

@@ -35,15 +35,17 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({
   const [mode, setMode] = useState<ThemeMode>('light');
   const [colors, setColors] = useState<ThemeColors>(getThemeForRole(initialRole, 'light'));
 
-  // Load theme preference from localStorage
+  // Load theme preference from localStorage.
+  // If no preference is saved (new user), stay on the 'light' default set by
+  // useState — never read system preference so the first-run experience is
+  // always light regardless of OS setting.
   useEffect(() => {
     const savedMode = localStorage.getItem('themeMode');
     if (savedMode === 'light' || savedMode === 'dark') {
       setMode(savedMode);
     } else {
-      // Check system preference
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      setMode(prefersDark ? 'dark' : 'light');
+      // Explicitly persist 'light' so the key exists for future visits
+      localStorage.setItem('themeMode', 'light');
     }
   }, []);
 

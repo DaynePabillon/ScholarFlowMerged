@@ -1,8 +1,6 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/AppLayout'
 import Link from 'next/link';
@@ -152,6 +150,8 @@ export default function DashboardPage() {
   const [readiness, setReadiness] = useState<ReadinessSummary>(emptyReadiness);
   const [availability, setAvailability] = useState<AvailabilitySummary>(emptyAvailability);
   const [loading, setLoading] = useState(true);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<any>(null);
   const router = useRouter();
 
 

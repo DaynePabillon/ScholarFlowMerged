@@ -8,7 +8,7 @@ import { Building2, Plus, Mail, Users, ChevronRight, Loader2, UserPlus } from 'l
 interface Organization {
     id: string
     name: string
-    role: 'admin' | 'manager' | 'member'
+    role: 'admin' | 'manager' | 'member' | 'adviser'
     member_count?: number
 }
 

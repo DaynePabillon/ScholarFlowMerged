@@ -7,11 +7,12 @@ import ClassroomIntegrationPanel from '@/components/integrations/ClassroomIntegr
 import ColumnMappingPanel from '@/components/sync/ColumnMappingPanel';
 import ConflictResolutionDialog from '@/components/sync/ConflictResolutionDialog';
 import SyncControlPanel from '@/components/sync/SyncControlPanel';
+import ConnectedSheetsPanel from '@/components/sync/ConnectedSheetsPanel';
 import { apiClient } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 import { Plug, RefreshCw, Grid3x3, BookOpen } from 'lucide-react';
 
-interface Organization { id: string; name: string; role: 'admin' | 'manager' | 'member'; }
+interface Organization { id: string; name: string; role: 'admin' | 'manager' | 'member' | 'adviser'; }
 interface Project { id: string; name: string; }
 
 export default function IntegrationsPage() {
@@ -25,6 +26,15 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const fetchProjects = (effectiveOrgId: string) => {
+    setLoading(true);
+    apiClient.get(`/projects?organization_id=${effectiveOrgId}`).then(res => {
+      const list = Array.isArray(res.data) ? res.data : [];
+      setProjects(list);
+      if (list.length > 0) setSelectedProject(list[0].id);
+    }).catch(() => setProjects([])).finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
     if (!token) { router.push('/login'); return; }
@@ -32,20 +42,29 @@ export default function IntegrationsPage() {
     const storedUser = localStorage.getItem('user');
     const storedOrgs = localStorage.getItem('organizations');
     const storedOrg = localStorage.getItem('selectedOrganization');
-    if (storedUser) setUser(JSON.parse(storedUser));
-    if (storedOrgs) {
-      const orgs = JSON.parse(storedOrgs);
-      setOrganizations(orgs);
-      if (orgs.length > 0) setOrgId(orgs[0].id);
-    }
-    if (storedOrg) setSelectedOrg(JSON.parse(storedOrg));
 
-    apiClient.get('/projects').then(res => {
-      const list = res.data.projects || [];
-      setProjects(list);
-      if (list.length > 0) setSelectedProject(list[0].id);
-    }).finally(() => setLoading(false));
+    if (storedUser) setUser(JSON.parse(storedUser));
+    if (storedOrgs) setOrganizations(JSON.parse(storedOrgs));
+
+    // Prefer selectedOrganization, fall back to first org
+    const orgObj = storedOrg ? JSON.parse(storedOrg) : (storedOrgs ? JSON.parse(storedOrgs)[0] : null);
+    if (orgObj) {
+      setSelectedOrg(orgObj);
+      setOrgId(orgObj.id);
+      fetchProjects(orgObj.id);
+    } else {
+      setLoading(false);
+    }
   }, []);
+
+  const handleOrgChange = (org: Organization) => {
+    setSelectedOrg(org);
+    setOrgId(org.id);
+    setProjects([]);
+    setSelectedProject('');
+    localStorage.setItem('selectedOrganization', JSON.stringify(org));
+    fetchProjects(org.id);
+  };
 
   const TABS = [
     { id: 'sync', label: 'Sync Controls', icon: RefreshCw },
@@ -58,11 +77,7 @@ export default function IntegrationsPage() {
       user={user}
       organizations={organizations}
       selectedOrg={selectedOrg}
-      onOrgChange={(org) => {
-        setSelectedOrg(org);
-        setOrgId(org.id);
-        localStorage.setItem('selectedOrganization', JSON.stringify(org));
-      }}
+      onOrgChange={handleOrgChange}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -116,14 +131,27 @@ export default function IntegrationsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {tab === 'sync' && selectedProject && (
-              <>
-                <SyncControlPanel projectId={selectedProject} />
-                <ConflictResolutionDialog projectId={selectedProject} />
-                <div className="lg:col-span-2">
-                  <ColumnMappingPanel projectId={selectedProject} sheetColumns={[]} />
+            {tab === 'sync' && (
+              selectedProject ? (
+                <>
+                  <div className="lg:col-span-2">
+                    <ConnectedSheetsPanel projectId={selectedProject} organizationId={orgId} />
+                  </div>
+                  <SyncControlPanel projectId={selectedProject} />
+                  <ConflictResolutionDialog projectId={selectedProject} />
+                  <div className="lg:col-span-2">
+                    <ColumnMappingPanel projectId={selectedProject} sheetColumns={[]} />
+                  </div>
+                </>
+              ) : (
+                <div className="lg:col-span-2 text-center py-12" style={{ color: 'var(--color-textSecondary)' }}>
+                  <RefreshCw className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p>No project selected. Create a project first to use Sync Controls.</p>
+                  <a href="/projects" className="mt-3 inline-block text-sm text-violet-600 hover:text-violet-700 underline">
+                    Go to Projects →
+                  </a>
                 </div>
-              </>
+              )
             )}
             {tab === 'ms365' && orgId && selectedProject && (
               <div className="lg:col-span-2">

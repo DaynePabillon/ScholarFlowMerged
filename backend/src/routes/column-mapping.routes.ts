@@ -72,15 +72,24 @@ router.post('/column-mappings', authenticateToken, async (req: AuthRequest, res:
       return res.status(400).json({ error: 'Validation failed', details: errors });
     }
 
+    // Delete existing mappings for this scope before inserting fresh ones.
+    // We can't rely on ON CONFLICT because the UNIQUE index is on
+    // (synced_sheet_id, sheet_column) and NULLs never match in UNIQUE constraints,
+    // so upserts with synced_sheet_id = NULL always create duplicates.
+    if (synced_sheet_id) {
+      await query(`DELETE FROM column_mappings WHERE synced_sheet_id = $1`, [synced_sheet_id]);
+    } else if (project_id) {
+      await query(
+        `DELETE FROM column_mappings WHERE project_id = $1 AND synced_sheet_id IS NULL`,
+        [project_id]
+      );
+    }
+
     const saved = [];
     for (const m of mappings) {
       const result = await query(
         `INSERT INTO column_mappings (synced_sheet_id, project_id, sheet_column, kanban_column, created_by)
          VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (synced_sheet_id, sheet_column) DO UPDATE
-           SET kanban_column = EXCLUDED.kanban_column,
-               updated_at = NOW(),
-               is_active = true
          RETURNING *`,
         [synced_sheet_id || null, project_id || null, m.sheet_column, m.kanban_column, userId]
       );

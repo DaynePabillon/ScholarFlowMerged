@@ -14,6 +14,7 @@ interface Task {
     priority: string
     due_date?: string
     project_name?: string
+    team_name?: string
     assigned_to?: string | null
     assigned_to_name?: string
     comment_count?: number
@@ -31,8 +32,10 @@ interface ProfessionalKanbanProps {
     onDeleteTask?: (taskId: string) => void
     onArchiveTask?: (taskId: string) => void
     onProgressChange?: (taskId: string, progress: number) => void
+    onDependency?: (task: Task) => void
     canDrag?: boolean
     role?: 'admin' | 'student' | 'manager'
+    theme?: string
 }
 
 const COLUMNS = [
@@ -58,6 +61,7 @@ export default function ProfessionalKanban({
     onDeleteTask,
     onArchiveTask,
     onProgressChange,
+    onDependency,
     canDrag = true,
     role = 'student'
 }: ProfessionalKanbanProps) {
@@ -194,6 +198,8 @@ export default function ProfessionalKanban({
                                                         <ProfessionalTaskCard
                                                             task={task}
                                                             onClick={() => onTaskClick?.(task)}
+                                                            onDependency={onDependency ? () => onDependency(task) : undefined}
+                                                            role={role}
                                                         />
                                                     </div>
                                                 ))}

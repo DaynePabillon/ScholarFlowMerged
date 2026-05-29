@@ -1,7 +1,7 @@
 "use client"
 import { useState, memo } from 'react'
 
-import { Clock, CheckCircle2, AlertCircle, User, Calendar, Flag, Trash2, Archive, MessageSquare, Lock } from 'lucide-react'
+import { Clock, CheckCircle2, AlertCircle, User, Calendar, Flag, Trash2, Archive, MessageSquare, Lock, Layers, Users, Link2 } from 'lucide-react'
 
 interface Task {
     id: string
@@ -11,6 +11,8 @@ interface Task {
     priority: string
     due_date?: string
     project_name?: string
+    team_name?: string
+    team_id?: string
     assigned_to_name?: string
     comment_count?: number
     is_absolute?: boolean
@@ -25,16 +27,18 @@ interface ProfessionalTaskCardProps {
     onDelete?: (taskId: string) => void
     onArchive?: (taskId: string) => void
     onProgressChange?: (taskId: string, progress: number) => void
+    onDependency?: () => void
     role?: 'admin' | 'student' | 'manager'
 }
 
-const ProfessionalTaskCard = memo(({ 
-    task, 
-    onClick, 
-    onStatusChange, 
-    onDelete, 
+const ProfessionalTaskCard = memo(({
+    task,
+    onClick,
+    onStatusChange,
+    onDelete,
     onArchive,
     onProgressChange,
+    onDependency,
     role = 'student'
 }: ProfessionalTaskCardProps) => {
     const isAdmin = role === 'admin' || role === 'manager';
@@ -117,6 +121,15 @@ const ProfessionalTaskCard = memo(({
             {/* Quick Actions (Hover) - Restricted to Admin/Manager */}
             {isAdmin && (
                 <div className="absolute top-4 right-4 flex gap-2 z-20 opacity-0 group-hover/card:opacity-100 transition-all translate-x-4 group-hover/card:translate-x-0 duration-500">
+                    {onDependency && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDependency(); }}
+                            className="p-2.5 bg-white/90 dark:bg-slate-900/80 hover:bg-sky-500 rounded-xl shadow-xl transition-all border border-gray-200 dark:border-white/10 group/btn"
+                            title="Dependencies"
+                        >
+                            <Link2 className="w-4 h-4 text-sky-500 group-hover/btn:text-white group-hover/btn:scale-110 transition-all" />
+                        </button>
+                    )}
                     {onArchive && (
                         <button
                             onClick={(e) => { e.stopPropagation(); onArchive(task.id); }}
@@ -156,9 +169,27 @@ const ProfessionalTaskCard = memo(({
             </div>
 
             {/* Title */}
-            <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 group-hover/card:text-emerald-600 dark:group-hover/card:text-emerald-400 transition-colors uppercase leading-tight tracking-tight mb-3 line-clamp-2">
+            <h3 className="text-sm font-black text-gray-900 dark:text-slate-100 group-hover/card:text-emerald-600 dark:group-hover/card:text-emerald-400 transition-colors uppercase leading-tight tracking-tight mb-2 line-clamp-2">
                 {task.title}
             </h3>
+
+            {/* Project & Team context badges */}
+            {(task.project_name || task.team_name) && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                    {task.project_name && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-500/20">
+                            <Layers className="w-2.5 h-2.5" />
+                            {task.project_name}
+                        </span>
+                    )}
+                    {task.team_name && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 border border-violet-200/60 dark:border-violet-500/20">
+                            <Users className="w-2.5 h-2.5" />
+                            {task.team_name}
+                        </span>
+                    )}
+                </div>
+            )}
 
             {/* Description preview */}
             {task.description && (

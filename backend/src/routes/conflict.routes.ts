@@ -60,7 +60,7 @@ router.get('/conflicts/log', authenticateToken, async (req: AuthRequest, res: Re
 // POST /api/conflicts/resolve — apply resolution for one conflict field
 router.post('/conflicts/resolve', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const { task_id, project_id, field_name, resolution, sheet_value, kanban_value, merged_value } = req.body;
+    const { task_id, sheet_task_id, project_id, field_name, resolution, sheet_value, kanban_value, merged_value } = req.body;
     const userId = req.user!.id;
 
     if (!task_id || !field_name || !resolution) {
@@ -72,15 +72,39 @@ router.post('/conflicts/resolve', authenticateToken, async (req: AuthRequest, re
       return res.status(400).json({ error: `resolution must be one of: ${validResolutions.join(', ')}` });
     }
 
-    // Apply the resolution to the task
-    let appliedValue = resolution === 'keep_sheet' ? sheet_value
-      : resolution === 'keep_kanban' ? kanban_value
-      : merged_value;
+    // The value to stamp on the "winning" side
+    const appliedValue = resolution === 'keep_sheet'  ? sheet_value
+                       : resolution === 'keep_kanban' ? kanban_value
+                       : merged_value;
 
     if (field_name === 'status' && appliedValue) {
-      await query(`UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`, [appliedValue, task_id]);
+      if (resolution === 'keep_sheet' || resolution === 'merged') {
+        // Sheet wins → push sheet value into the Kanban task
+        await query(`UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2`, [appliedValue, task_id]);
+      }
+      if (resolution === 'keep_kanban' || resolution === 'merged') {
+        // Kanban wins → push kanban value back into sheet_tasks so the conflict disappears
+        if (sheet_task_id) {
+          await query(`UPDATE sheet_tasks SET status = $1, updated_at = NOW() WHERE id = $2`, [appliedValue, sheet_task_id]);
+        } else {
+          // Fallback: match by task title if sheet_task_id wasn't provided
+          await query(
+            `UPDATE sheet_tasks SET status = $1, updated_at = NOW()
+             WHERE synced_sheet_id IN (SELECT id FROM synced_sheets ss JOIN projects p ON ss.project_id = p.id WHERE p.id = $2)
+               AND LOWER(title) = (SELECT LOWER(title) FROM tasks WHERE id = $3)`,
+            [appliedValue, project_id, task_id]
+          );
+        }
+      }
     } else if (field_name === 'due_date' && appliedValue) {
-      await query(`UPDATE tasks SET due_date = $1, updated_at = NOW() WHERE id = $2`, [appliedValue, task_id]);
+      if (resolution === 'keep_sheet' || resolution === 'merged') {
+        await query(`UPDATE tasks SET due_date = $1, updated_at = NOW() WHERE id = $2`, [appliedValue, task_id]);
+      }
+      if (resolution === 'keep_kanban' || resolution === 'merged') {
+        if (sheet_task_id) {
+          await query(`UPDATE sheet_tasks SET due_date = $1, updated_at = NOW() WHERE id = $2`, [appliedValue, sheet_task_id]);
+        }
+      }
     }
 
     // Log the resolution

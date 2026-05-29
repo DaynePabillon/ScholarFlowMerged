@@ -121,21 +121,27 @@ router.post('/tasks/:taskId/comments', authenticateToken, async (req: Request, r
             }
         }
 
-        // Also notify all multi-assignees (assigned_to_ids) except the commenter
-        if (task.source_type === 'app' && Array.isArray(task.assigned_to_ids)) {
-            const otherAssignees = (task.assigned_to_ids as string[]).filter((id: string) => id !== user.id && id !== task.assigned_to);
-            for (const assigneeId of otherAssignees) {
-                await notificationService.notifyNewComment(taskId, task.title, assigneeId, user.name);
-                const aResult = await pool.query(`SELECT email FROM users WHERE id = $1`, [assigneeId]);
-                if (aResult.rows.length > 0) {
-                    sendCommentAlertEmail({
-                        to: aResult.rows[0].email,
-                        commenterName: user.name,
-                        taskTitle: task.title,
-                        taskId,
-                        commentText: commentText.trim()
-                    }).catch(() => {});
-                }
+        // Also notify all additional assignees in task_assignees junction table
+        // (excludes the commenter and the primary assignee already handled above)
+        if (task.source_type === 'app') {
+            const additionalResult = await pool.query(
+                `SELECT ta.user_id, u.email
+                 FROM task_assignees ta
+                 JOIN users u ON u.id = ta.user_id
+                 WHERE ta.task_id = $1
+                   AND ta.user_id != $2
+                   AND ($3::uuid IS NULL OR ta.user_id != $3::uuid)`,
+                [taskId, user.id, task.assigned_to || null]
+            );
+            for (const row of additionalResult.rows) {
+                await notificationService.notifyNewComment(taskId, task.title, row.user_id, user.name);
+                sendCommentAlertEmail({
+                    to: row.email,
+                    commenterName: user.name,
+                    taskTitle: task.title,
+                    taskId,
+                    commentText: commentText.trim()
+                }).catch(() => {});
             }
         }
 

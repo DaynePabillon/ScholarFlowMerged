@@ -3,9 +3,10 @@
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { CheckSquare, Plus, Search, LayoutGrid, Table, X, Calendar, AlertCircle, User, Users, Edit3, Archive, RotateCcw, ChevronDown, ChevronRight, FileText } from "lucide-react"
+import { CheckSquare, Plus, Search, LayoutGrid, Table, X, Calendar, AlertCircle, User, Users, Edit3, Archive, RotateCcw, ChevronDown, ChevronRight, FileText, Link2 } from "lucide-react"
 import ProfessionalTaskCard from "./ProfessionalTaskCard"
 import ProfessionalKanban from "./ProfessionalKanban"
+import DependencyDialog from "./DependencyDialog"
 import TaskTimeline from "./TaskTimeline"
 import MultiAssigneeSelect from "./MultiAssigneeSelect"
 import GoogleSheetImportModal from "./GoogleSheetImportModal"
@@ -55,6 +56,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterPriority, setFilterPriority] = useState<string>("all")
   const [viewMode, setViewMode] = useState<'board' | 'table'>('board')
@@ -69,18 +71,37 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
     complexity_weight: 1,
     is_absolute: false,
     wbs_code: '',
-    parent_task_id: null as string | null
+    parent_task_id: null as string | null,
+    project_id: null as string | null
   })
+  const [projects, setProjects] = useState<{id: string; name: string}[]>([])
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
   const [isGoogleSyncModalOpen, setIsGoogleSyncModalOpen] = useState(false)
+  const [dependencyTask, setDependencyTask] = useState<Task | null>(null)
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
 
   useEffect(() => {
     fetchTasks()
     fetchMembers()
+    fetchProjects()
   }, [organization.id, selectedTeam])
+
+  const fetchProjects = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/projects?organization_id=${organization.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(Array.isArray(data) ? data : [])
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    }
+  }
 
   const fetchTasks = async () => {
     try {
@@ -132,7 +153,13 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
       })
       if (response.ok) {
         const data = await response.json()
-        const allMembers: Member[] = data.members || []
+        // Backend returns 'id' (users.id) not 'user_id' — map it so MultiAssigneeSelect works
+        const allMembers: Member[] = (data.members || []).map((m: any) => ({
+          user_id: m.id,
+          name: m.name,
+          email: m.email,
+          profile_picture: m.profile_picture
+        }))
 
         if (selectedTeam) {
           // Fetch team detail to get team-specific members
@@ -168,6 +195,8 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
         },
         body: JSON.stringify({
           ...newTask,
+          due_date: newTask.due_date || null,
+          start_date: newTask.start_date || null,
           status: 'todo',
           team_id: selectedTeam
         })
@@ -182,13 +211,19 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
           complexity_weight: 1,
           is_absolute: false,
           wbs_code: '',
-          parent_task_id: null
+          parent_task_id: null,
+          project_id: null
         })
         setIsCreateModalOpen(false)
+        setCreateError(null)
         fetchTasks()
+      } else {
+        const err = await response.json().catch(() => ({}))
+        setCreateError(err.error || `Failed to create task (${response.status})`)
       }
     } catch (error) {
       console.error('Error creating task:', error)
+      setCreateError('Network error — please try again')
     }
   }
 
@@ -292,8 +327,11 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
 
     try {
       const token = localStorage.getItem('token')
+      // Derive assignee fields from the current MultiAssigneeSelect state
+      const currentAssigneeIds = (editingTask.assignees || []).map((a: any) => a.user_id).filter(Boolean)
+      const primaryAssignee = currentAssigneeIds[0] || null
       const response = await fetch(`${API_URL}/api/tasks/${editingTask.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -302,12 +340,13 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
           title: editingTask.title,
           description: editingTask.description,
           priority: editingTask.priority,
-          due_date: editingTask.due_date,
-          start_date: editingTask.start_date,
+          due_date: editingTask.due_date || null,
+          start_date: editingTask.start_date || null,
           complexity_weight: editingTask.complexity_weight,
           is_absolute: editingTask.is_absolute,
           wbs_code: editingTask.wbs_code,
-          assigned_to: editingTask.assigned_to
+          assigned_to: primaryAssignee,
+          assigned_to_ids: currentAssigneeIds
         })
       })
       if (response.ok) {
@@ -482,6 +521,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
+                onDependency={(task) => setDependencyTask(task as Task)}
                 theme="admin"
                 role="manager"
               />
@@ -506,6 +546,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
+                onDependency={(task) => setDependencyTask(task as Task)}
                 theme="manager"
                 role="manager"
               />
@@ -605,12 +646,24 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                     {task.assigned_to_name || 'Unassigned'}
                   </td>
                   <td className="px-6 py-4">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
-                      className="p-1 hover:bg-blue-100 rounded-lg transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4 text-indigo-600" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
+                        className="p-1 hover:bg-blue-100 rounded-lg transition-colors"
+                        title="Edit task"
+                      >
+                        <Edit3 className="w-4 h-4 text-indigo-600" />
+                      </button>
+                      {task.project_id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDependencyTask(task); }}
+                          className="p-1 hover:bg-sky-100 rounded-lg transition-colors"
+                          title="Manage Dependencies"
+                        >
+                          <Link2 className="w-4 h-4 text-sky-500" />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -633,7 +686,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
               <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">
                 📋 Create New Task
               </h2>
-              <button onClick={() => setIsCreateModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+              <button onClick={() => { setIsCreateModalOpen(false); setCreateError(null); }} className="p-2 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -723,6 +776,18 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project (Optional)</label>
+                <select
+                  value={newTask.project_id || ''}
+                  onChange={(e) => setNewTask({ ...newTask, project_id: e.target.value || null })}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-400"
+                >
+                  <option value="">No project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
               <div className="flex items-center gap-3 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100">
                 <input
                   type="checkbox"
@@ -735,6 +800,12 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                   Mark as Absolute Task (Lock for students)
                 </label>
               </div>
+
+              {createError && (
+                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
+                  <span>⚠</span> {createError}
+                </div>
+              )}
 
               <button
                 onClick={handleCreateTask}
@@ -907,6 +978,16 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
         onImportComplete={() => fetchTasks()}
         teamId={selectedTeam}
       />
+
+      {/* Dependency Dialog */}
+      {dependencyTask && dependencyTask.project_id && (
+        <DependencyDialog
+          taskId={dependencyTask.id}
+          taskTitle={dependencyTask.title}
+          projectId={dependencyTask.project_id}
+          onClose={() => setDependencyTask(null)}
+        />
+      )}
     </div>
   )
 }

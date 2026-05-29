@@ -7,6 +7,40 @@ const router = Router();
 
 const SYNC_COOLDOWN_SECONDS = 30;
 
+// GET /api/sync/sheets?project_id= — sheets connected to a project
+router.get('/sync/sheets', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { project_id } = req.query;
+    if (!project_id) return res.status(400).json({ error: 'project_id is required' });
+
+    const result = await query(
+      `SELECT ss.id, ss.sheet_id, ss.sheet_name, ss.last_synced_at, ss.sync_status,
+              (SELECT COUNT(*) FROM sheet_tasks WHERE synced_sheet_id = ss.id) AS task_count
+       FROM synced_sheets ss
+       WHERE ss.project_id = $1
+       ORDER BY ss.created_at DESC`,
+      [project_id]
+    );
+
+    res.json({ sheets: result.rows });
+  } catch (error) {
+    logger.error('Error fetching connected sheets:', error);
+    res.status(500).json({ error: 'Failed to fetch connected sheets' });
+  }
+});
+
+// DELETE /api/sync/sheets/:sheetId — unlink a sheet from a project
+router.delete('/sync/sheets/:sheetId', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { sheetId } = req.params;
+    await query(`DELETE FROM synced_sheets WHERE id = $1`, [sheetId]);
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Error removing connected sheet:', error);
+    res.status(500).json({ error: 'Failed to remove sheet' });
+  }
+});
+
 // GET /api/sync/status?project_id= — last sync time + cooldown state
 router.get('/sync/status', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
@@ -104,19 +138,41 @@ router.post('/sync/trigger', authenticateToken, async (req: AuthRequest, res: Re
     const syncService = new WorkspaceSyncService();
 
     // Get project's synced sheets
+    // synced_sheets.project_id is the direct link — no workspace JOIN needed
     const sheetsResult = await query(
-      `SELECT ss.id FROM synced_sheets ss
-       JOIN workspaces w ON ss.workspace_id = w.id
-       WHERE w.project_id = $1 AND ss.is_active = true`,
+      `SELECT ss.id FROM synced_sheets ss WHERE ss.project_id = $1`,
       [project_id]
     );
+
+    if (sheetsResult.rows.length === 0) {
+      // No sheets linked to this project — succeed with a helpful message
+      await query(
+        `INSERT INTO sync_logs (project_id, triggered_by, status, synced_count, error_message)
+         VALUES ($1, $2, 'success', 0, 'No sheets connected to this project')`,
+        [project_id, userId]
+      );
+      return res.json({ success: true, syncedCount: 0, message: 'No Google Sheets are connected to this project yet. Link a sheet via the workspace panel first.' });
+    }
+
+    // Fetch user-defined column_mappings for this project and pass them as
+    // status overrides so custom values (e.g. "Not Started" → "todo") are respected
+    const mappingsResult = await query(
+      `SELECT LOWER(sheet_column) as sheet_column, kanban_column
+       FROM column_mappings
+       WHERE project_id = $1 AND is_active = true`,
+      [project_id]
+    );
+    const statusOverrides: Record<string, string> = {};
+    for (const m of mappingsResult.rows) {
+      statusOverrides[m.sheet_column] = m.kanban_column;
+    }
 
     let syncedCount = 0;
     let syncError: string | null = null;
 
     try {
       for (const sheet of sheetsResult.rows) {
-        await syncService.syncSheet(sheet.id);
+        await syncService.syncSheet(sheet.id, Object.keys(statusOverrides).length ? statusOverrides : undefined);
         syncedCount++;
       }
     } catch (err: any) {

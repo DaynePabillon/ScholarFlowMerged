@@ -1,9 +1,6 @@
 ﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-  const [user, setUser] = useState<any>(null)
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import AppLayout from '@/components/layout/AppLayout'
@@ -57,6 +54,9 @@ const daysSince = (value: string): number => {
 
 export default function AdviserFollowUpsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<QueueItem[]>([]);
   const [query, setQuery] = useState('');

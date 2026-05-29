@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Cloud, LogOut, Menu, X, Calendar, FileText, FolderOpen, BarChart3, Users, FolderKanban, CheckSquare, Building2, ChevronDown, Plus, UserPlus, Settings, LayoutDashboard, RefreshCw, Bug, Plug, CreditCard, GraduationCap, BookOpen, ClipboardList, Shield, AlertTriangle } from "lucide-react"
+import { Cloud, LogOut, Menu, X, Calendar, FileText, FolderOpen, BarChart3, Users, FolderKanban, CheckSquare, Building2, ChevronDown, Plus, UserPlus, Settings, LayoutDashboard, RefreshCw, Bug, Plug, CreditCard, GraduationCap, BookOpen, ClipboardList, Shield, AlertTriangle, Layers } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import { useTheme } from "@/contexts/ThemeContext"
 import NotificationBell from "@/components/notifications/NotificationBell"
@@ -13,7 +13,7 @@ import AnnouncementBanner from "@/components/announcements/AnnouncementBanner"
 interface Organization {
   id: string
   name: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
 }
 
 interface AppLayoutProps {
@@ -34,8 +34,10 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   const onScholarPath = pathname?.startsWith('/scholar') ?? false
-  const [skyflowOpen, setSkyflowOpen] = useState(!onScholarPath)
-  const [scholarOpen, setScholarOpen] = useState(onScholarPath)
+  const isAdviser = selectedOrg?.role === 'adviser'
+  // Advisers are primarily ScholarSync users — default their sidebar to ScholarSync expanded
+  const [skyflowOpen, setSkyflowOpen] = useState(!onScholarPath && !isAdviser)
+  const [scholarOpen, setScholarOpen] = useState(onScholarPath || isAdviser)
   const [workspaceOpen, setWorkspaceOpen] = useState(true)
   const [scholarRole, setScholarRole] = useState('')
 
@@ -88,7 +90,8 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
     const badges = {
       admin: { label: 'Admin', color: 'bg-red-100 text-red-700' },
       manager: { label: 'Manager', color: 'bg-blue-100 text-blue-700' },
-      member: { label: 'Member', color: 'bg-green-100 text-green-700' }
+      member: { label: 'Member', color: 'bg-green-100 text-green-700' },
+      adviser: { label: 'Adviser', color: 'bg-purple-100 text-purple-700' }
     }
     return badges[role as keyof typeof badges] || badges.member
   }
@@ -196,7 +199,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
       {isMenuOpen && (
         <div className="fixed inset-0 z-[100] md:hidden">
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsMenuOpen(false)} />
-          <nav className="fixed top-0 left-0 bottom-0 w-72 bg-white dark:bg-slate-900 shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out p-6">
+          <nav className="fixed top-0 left-0 bottom-0 w-72 shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-in-out p-6" style={{ backgroundColor: 'var(--color-surface)', borderRight: '1px solid var(--color-border)' }}>
             <div className="flex items-center justify-between mb-8">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
@@ -241,11 +244,6 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 <LayoutDashboard className="w-5 h-5" />
                 <span className="text-sm font-medium">Portal</span>
               </a>
-              <a href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
-                <BarChart3 className="w-5 h-5" />
-                <span className="text-sm font-medium">Dashboard</span>
-              </a>
-
               {/* Mobile SkyFlow group */}
               <button onClick={() => setSkyflowOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
                 <span className="flex items-center gap-1.5"><Cloud className="w-3.5 h-3.5"/>SkyFlow</span>
@@ -253,11 +251,17 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
               </button>
               {skyflowOpen && (
                 <>
+                  <a href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <LayoutDashboard className="w-4 h-4" /><span className="text-sm font-medium">Dashboard</span>
+                  </a>
                   <a href="/boards" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <FolderKanban className="w-4 h-4" /><span className="text-sm font-medium">Boards</span>
                   </a>
                   <a href="/tasks" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <CheckSquare className="w-4 h-4" /><span className="text-sm font-medium">Tasks</span>
+                  </a>
+                  <a href="/projects" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <Layers className="w-4 h-4" /><span className="text-sm font-medium">Projects</span>
                   </a>
                   <a href="/team" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <Users className="w-4 h-4" /><span className="text-sm font-medium">Team</span>
@@ -299,6 +303,11 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                   ) : (
                     <a href="/scholar/schedule" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                       <Calendar className="w-4 h-4" /><span className="text-sm font-medium">Schedule</span>
+                    </a>
+                  )}
+                  {scholarRole !== 'Student' && (
+                    <a href="/scholar/adviser/consultation-hub" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                      <ClipboardList className="w-4 h-4" /><span className="text-sm font-medium">Consultation Hub</span>
                     </a>
                   )}
                   <a href="/scholar/workspace-sync" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
@@ -382,18 +391,6 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 <LayoutDashboard className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                 <span>Portal Home</span>
               </a>
-              <a href="/dashboard" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
-                style={{ color: 'var(--color-text)' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundImage = 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundImage = 'none';
-                }}
-              >
-                <BarChart3 className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                <span>Dashboard</span>
-              </a>
             </nav>
 
             {/* ── SkyFlow Section ── */}
@@ -410,6 +407,10 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
               </button>
               {skyflowOpen && (
                 <nav className="space-y-1 mt-1 ml-1">
+                  <a href="/dashboard" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <LayoutDashboard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Dashboard</span>
+                  </a>
                   <a href="/boards" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <FolderKanban className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                     <span>Boards</span>
@@ -417,6 +418,10 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                   <a href="/tasks" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-emerald-500 hover:to-teal-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <CheckSquare className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                     <span>Tasks</span>
+                  </a>
+                  <a href="/projects" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <Layers className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Projects</span>
                   </a>
                   <a href="/team" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <Users className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
@@ -475,6 +480,12 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                     <a href="/scholar/schedule" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                       <Calendar className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                       <span>Schedule</span>
+                    </a>
+                  )}
+                  {scholarRole !== 'Student' && (
+                    <a href="/scholar/adviser/consultation-hub" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                      <ClipboardList className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                      <span>Consultation Hub</span>
                     </a>
                   )}
                   <a href="/scholar/workspace-sync" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
@@ -543,6 +554,18 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
               )}
             </div>
 
+            {/* Logout button */}
+            <div className="pt-3 mt-3" style={{ borderTop: `1px solid var(--color-border)` }}>
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:bg-red-50/60 transition-all duration-200"
+                style={{ color: '#ef4444' }}
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Log Out</span>
+              </button>
+            </div>
+
             {/* Settings + Creator Notes */}
             {selectedOrg?.role !== 'member' && (
               <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
@@ -576,7 +599,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1">
+        <main className="flex-1" style={{ background: 'var(--color-background)', transition: 'background 0.3s ease' }}>
           {children}
         </main>
       </div>

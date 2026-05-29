@@ -35,6 +35,8 @@ interface Task {
     created_at: string
     project_id: string | null
     project_name?: string
+    team_id?: string | null
+    team_name?: string
     synced?: boolean
     sheet_name?: string
     comment_count?: number
@@ -61,7 +63,7 @@ interface TeamMember {
 interface Organization {
     id: string
     name: string
-    role: 'admin' | 'manager' | 'member'
+    role: 'admin' | 'manager' | 'member' | 'adviser'
 }
 
 interface TaskComment {
@@ -92,6 +94,9 @@ interface TeamGroup {
     total_checkpoints: number
     completed_checkpoints: number
     proposed_project: string | null
+    project_id?: string | null
+    project_name?: string | null
+    project_status?: string | null
 }
 
 function BoardsContent() {
@@ -596,7 +601,7 @@ function BoardsContent() {
         setSelectedTeamGroup(team as TeamGroup)
     }, [])
 
-    const getUserRole = (): 'admin' | 'manager' | 'member' => {
+    const getUserRole = (): 'admin' | 'manager' | 'member' | 'adviser' => {
         return selectedOrg?.role || 'member'
     }
 
@@ -685,10 +690,10 @@ function BoardsContent() {
                             </div>
                             <div>
                                 <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter uppercase">
-                                    Project <span className="text-blue-500">Boards</span>
+                                    Project <span className="text-blue-500">Teams</span>
                                 </h1>
                                 <p className="text-gray-500 dark:text-slate-500 font-bold text-xs uppercase tracking-[0.2em] mt-1 opacity-70">
-                                    {`Team Overview ΓÇó ${teamGroups.length} Teams`}
+                                    {`Team Groups · ${teamGroups.length} Teams · Click a team to view details`}
                                 </p>
                             </div>
                         </div>

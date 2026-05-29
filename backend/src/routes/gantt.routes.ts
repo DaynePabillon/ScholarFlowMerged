@@ -10,20 +10,15 @@ const router = Router();
 router.get('/projects/:projectId/gantt', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { projectId } = req.params;
-    const { sprint, assignee, priority } = req.query;
+    const { assignee, priority } = req.query;
 
     let whereClause = 'WHERE t.project_id = $1';
     const params: any[] = [projectId];
     let paramCount = 1;
 
-    if (sprint) {
-      paramCount++;
-      whereClause += ` AND t.sprint_label = $${paramCount}`;
-      params.push(sprint);
-    }
     if (assignee) {
       paramCount++;
-      whereClause += ` AND $${paramCount} = ANY(t.assigned_to_ids)`;
+      whereClause += ` AND t.assigned_to = $${paramCount}`;
       params.push(assignee);
     }
     if (priority) {
@@ -35,14 +30,18 @@ router.get('/projects/:projectId/gantt', authenticateToken, async (req: AuthRequ
     const [tasksResult, depsResult, membersResult] = await Promise.all([
       query(
         `SELECT t.id, t.title, t.status, t.priority, t.wbs_code,
-                t.start_date, t.due_date, t.progress, t.estimated_hours,
-                t.assigned_to_ids, t.parent_task_id,
-                array_agg(DISTINCT u.name) FILTER (WHERE u.id IS NOT NULL) as assignee_names
+                t.start_date, t.due_date,
+                COALESCE(t.progress_percent, 0) AS progress,
+                t.estimated_hours, t.assigned_to, t.parent_task_id,
+                ARRAY_REMOVE(ARRAY[u.name], NULL) AS assignee_names
          FROM tasks t
-         LEFT JOIN users u ON u.id = ANY(t.assigned_to_ids)
+         LEFT JOIN users u ON u.id = t.assigned_to
          ${whereClause}
-         GROUP BY t.id
-         ORDER BY t.wbs_code NULLS LAST, t.created_at`,
+         ORDER BY
+           -- Sort WBS codes numerically (handles 1,2,...9,10 correctly instead of 1,10,2,3)
+           CASE WHEN t.wbs_code ~ '^\d+$' THEN t.wbs_code::integer ELSE NULL END NULLS LAST,
+           t.wbs_code NULLS LAST,
+           t.created_at`,
         params
       ),
       query(

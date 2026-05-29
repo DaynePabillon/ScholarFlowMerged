@@ -1,9 +1,6 @@
 ﻿'use client';
 
 import { useEffect, useState } from 'react';
-  const [user, setUser] = useState<any>(null)
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/AppLayout'
 import { API_URL } from '@/lib/api/client';
@@ -22,6 +19,9 @@ type Account = {
 };
 
 export default function AdminAccountsPage() {
+    const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([]);
+    const [selectedOrg, setSelectedOrg] = useState<any>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [query, setQuery] = useState<string>('');
     const [loading, setLoading] = useState(true);

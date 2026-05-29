@@ -39,64 +39,61 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
 
         let result;
 
-        if (role === 'manager') {
-            // Get the manager's name for adviser_name matching
-            const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
-            const userName = userResult.rows[0]?.name || '';
-
+        if (role === 'manager' || role === 'adviser') {
+            // manager/adviser: see ALL teams (same as admin — they oversee the full org)
             result = await query(
-                `SELECT tg.*,
+                `SELECT tg.*, p.name as project_name, p.status as project_status,
                   (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
-                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) + 
-                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) + 
+                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) +
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) +
                   (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
-                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') + 
-                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) + 
+                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') +
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) +
                   (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
            FROM team_groups tg
+           LEFT JOIN projects p ON tg.project_id = p.id
            WHERE tg.organization_id = $1
-             AND (tg.adviser_id = $2 OR LOWER(tg.adviser_name) = LOWER($3))
            ORDER BY tg.team_number ASC`,
-                [orgId, userId, userName]
+                [orgId]
             );
         } else if (role === 'member') {
-            // member: see only their own team
+            // member: see only their own team (match by email OR user_id to handle campus vs Google email mismatch)
             const userResult = await query('SELECT email FROM users WHERE id = $1', [userId]);
             const userEmail = userResult.rows[0]?.email;
-            
-            if (userEmail) {
-                result = await query(
-                    `SELECT tg.*,
-                      (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
-                      (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) + 
-                      (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) + 
-                      (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
-                      (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') + 
-                      (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) + 
-                      (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
-               FROM team_groups tg
-               WHERE tg.organization_id = $1
-                 AND tg.id IN (
-                   SELECT team_group_id FROM team_group_members WHERE email = $2
-                 )
-               ORDER BY tg.team_number ASC`,
-                    [orgId, userEmail]
-                );
-            } else {
-                result = { rows: [] };
-            }
+
+            result = await query(
+                `SELECT tg.*, p.name as project_name, p.status as project_status,
+                  (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
+                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) +
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) +
+                  (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
+                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') +
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) +
+                  (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
+           FROM team_groups tg
+           LEFT JOIN projects p ON tg.project_id = p.id
+           WHERE tg.organization_id = $1
+             AND tg.id IN (
+               SELECT team_group_id FROM team_group_members
+               WHERE ($2::text IS NOT NULL AND email = $2)
+                  OR user_id = $3
+             )
+           ORDER BY tg.team_number ASC`,
+                [orgId, userEmail || null, userId]
+            );
         } else {
             // admin: see all teams
             result = await query(
-                `SELECT tg.*,
+                `SELECT tg.*, p.name as project_name, p.status as project_status,
                   (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
-                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) + 
-                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) + 
+                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id) +
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) +
                   (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) as total_checkpoints,
-                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') + 
-                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) + 
+                  (SELECT COUNT(*) FROM team_checkpoints WHERE team_group_id = tg.id AND status = 'completed') +
+                  (SELECT COUNT(*) FROM tasks t LEFT JOIN users u ON t.assigned_to = u.id LEFT JOIN team_group_members tgm ON (COALESCE(t.assignee_email, u.email) = tgm.email OR t.assigned_to = tgm.user_id) AND tgm.team_group_id = tg.id WHERE (t.team_id = tg.id OR (t.team_id IS NULL AND tgm.team_group_id = tg.id)) AND t.status IN ('completed', 'done', 'Done')) +
                   (SELECT COUNT(*) FROM sheet_tasks st LEFT JOIN team_group_members tgm ON st.assignee_email = tgm.email AND tgm.team_group_id = tg.id WHERE (st.team_id = tg.id OR (st.team_id IS NULL AND tgm.team_group_id = tg.id)) AND st.status IN ('completed', 'done', 'Done')) as completed_checkpoints
            FROM team_groups tg
+           LEFT JOIN projects p ON tg.project_id = p.id
            WHERE tg.organization_id = $1
            ORDER BY tg.team_number ASC`,
                 [orgId]
@@ -122,6 +119,50 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
 });
 
 /**
+ * PATCH /api/team-groups/:id/assign-project
+ * Assign or unassign a project to a team (admin / manager)
+ */
+router.patch('/team-groups/:id/assign-project', authenticateToken, async (req: AuthRequest, res: Response) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user!.id;
+        const { project_id } = req.body; // null = unassign
+
+        const teamCheck = await query('SELECT organization_id FROM team_groups WHERE id = $1', [id]);
+        if (teamCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Team not found' });
+        }
+
+        const role = await getUserOrgRole(userId, teamCheck.rows[0].organization_id);
+        if (!role || role === 'member') {
+            return res.status(403).json({ error: 'Only admins and managers can assign projects to teams' });
+        }
+
+        // If a project_id is provided, verify it belongs to the same org
+        if (project_id) {
+            const projectCheck = await query(
+                'SELECT id FROM projects WHERE id = $1 AND organization_id = $2',
+                [project_id, teamCheck.rows[0].organization_id]
+            );
+            if (projectCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Project not found in this organization' });
+            }
+        }
+
+        const result = await query(
+            `UPDATE team_groups SET project_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
+            [project_id || null, id]
+        );
+
+        logger.info(`Team ${id} assigned to project ${project_id || 'none'} by user ${userId}`);
+        res.json(result.rows[0]);
+    } catch (error) {
+        logger.error('Error assigning project to team:', error);
+        res.status(500).json({ error: 'Failed to assign project' });
+    }
+});
+
+/**
  * GET /api/team-groups/:id
  * Get team detail with members, checkpoints
  */
@@ -129,8 +170,14 @@ router.get('/team-groups/:id', authenticateToken, async (req: AuthRequest, res: 
     try {
         const { id } = req.params;
 
-        // Get team info
-        const teamResult = await query('SELECT * FROM team_groups WHERE id = $1', [id]);
+        // Get team info (include assigned project)
+        const teamResult = await query(
+            `SELECT tg.*, p.name as project_name, p.status as project_status, p.priority as project_priority
+             FROM team_groups tg
+             LEFT JOIN projects p ON tg.project_id = p.id
+             WHERE tg.id = $1`,
+            [id]
+        );
         if (teamResult.rows.length === 0) {
             return res.status(404).json({ error: 'Team not found' });
         }
@@ -337,15 +384,22 @@ router.post('/team-groups/:id/members', authenticateToken, async (req: AuthReque
 
         const { member_number, name, email, student_id, is_leader } = req.body;
 
-        if (!member_number || !name) {
-            return res.status(400).json({ error: 'member_number and name are required' });
+        if (!name) {
+            return res.status(400).json({ error: 'name is required' });
         }
 
+        // Always auto-assign member_number from MAX(member_number)+1 to prevent
+        // UNIQUE(team_group_id, member_number) constraint violations when the
+        // frontend sends a stale/duplicate number.
         const result = await query(
             `INSERT INTO team_group_members (team_group_id, member_number, name, email, student_id, is_leader)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       VALUES (
+         $1,
+         (SELECT COALESCE(MAX(member_number), 0) + 1 FROM team_group_members WHERE team_group_id = $1),
+         $2, $3, $4, $5
+       )
        RETURNING *`,
-            [id, member_number, name, email || null, student_id || null, is_leader || false]
+            [id, name, email || null, student_id || null, is_leader || false]
         );
 
         // If is_leader, update team's leader_name

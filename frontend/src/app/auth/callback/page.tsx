@@ -47,7 +47,7 @@ function AuthCallbackContent() {
           }
           return res.json()
         })
-        .then(data => {
+        .then(async data => {
           const { organizations, onboarding_data, ...userData } = data
           const normalizedScholarRole = normalizeScholarRole(data?.scholarsyncRole || data?.role)
 
@@ -68,10 +68,60 @@ function AuthCallbackContent() {
             localStorage.setItem('onboardingPreferences', JSON.stringify(onboarding_data))
           }
 
+          // Ensure light mode for users who have never set a theme preference
+          if (!localStorage.getItem('themeMode')) {
+            localStorage.setItem('themeMode', 'light')
+          }
+
+          // 3. Handle pending invitation — stored when the user had no token on the
+          //    invite/accept page, meaning they had to log in first.
+          const pendingInvite = localStorage.getItem('pendingInvitation')
+          if (pendingInvite) {
+            localStorage.removeItem('pendingInvitation')
+            setMessage('Joining your organization...')
+            try {
+              const acceptRes = await fetch(`${API_URL}/api/invitations/accept`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ token: pendingInvite })
+              })
+              if (acceptRes.ok) {
+                // Re-fetch so the new org membership is reflected in localStorage
+                const meRes2 = await fetch(`${API_URL}/api/auth/me`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+                if (meRes2.ok) {
+                  const freshData = await meRes2.json()
+                  const { organizations: freshOrgs, onboarding_data: freshOD, ...freshUser } = freshData
+                  localStorage.setItem('user', JSON.stringify({ ...freshUser, onboarding_data: freshOD }))
+                  localStorage.setItem('organizations', JSON.stringify(freshOrgs || []))
+                  // Select the last org — most recently joined is at the end
+                  if (freshOrgs?.length > 0) {
+                    localStorage.setItem('selectedOrganization', JSON.stringify(freshOrgs[freshOrgs.length - 1]))
+                  }
+                }
+              }
+            } catch (_) {
+              // Best-effort — user can retry the invite link if this fails
+            }
+            setStatus('success')
+            setMessage('Welcome to SkyFlow!')
+            router.push('/dashboard')
+            return
+          }
+
+          // 4. For normal logins: auto-select first org if none is already selected
+          if (organizations?.length > 0 && !localStorage.getItem('selectedOrganization')) {
+            localStorage.setItem('selectedOrganization', JSON.stringify(organizations[0]))
+          }
+
           setStatus('success')
           setMessage('Welcome to SkyFlow!')
 
-          const postLoginRedirect = localStorage.getItem('post_login_redirect') || '/'
+          const postLoginRedirect = localStorage.getItem('post_login_redirect') || '/dashboard'
           localStorage.removeItem('post_login_redirect')
 
           router.push(postLoginRedirect)

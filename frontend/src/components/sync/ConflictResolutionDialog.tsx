@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, X, ClipboardList } from 'lucide-react';
 
 interface Conflict {
   task_id: string;
+  sheet_task_id: string;   // needed to update sheet_tasks on "keep kanban"
   title: string;
   kanban_status: string;
   sheet_status: string;
@@ -62,6 +63,7 @@ export default function ConflictResolutionDialog({ projectId, onClose }: Props) 
     try {
       await apiClient.post('/conflicts/resolve', {
         task_id: conflict.task_id,
+        sheet_task_id: conflict.sheet_task_id,
         project_id: projectId,
         field_name: field,
         resolution,
@@ -151,14 +153,14 @@ export default function ConflictResolutionDialog({ projectId, onClose }: Props) 
                         </div>
                       </div>
                       <div className="flex gap-2 flex-wrap">
-                        {(['keep_sheet', 'keep_kanban', 'merged'] as Resolution[]).map(r => (
+                        {(['keep_sheet', 'keep_kanban'] as Resolution[]).map(r => (
                           <button
                             key={r}
                             onClick={() => resolve(conflict, 'status', r)}
                             disabled={resolving === `${conflict.task_id}-status`}
                             className="text-xs px-3 py-1.5 border border-slate-200 dark:border-slate-600 rounded-lg hover:border-sky-400 hover:text-sky-600 disabled:opacity-50 transition-colors"
                           >
-                            {r === 'keep_sheet' ? 'Use Sheet' : r === 'keep_kanban' ? 'Use Kanban' : 'Merge'}
+                            {r === 'keep_sheet' ? 'Use Sheet' : 'Use Kanban'}
                           </button>
                         ))}
                       </div>

@@ -383,6 +383,228 @@ All 4 new pages now load `user`, `organizations`, `selectedOrg` from `localStora
 
 ---
 
+## [Unreleased] — 2026-05-28 · Bug Fixes & Adviser Role
+
+### Summary
+Six bug fixes: projects now load correctly in Timeline, Reports, and Integrations pages; task creation now includes a project selector; Google Classroom backend endpoints were fully implemented; and a new `adviser` role was added across the full stack.
+
+---
+
+### Bug Fix 1 — Projects not loading in Timeline, Reports, Integrations
+
+**Root cause:** All three pages called `GET /api/projects` and read `res.data.projects` (undefined), while the backend returns a flat array.
+
+**Fixed**
+- `frontend/src/app/gantt/page.tsx` — parse response as `Array.isArray(res.data) ? res.data : []`; pass `?organization_id=` query param; read `selectedOrganization` from localStorage (not `orgs[0]`); added `handleOrgChange` that re-fetches projects
+- `frontend/src/app/reports/page.tsx` — same fix; `orgId` state now correctly initialized from `selectedOrganization`
+- `frontend/src/app/integrations/page.tsx` — same fix; Sync tab shows a proper empty state with link when no project exists
+
+---
+
+### Bug Fix 2 — Task creation missing project selector
+
+**Fixed**
+- `frontend/src/components/tasks/AdminTaskView.tsx`
+  - Added `project_id: null` to `newTask` initial state
+  - Added `projects` state and `fetchProjects()` function (fetches `GET /api/projects?organization_id=`)
+  - Called `fetchProjects()` in `useEffect` alongside `fetchTasks` and `fetchMembers`
+  - Added Project `<select>` field in the Create Task modal form
+  - Added `project_id: null` to form reset after successful creation
+- `frontend/src/components/tasks/ManagerTaskView.tsx` — identical changes applied
+
+---
+
+### Bug Fix 3 — Google Classroom backend missing
+
+**Added**
+- `backend/src/routes/classroom.routes.ts` — **new file** with three endpoints:
+  - `GET /api/classroom/courses` — lists active courses for the authenticated user's Google account
+  - `GET /api/classroom/courses/:courseId/students` — fetches roster for a course
+  - `POST /api/classroom/import` — imports students as org member invitations via `organization_invitations` upsert
+- `backend/src/services/google/classroom.service.ts` — replaced placeholder stub with real implementation using `getGoogleClients()` from `config/google`; kept legacy default export for `dashboard.routes.ts` backward compatibility
+- `backend/src/routes/auth.routes.ts` — added `GET /api/auth/google/status` endpoint that checks `access_token` + `refresh_token` presence for the authenticated user; added `query` import from `config/database`
+- `backend/src/config/google.ts` — restored two Classroom OAuth scopes:
+  - `https://www.googleapis.com/auth/classroom.courses.readonly`
+  - `https://www.googleapis.com/auth/classroom.rosters.readonly`
+- `backend/src/server.ts` — registered `classroomRoutes` under `/api`
+
+> **Note:** Classroom API must be enabled in Google Cloud Console → APIs & Services before OAuth will succeed with these scopes.
+
+---
+
+### Bug Fix 4 — Stripe (skipped)
+
+Stripe configuration skipped by user request. Backend already returns `{ configured: false }` gracefully.
+
+---
+
+### Feature — Adviser Role
+
+**Added `adviser` as a valid organization membership role with manager-level access.**
+
+**Backend**
+- `backend/src/routes/organization.routes.ts` — added `'adviser'` to role validation arrays in both the invite endpoint (line 184) and the role-change endpoint (line 826); advisers cannot send invites or change roles (admin-only remains unchanged)
+
+**Frontend — type system**
+- `frontend/src/config/themes.ts` — added `'adviser'` to `UserRole` type; added `roleThemes.adviser` (purple palette: primary `#7c3aed`, dark mode `#a78bfa`)
+- Updated `Organization.role` and `Member.role` type declarations in **15 files**:
+  - Pages: `tasks`, `gantt`, `reports`, `integrations`, `boards`, `billing`, `dashboard`, `analytics`, `drive`, `workspace-sync`, `settings`, `sheets`, `select-workspace`, `team`, `calendar`, `projects`
+  - Components: `AppLayout`, `AdminTeamView`, `ManagerTeamView`, `MemberTeamView`, `RoleManagement`, `OrganizationGateway`
+
+**Frontend — UI**
+- `frontend/src/components/layout/AppLayout.tsx` — added `adviser: { label: 'Adviser', color: 'bg-purple-100 text-purple-700' }` to `getRoleBadge`; adviser gets manager-level sidebar access (all `role !== 'member'` gates pass)
+- `frontend/src/app/tasks/page.tsx` — adviser role routes to `ManagerTaskView` (same as manager)
+- `frontend/src/components/team/AdminTeamView.tsx` — added `'adviser'` to role-change dropdown options; added `🎓 Adviser` option in invite modal; added Adviser to member filter dropdown
+- `frontend/src/components/team/RoleManagement.tsx` — added `adviser` entry in `ROLE_CONFIG` (purple color, "Can view all teams and manage tasks" description)
+
+---
+
+## [Unreleased] — 2026-05-29 · Gantt Fix, Dependency UI, Adviser Role & Real Reports
+
+### Summary
+Four targeted fixes: Gantt chart now shows tasks for all roles by smart-selecting the most populated project; dependency tracking is fully accessible from task cards and the table view; the ScholarSync "Advisers" role now maps to the dedicated `adviser` role in SkyFlow instead of `manager`/`admin`; and report downloads now produce real PDF and Word (.docx) files with role-appropriate content.
+
+---
+
+### Fix 1 — Gantt Chart: Tasks Not Visible for Manager/Member Roles
+
+**Root cause:** `GET /api/projects` orders by `created_at DESC` (newest first). If the newest project had no tasks, manager/member users saw an empty chart because they couldn't see the dropdown to switch projects.
+
+**Backend — `backend/src/routes/project.routes.ts`**
+- Added scalar subquery `(SELECT COUNT(*) FROM tasks WHERE project_id = p.id) as task_count` to `GET /api/projects` response so the frontend can pick a populated project automatically
+
+**Frontend — `frontend/src/app/gantt/page.tsx`**
+- Updated `Project` interface to include `task_count?: number`
+- Changed `fetchProjects` to prefer the first project with `task_count > 0` over `list[0]`; this ensures all roles land on a chart with visible bars without needing to change the dropdown
+
+**Frontend — `frontend/src/components/gantt/GanttChart.tsx`**
+- Added `error` state and `.catch` handler so API failures surface as an actionable error message instead of a silent empty state
+- Added null guard (`if (!projectId) return`) to prevent fetching with an empty ID
+- Added defensive `|| []` defaults on `tasks`, `dependencies`, `members`
+
+**Backend — `backend/src/services/migration.service.ts`** (migration `051`)
+- Expanded migration 051 from a single `progress_percent` add to a full safety-net block:
+  - `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress_percent NUMERIC DEFAULT 0`
+  - `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS complexity_weight INTEGER DEFAULT 1`
+  - `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS wbs_code VARCHAR(100)`
+  - `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMP`
+  - `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_absolute BOOLEAN DEFAULT FALSE`
+  - `CREATE TABLE IF NOT EXISTS task_assignees (...)` with `UNIQUE(task_id, user_id)` and indexes
+  - Ensures fresh installs without the raw SQL migration files still have all required columns
+
+---
+
+### Fix 2 — Dependency Tracking: Dialog Now Accessible From Task Views
+
+**Root cause:** `DependencyDialog.tsx` and all four backend dependency endpoints were fully implemented but the dialog was never imported or rendered anywhere — it was an orphaned component with no trigger.
+
+**`frontend/src/components/tasks/DependencyDialog.tsx`**
+- Fixed data-shape bug: `GET /api/tasks` returns a flat array but the dialog read `tasksRes.data.tasks` (always `undefined`), so the "depends on" dropdown was always empty. Changed to `Array.isArray(tasksRes.data) ? tasksRes.data : (tasksRes.data.tasks || [])`.
+
+**`frontend/src/components/tasks/ProfessionalTaskCard.tsx`**
+- Added `onDependency?: () => void` prop
+- Added `Link2` icon to lucide-react import
+- Added sky-blue `Link2` hover button in the Quick Actions overlay (appears alongside Archive/Delete on hover, admin/manager role only)
+
+**`frontend/src/components/tasks/ProfessionalKanban.tsx`**
+- Added `onDependency?: (task: Task) => void` to `ProfessionalKanbanProps`
+- Passed `role` and `onDependency` through to each `ProfessionalTaskCard`
+
+**`frontend/src/components/tasks/AdminTaskView.tsx`**
+- Imported `DependencyDialog` and `Link2`
+- Added `dependencyTask` state (`Task | null`)
+- Passed `onDependency={(task) => setDependencyTask(task as Task)}` to both Kanban boards (Advisor Board + Team Board)
+- Added **Actions** column to the table view with a `Link2` icon button per row (only shown when `task.project_id` is set)
+- Renders `<DependencyDialog>` as a modal overlay when `dependencyTask` is non-null
+
+**`frontend/src/components/tasks/ManagerTaskView.tsx`**
+- Identical changes: `DependencyDialog` import, `dependencyTask` state, `onDependency` on both Kanban boards, `Link2` added next to the existing Edit button in the table's Actions column
+
+**Result:** Clicking the `🔗` icon on any task card (hover) or any table row opens the dependency dialog. The "Blocked By" and "Blocking" sections and the Add Dependency dropdown now fully populate.
+
+---
+
+### Fix 3 — ScholarSync Adviser Role Mapping
+
+**Root cause:** When a ScholarSync user with `accountRole = 'Advisers'` logged in, three separate code paths mapped them to SkyFlow `'admin'` or `'manager'` rather than the intended `'adviser'` role. Additionally, when an admin changed a user's role in the ScholarSync Accounts panel, the cascade to `organization_members` also wrote `'manager'`.
+
+**`backend/src/routes/auth.routes.ts`** (3 fixes)
+- **First-time login** (`skyflowRole`): `Advisers → 'admin'` → `Advisers → 'adviser'`
+- **Org membership sync** (`mappedRole`): `Advisers → 'manager'` → `Advisers → 'adviser'`
+- **Existing-user backfill** on `/api/auth/me` (`backfillRole`): `Advisers → 'admin'` → `Advisers → 'adviser'`
+
+**`backend/src/routes/scholar.routes.ts`** (1 fix)
+- Admin role-change cascade (`orgRole`): `Advisers → 'manager'` → `Advisers → 'adviser'`
+
+**No frontend changes needed** — `AppLayout`, `tasks/page.tsx`, and all Organization type declarations already handled `'adviser'` from the previous release. The ScholarSync auth middleware's `normalizeRole` already maps `'adviser' → 'advisers'` for route-level access control.
+
+---
+
+### Feature — Real PDF & Word Report Downloads
+
+**Root cause:** `ReportExportPanel` generated a `.json` blob regardless of the format selected. No PDF or DOCX file was ever produced.
+
+**Installed (frontend)**
+- `jspdf` `^4.2.1` — client-side PDF generation
+- `jspdf-autotable` `^5.0.8` — table plugin for jsPDF
+- `docx` `^9.7.1` — Word document generation (OOXML)
+
+**`frontend/src/components/reports/ReportExportPanel.tsx`** — rewritten
+
+*Format options:*
+| Format | Before | After |
+|---|---|---|
+| PDF | Downloaded `.json` | Downloads a real **`.pdf`** |
+| Word (DOCX) | Not available | Downloads a real **`.docx`** |
+| Google Doc | Attempted Google Docs | Unchanged; falls back to DOCX if not configured |
+
+*Report content — tailored per type:*
+
+| Report Type | Content |
+|---|---|
+| **Sprint Summary** | Blue header band; meta block (project, sprint, date range, generator); stats row (Total / Done / In Progress / In Review / Todo / Blocked); task table (WBS, title, status, priority, assignee, progress %, due date, estimated hours) |
+| **Task Status Report** | Same as Sprint Summary — stats + full task table |
+| **Team Performance** | Per-member summary table (total, completed, in-progress, in-review, remaining) followed by detail table sorted by assignee |
+| **Dependency Report** | Task list with WBS, dates, and status; note directing users to the Link icon on task cards for managing dependency links |
+| **Custom Report** | Complete task table with all available fields |
+
+*Technical details:*
+- All generation is **client-side** via dynamic `import()` — no SSR issues in Next.js `'use client'` components
+- PDF: landscape A4, branded header band (`#1E40AF`), alternating row shading, status column coloured per status, page footer with page numbers
+- DOCX: US Letter, Calibri font, `#1E40AF` heading colour, branded page header with page numbers, alternating row shading in tables
+- `handleDownload` on history rows re-fetches task data and regenerates in the report's original format
+
+**`frontend/src/app/reports/page.tsx`**
+- Passes `projectName={projects.find(p => p.id === selectedProject)?.name}` to `<ReportExportPanel>` so the project name appears in generated files
+
+---
+
+### Fix 5 — PDF Reports: Actual Task Data Now Renders in Tables
+
+**Root cause:** `jspdf-autotable` 5.0.8 ships an ESM `.mjs` build. When Next.js resolves the dynamic `import('jspdf-autotable')` in the browser, it imports the ESM module whose `default` export is the `autoTable` function — but in the browser ESM context this function silently no-ops when called with a freshly-created `jsPDF` instance (the instance hasn't been augmented by the plugin side-effect). Confirmed via Node.js testing: the functional `autoTable(doc, opts)` call works fine in CJS, but in Next.js browser ESM it produces an unaugmented doc with no table content. File sizes of 5.8–7.2 KB (header/meta only) vs. expected 15–30 KB (with data rows) confirmed the issue.
+
+**Fix — `frontend/src/components/reports/ReportExportPanel.tsx`**
+- Removed all `jspdf-autotable` imports and usage
+- Added two new pure-function helpers:
+  - **`truncateText(doc, text, maxW)`** — fits cell text to column width with ellipsis
+  - **`drawPdfTable(doc, opts)`** — draws tables using only native jsPDF primitives:
+    - `doc.setFillColor` + `doc.rect('F')` for header row (blue `#1E40AF`) and alternating row fills (`#F5F7FF`)
+    - `doc.text` for all cell content with per-column width truncation
+    - `doc.line` for row separator lines
+    - Automatic page break detection: when `y + rowH > pageH - margin - 5`, adds new page and redraws header
+- Changed jsPDF import from `(await import('jspdf')).default` to `const { jsPDF } = await import('jspdf')` (named export — more reliable across CJS/ESM contexts)
+- Removed now-unused `STATUS_HEX` constant
+
+**All 5 report types now produce PDFs with full table data:**
+
+| Report Type | Table Content |
+|---|---|
+| Sprint Summary / Task Status / Custom | Stats row (Total/Done/In Progress/…) + 9-column task table with WBS, title, status, priority, assignee, progress, due date, hours |
+| Team Performance | Per-member summary table (6 cols) + task detail table sorted by assignee (7 cols) |
+| Dependency Report | 8-column task list with WBS, start/due dates, and status for dependency review |
+
+---
+
 ## [1.0.0] — Initial Release (prior to this document)
 
 - SkyFlow Kanban board with drag-and-drop, WBS codes, multi-assignee

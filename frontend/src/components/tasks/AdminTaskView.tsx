@@ -3,9 +3,10 @@
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { CheckSquare, Plus, Search, Filter, Calendar, User, Users, AlertCircle, Clock, X, LayoutGrid, Table, Archive, ChevronDown, ChevronRight, RotateCcw, Edit3, FileText } from "lucide-react"
+import { CheckSquare, Plus, Search, Filter, Calendar, User, Users, AlertCircle, Clock, X, LayoutGrid, Table, Archive, ChevronDown, ChevronRight, RotateCcw, Edit3, FileText, Link2 } from "lucide-react"
 import ProfessionalTaskCard from "./ProfessionalTaskCard"
 import ProfessionalKanban from "./ProfessionalKanban"
+import DependencyDialog from "./DependencyDialog"
 import TaskTimeline from "./TaskTimeline"
 import MultiAssigneeSelect from "./MultiAssigneeSelect"
 import GoogleSheetImportModal from "./GoogleSheetImportModal"
@@ -52,6 +53,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterPriority, setFilterPriority] = useState<string>("all")
   const [viewMode, setViewMode] = useState<'board' | 'table'>('board')
@@ -65,18 +67,22 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
     complexity_weight: 1,
     is_absolute: false,
     wbs_code: '',
-    parent_task_id: null as string | null
+    parent_task_id: null as string | null,
+    project_id: null as string | null
   })
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [members, setMembers] = useState<Member[]>([])
+  const [projects, setProjects] = useState<{id: string; name: string}[]>([])
   const [isGoogleSyncModalOpen, setIsGoogleSyncModalOpen] = useState(false)
   const [boardSubView, setBoardSubView] = useState<'team' | 'advisor'>('team')
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
+  const [dependencyTask, setDependencyTask] = useState<Task | null>(null)
 
   useEffect(() => {
     fetchTasks()
     fetchMembers()
+    fetchProjects()
   }, [organization.id, selectedTeam])
 
   const fetchTasks = async () => {
@@ -122,7 +128,13 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
       })
       if (response.ok) {
         const data = await response.json()
-        const allMembers: Member[] = data.members || []
+        // Backend returns 'id' (users.id) not 'user_id' — map it so MultiAssigneeSelect works
+        const allMembers: Member[] = (data.members || []).map((m: any) => ({
+          user_id: m.id,
+          name: m.name,
+          email: m.email,
+          profile_picture: m.profile_picture
+        }))
 
         if (selectedTeam) {
           // Fetch team detail to get team-specific members
@@ -147,6 +159,21 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
     }
   }
 
+  const fetchProjects = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`${API_URL}/api/projects?organization_id=${organization.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setProjects(Array.isArray(data) ? data : [])
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error)
+    }
+  }
+
   // Normalize database status values to frontend format
   const normalizeStatus = (status: string): Task['status'] => {
     const statusMap: Record<string, Task['status']> = {
@@ -164,6 +191,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
 
   const handleCreateTask = async () => {
     if (!newTask.title) return
+    setCreateError(null)
 
     try {
       const token = localStorage.getItem('token')
@@ -175,6 +203,8 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
         },
         body: JSON.stringify({
           ...newTask,
+          due_date: newTask.due_date || null,
+          start_date: newTask.start_date || null,
           status: 'todo',
           team_id: selectedTeam
         })
@@ -183,6 +213,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
       if (response.ok) {
         fetchTasks()
         setIsCreateModalOpen(false)
+        setCreateError(null)
         setNewTask({
           title: '',
           description: '',
@@ -192,10 +223,15 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
           complexity_weight: 1,
           is_absolute: false,
           wbs_code: '',
-          parent_task_id: null
+          parent_task_id: null,
+          project_id: null
         })
+      } else {
+        const err = await response.json().catch(() => ({}))
+        setCreateError(err.error || `Failed to create task (${response.status})`)
       }
     } catch (error) {
+      setCreateError('Network error — could not reach server')
       console.error('Error creating task:', error)
     }
   }
@@ -326,8 +362,11 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
 
     try {
       const token = localStorage.getItem('token')
+      // Derive assignee fields from the current MultiAssigneeSelect state
+      const currentAssigneeIds = (editingTask.assignees || []).map((a: any) => a.user_id).filter(Boolean)
+      const primaryAssignee = currentAssigneeIds[0] || null
       const response = await fetch(`${API_URL}/api/tasks/${editingTask.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -336,12 +375,13 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
           title: editingTask.title,
           description: editingTask.description,
           priority: editingTask.priority,
-          due_date: editingTask.due_date,
-          start_date: editingTask.start_date,
+          due_date: editingTask.due_date || null,
+          start_date: editingTask.start_date || null,
           complexity_weight: editingTask.complexity_weight,
           is_absolute: editingTask.is_absolute,
           wbs_code: editingTask.wbs_code,
-          assigned_to: editingTask.assigned_to
+          assigned_to: primaryAssignee,
+          assigned_to_ids: currentAssigneeIds
         })
       })
       if (response.ok) {
@@ -505,6 +545,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
+                onDependency={(task) => setDependencyTask(task as Task)}
                 theme="admin"
                 role="admin"
               />
@@ -529,6 +570,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 onStatusChange={handleStatusChange}
                 onDeleteTask={handleDeleteTask}
                 onArchiveTask={handleArchiveTask}
+                onDependency={(task) => setDependencyTask(task as Task)}
                 theme="manager"
                 role="admin"
               />
@@ -598,6 +640,7 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Created</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Due Date</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Assignee</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-white uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -651,6 +694,17 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                       </div>
                     ) : (
                       <span className="text-sm text-gray-400">Unassigned</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    {task.project_id && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDependencyTask(task); }}
+                        className="p-1.5 hover:bg-sky-100 rounded-lg transition-colors"
+                        title="Manage Dependencies"
+                      >
+                        <Link2 className="w-4 h-4 text-sky-500" />
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -783,6 +837,20 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">
+                  Project (Optional)
+                </label>
+                <select
+                  value={newTask.project_id || ''}
+                  onChange={(e) => setNewTask({ ...newTask, project_id: e.target.value || null })}
+                  className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">No project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+
               <div className="flex items-center gap-3 p-3 bg-blue-50/50 rounded-xl border border-blue-100">
                 <input
                   type="checkbox"
@@ -796,9 +864,15 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
                 </label>
               </div>
 
+              {createError && (
+                <div className="px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-sm text-red-600 flex items-center gap-2">
+                  <span>⚠</span> {createError}
+                </div>
+              )}
+
               <div className="flex gap-3 pt-4">
                 <button
-                  onClick={() => setIsCreateModalOpen(false)}
+                  onClick={() => { setIsCreateModalOpen(false); setCreateError(null); }}
                   className="flex-1 px-4 py-2 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-gray-600 font-medium"
                 >
                   Cancel
@@ -977,6 +1051,16 @@ export default function AdminTaskView({ user, organization }: AdminTaskViewProps
         onImportComplete={() => fetchTasks()}
         teamId={selectedTeam}
       />
+
+      {/* Dependency Dialog */}
+      {dependencyTask && dependencyTask.project_id && (
+        <DependencyDialog
+          taskId={dependencyTask.id}
+          taskTitle={dependencyTask.title}
+          projectId={dependencyTask.project_id}
+          onClose={() => setDependencyTask(null)}
+        />
+      )}
     </div>
   )
 }

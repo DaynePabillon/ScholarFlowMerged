@@ -77,9 +77,12 @@ export default function SyncControlPanel({ projectId }: Props) {
     setFeedback(null);
     try {
       const res = await apiClient.post('/sync/trigger', { project_id: projectId });
+      const count = res.data.syncedCount ?? 0;
       setFeedback({
         type: 'success',
-        message: `Sync complete — ${res.data.syncedCount} sheet(s) synced`
+        message: count === 0
+          ? (res.data.message || 'No sheets are connected to this project yet.')
+          : `Sync complete — ${count} sheet(s) synced`
       });
       await loadStatus();
       await loadLogs();

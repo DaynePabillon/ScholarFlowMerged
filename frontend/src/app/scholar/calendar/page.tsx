@@ -2,8 +2,6 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-  const [organizations, setOrganizations] = useState<any[]>([])
-  const [selectedOrg, setSelectedOrg] = useState<any>(null)
 import {
   CalendarIcon,
   Plus,
@@ -226,6 +224,8 @@ function isConsultationEvent(event: CalendarEvent | null): boolean {
 export default function CalendarPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [currentDate, setCurrentDate] = useState(new Date())

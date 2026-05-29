@@ -1370,6 +1370,86 @@ async function runMigrations(): Promise<void> {
           UNIQUE (project_id)
         );
       `
+    },
+    {
+      name: '049_fix_sync_logs_columns',
+      sql: `
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'project_id') THEN
+            ALTER TABLE sync_logs ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE CASCADE;
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'organization_id') THEN
+            ALTER TABLE sync_logs ADD COLUMN organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'triggered_by') THEN
+            ALTER TABLE sync_logs ADD COLUMN triggered_by UUID REFERENCES users(id);
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'status') THEN
+            ALTER TABLE sync_logs ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'success';
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'synced_count') THEN
+            ALTER TABLE sync_logs ADD COLUMN synced_count INTEGER DEFAULT 0;
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'error_message') THEN
+            ALTER TABLE sync_logs ADD COLUMN error_message TEXT;
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '050_add_adviser_role',
+      sql: `
+        -- Drop and recreate the role CHECK constraint on organization_members to include 'adviser'
+        DO $$ BEGIN
+          ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
+          ALTER TABLE organization_members ADD CONSTRAINT organization_members_role_check
+            CHECK (role IN ('admin', 'manager', 'member', 'adviser'));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+
+        -- Drop and recreate the role CHECK constraint on organization_invitations to include 'adviser'
+        DO $$ BEGIN
+          ALTER TABLE organization_invitations DROP CONSTRAINT IF EXISTS organization_invitations_role_check;
+          ALTER TABLE organization_invitations ADD CONSTRAINT organization_invitations_role_check
+            CHECK (role IN ('admin', 'manager', 'member', 'adviser'));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+      `
+    },
+    {
+      name: '051_add_progress_percent_to_tasks',
+      sql: `
+        -- Add columns missing from tasks table.
+        -- These may have been added via raw SQL files (022_kanban_role_enhancements.sql)
+        -- but were never tracked in the migration service. Using IF NOT EXISTS for safety.
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress_percent NUMERIC DEFAULT 0;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS complexity_weight INTEGER DEFAULT 1;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS wbs_code VARCHAR(100);
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMP;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_absolute BOOLEAN DEFAULT FALSE;
+
+        -- Also ensure task_assignees table exists (created in raw SQL file 022)
+        CREATE TABLE IF NOT EXISTS task_assignees (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          UNIQUE(task_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_assignees_task_id ON task_assignees(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_assignees_user_id ON task_assignees(user_id);
+      `
     }
   ];
 

@@ -45,7 +45,11 @@ export default function DependencyDialog({ taskId, taskTitle, projectId, onClose
     ]);
     setBlocking(depsRes.data.blocking);
     setBlockedBy(depsRes.data.blockedBy);
-    setAllTasks((tasksRes.data.tasks || []).filter((t: Task) => t.id !== taskId));
+    // GET /api/tasks returns a flat array; guard against both shapes
+    const taskList: Task[] = Array.isArray(tasksRes.data)
+      ? tasksRes.data
+      : (tasksRes.data.tasks || []);
+    setAllTasks(taskList.filter((t: Task) => t.id !== taskId));
     setLoading(false);
   };
 

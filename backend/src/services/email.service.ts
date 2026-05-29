@@ -184,7 +184,7 @@ export const sendCommentAlertEmail = async (params: {
   commentText: string;
 }): Promise<{ success: boolean; error?: string }> => {
   const frontendUrl = process.env.FRONTEND_URL || 'https://skyflow.fun';
-  const taskUrl = `${frontendUrl}/tasks/${params.taskId}`;
+  const taskUrl = `${frontendUrl}/tasks`;
 
   if (!isEmailConfigured()) {
     logger.info(`📧 [DEV] Comment alert: to=${params.to}, task="${params.taskTitle}", by=${params.commenterName}`);

@@ -7,7 +7,7 @@ import { apiClient } from '@/lib/api/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { CreditCard, CheckCircle2, XCircle } from 'lucide-react';
 
-interface Organization { id: string; name: string; role: 'admin' | 'manager' | 'member'; }
+interface Organization { id: string; name: string; role: 'admin' | 'manager' | 'member' | 'adviser'; }
 
 function BillingPageContent() {
   const [user, setUser] = useState<any>(null);

@@ -11,7 +11,7 @@ import MemberTaskView from "@/components/tasks/MemberTaskView"
 interface Organization {
   id: string
   name: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
 }
 
 export default function TasksPage() {
@@ -88,7 +88,7 @@ export default function TasksPage() {
   let content
   if (selectedOrg.role === 'admin') {
     content = <AdminTaskView user={user} organization={selectedOrg} />
-  } else if (selectedOrg.role === 'manager') {
+  } else if (selectedOrg.role === 'manager' || selectedOrg.role === 'adviser') {
     content = <ManagerTaskView user={user} organization={selectedOrg} />
   } else {
     content = <MemberTaskView user={user} organization={selectedOrg} />

@@ -7,8 +7,8 @@ import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
 import { Calendar } from 'lucide-react';
 
-interface Organization { id: string; name: string; role: 'admin' | 'manager' | 'member'; }
-interface Project { id: string; name: string; }
+interface Organization { id: string; name: string; role: 'admin' | 'manager' | 'member' | 'adviser'; }
+interface Project { id: string; name: string; task_count?: number; }
 
 export default function GanttPage() {
   const [user, setUser] = useState<any>(null);
@@ -19,6 +19,19 @@ export default function GanttPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const fetchProjects = (orgId: string) => {
+    setLoading(true);
+    apiClient.get(`/projects?organization_id=${orgId}`).then(res => {
+      const list = Array.isArray(res.data) ? res.data : [];
+      setProjects(list);
+      if (list.length > 0) {
+        // Prefer the first project that actually has tasks so all roles see a populated chart
+        const projectWithTasks = list.find((p: any) => Number(p.task_count) > 0);
+        setSelectedProject((projectWithTasks || list[0]).id);
+      }
+    }).catch(() => setProjects([])).finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     const token = localStorage.getItem('token') || localStorage.getItem('auth_token');
     if (!token) { router.push('/login'); return; }
@@ -26,26 +39,34 @@ export default function GanttPage() {
     const storedUser = localStorage.getItem('user');
     const storedOrgs = localStorage.getItem('organizations');
     const storedOrg = localStorage.getItem('selectedOrganization');
+
     if (storedUser) setUser(JSON.parse(storedUser));
     if (storedOrgs) setOrganizations(JSON.parse(storedOrgs));
-    if (storedOrg) setSelectedOrg(JSON.parse(storedOrg));
 
-    apiClient.get('/projects').then(res => {
-      const list = res.data.projects || [];
-      setProjects(list);
-      if (list.length > 0) setSelectedProject(list[0].id);
-    }).finally(() => setLoading(false));
+    // Use selectedOrganization if available, else fall back to first org
+    const orgObj = storedOrg ? JSON.parse(storedOrg) : (storedOrgs ? JSON.parse(storedOrgs)[0] : null);
+    if (orgObj) {
+      setSelectedOrg(orgObj);
+      fetchProjects(orgObj.id);
+    } else {
+      setLoading(false);
+    }
   }, []);
+
+  const handleOrgChange = (org: Organization) => {
+    setSelectedOrg(org);
+    localStorage.setItem('selectedOrganization', JSON.stringify(org));
+    setProjects([]);
+    setSelectedProject('');
+    fetchProjects(org.id); // fetchProjects already applies the task_count-based default
+  };
 
   return (
     <AppLayout
       user={user}
       organizations={organizations}
       selectedOrg={selectedOrg}
-      onOrgChange={(org) => {
-        setSelectedOrg(org);
-        localStorage.setItem('selectedOrganization', JSON.stringify(org));
-      }}
+      onOrgChange={handleOrgChange}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -79,6 +100,9 @@ export default function GanttPage() {
           <div className="text-center py-16" style={{ color: 'var(--color-textSecondary)' }}>
             <Calendar className="h-12 w-12 mx-auto mb-3 opacity-40" />
             <p>No projects found. Create a project first to view its timeline.</p>
+            <a href="/projects" className="mt-3 inline-block text-sm text-sky-600 hover:text-sky-700 underline">
+              Go to Projects →
+            </a>
           </div>
         ) : selectedProject ? (
           <GanttChart projectId={selectedProject} />
