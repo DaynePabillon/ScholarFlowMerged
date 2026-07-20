@@ -405,17 +405,21 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       [title, description, status, priority, due_date, start_date, estimated_hours, actual_hours, assigned_to, is_absolute, complexity_weight, wbs_code, parent_task_id, luxury_weight, progress_percent, id]
     );
 
-    // Sync assignees if provided
+    // Sync assignees if an explicit list is provided (sent by the edit modal)
     if (assigned_to_ids && Array.isArray(assigned_to_ids)) {
-      // First, remove existing assignees that are not in the new list OR the primary assigned_to
-      await query(
-        `DELETE FROM task_assignees 
-         WHERE task_id = $1 AND user_id != COALESCE($2, '00000000-0000-0000-0000-000000000000'::uuid)`,
-        [id, assigned_to]
-      );
+      // Remove all existing assignees that are not in the new list
+      if (assigned_to_ids.length === 0) {
+        await query(`DELETE FROM task_assignees WHERE task_id = $1`, [id]);
+      } else {
+        await query(
+          `DELETE FROM task_assignees WHERE task_id = $1 AND user_id != ALL($2::uuid[])`,
+          [id, assigned_to_ids]
+        );
+      }
 
-      // Add new assignees
+      // Upsert new assignees
       for (const assigneeId of assigned_to_ids) {
+        if (!assigneeId) continue;
         await query(
           `INSERT INTO task_assignees (task_id, user_id, assigned_by)
            VALUES ($1, $2, $3)
@@ -423,15 +427,8 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
           [id, assigneeId, userId]
         );
       }
-    } else if (assigned_to) {
-      // If only primary assigned_to is changed, update junction table
-      await query(
-        `INSERT INTO task_assignees (task_id, user_id, assigned_by)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (task_id, user_id) DO NOTHING`,
-        [id, assigned_to, userId]
-      );
     }
+    // Note: individual add/remove is handled by POST/DELETE /api/tasks/:id/assignees endpoints
 
     res.json(result.rows[0]);
   } catch (error) {

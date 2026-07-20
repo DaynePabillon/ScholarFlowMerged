@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { AuthRequest, authenticateToken } from '../middleware/auth.middleware';
 import { query } from '../config/database';
 import logger from '../config/logger';
+import { syncScholarSyncAdminRole } from '../services/ssAccountSync.service';
 
 const router = Router();
 
@@ -145,6 +146,13 @@ router.post('/accept', authenticateToken, async (req: AuthRequest, res: Response
        VALUES ($1, $2, $3, 'active', NOW())`,
             [invitation.organization_id, userId, invitation.role]
         );
+
+        // If invited as an org Admin, immediately grant ScholarSync Admin too
+        if (invitation.role === 'admin') {
+            const acceptedUser = await query('SELECT name, email FROM users WHERE id = $1', [userId]);
+            const au = acceptedUser.rows[0];
+            await syncScholarSyncAdminRole(au?.email, au?.name, userId);
+        }
 
         // Mark invitation as accepted
         await query(

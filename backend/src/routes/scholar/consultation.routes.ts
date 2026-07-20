@@ -1789,4 +1789,142 @@ router.put('/followups/:conID/status', authenticate, async (req, res) => {
   }
 });
 
+// ─── GET /all-records — Consultation Hub: all records for adviser's courses ───
+router.get('/all-records', authenticate, async (req: any, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const userEmail = req.user?.email;
+    if (!userEmail) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Check if validation columns exist (migration 057 may not have run yet)
+    const { rows: colCheck } = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'ss_consultation' AND column_name = 'validation_status'
+    `);
+    const hasValidation = colCheck.length > 0;
+    if (!hasValidation) console.warn('[consultation] validation columns not found — migration 057 may not have run');
+
+    const validationCols = hasValidation
+      ? `COALESCE(c."validation_status", 'not_requested') AS validation_status,
+         c."validated_by",
+         c."validated_at",
+         c."validation_requested_at",
+         c."validation_notes",`
+      : `'not_requested' AS validation_status,
+         NULL AS validated_by,
+         NULL AS validated_at,
+         NULL AS validation_requested_at,
+         NULL AS validation_notes,`;
+
+    const { rows } = await client.query(`
+      SELECT
+        c."conID"                    AS con_id,
+        c."slot_id",
+        c."groupName"                AS group_name,
+        c."conDate"                  AS consultation_date,
+        c."conMil"                   AS milestone,
+        c."conSum"                   AS summary,
+        c."conAction"                AS action,
+        c."conConcerns"              AS concerns,
+        c."status",
+        c."follow_up_status",
+        c."submitted_at",
+        ${validationCols}
+        COALESCE(sc."courseCode", '') AS course_code,
+        COALESCE(sc."courseName", '') AS course_name,
+        COALESCE(sc."courseSection", '') AS course_section
+      FROM ss_consultation c
+      LEFT JOIN ss_courses sc ON c."courseID" = sc.id
+      WHERE c."status" = 'SUBMITTED' OR c."status" = 'COMPLETED'
+      ORDER BY c."submitted_at" DESC NULLS LAST, c."conID" DESC
+      LIMIT 200
+    `);
+
+    return res.json({ records: rows });
+  } catch (error: any) {
+    console.error('Error fetching all consultation records:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to fetch consultation records.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /:conID/request-validation — Student/Adviser requests external validation ───
+router.post('/:conID/request-validation', authenticate, async (req: any, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { conID } = req.params;
+    const userEmail = req.user?.email;
+    if (!userEmail) return res.status(401).json({ error: 'Unauthorized' });
+
+    // Check the record exists
+    const { rows: existing } = await client.query(
+      `SELECT "conID", "validation_status" FROM ss_consultation WHERE "conID" = $1`,
+      [conID]
+    );
+    if (!existing.length) return res.status(404).json({ error: 'Consultation record not found.' });
+    if (existing[0].validation_status === 'validated') {
+      return res.status(400).json({ error: 'This record has already been validated.' });
+    }
+
+    const { rows } = await client.query(
+      `UPDATE ss_consultation
+       SET validation_status = 'pending',
+           validation_requested_at = NOW()
+       WHERE "conID" = $1
+       RETURNING "conID", validation_status, validation_requested_at`,
+      [conID]
+    );
+
+    return res.json({ success: true, consultation: rows[0] });
+  } catch (error: any) {
+    console.error('Error requesting validation:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to request validation.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ─── POST /:conID/validate — External leader validates or rejects a consultation ───
+router.post('/:conID/validate', authenticate, async (req: any, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { conID } = req.params;
+    const { decision, notes } = req.body;
+    const userEmail = req.user?.email;
+    if (!userEmail) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (!['validated', 'rejected'].includes(decision)) {
+      return res.status(400).json({ error: "decision must be 'validated' or 'rejected'." });
+    }
+
+    const { rows: existing } = await client.query(
+      `SELECT "conID", validation_status FROM ss_consultation WHERE "conID" = $1`,
+      [conID]
+    );
+    if (!existing.length) return res.status(404).json({ error: 'Consultation record not found.' });
+    if (existing[0].validation_status !== 'pending') {
+      return res.status(400).json({ error: 'Only records with pending validation status can be reviewed.' });
+    }
+
+    const { rows } = await client.query(
+      `UPDATE ss_consultation
+       SET validation_status = $1,
+           validated_by = $2,
+           validated_at = NOW(),
+           validation_notes = $3
+       WHERE "conID" = $4
+       RETURNING "conID", validation_status, validated_by, validated_at, validation_notes`,
+      [decision, userEmail, notes || null, conID]
+    );
+
+    return res.json({ success: true, consultation: rows[0] });
+  } catch (error: any) {
+    console.error('Error validating consultation:', error);
+    return res.status(500).json({ error: error?.message || 'Failed to validate consultation.' });
+  } finally {
+    client.release();
+  }
+});
+
 export default router;

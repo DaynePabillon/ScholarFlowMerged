@@ -19,9 +19,9 @@ const TEMPLATE_HEADERS = [
 ]
 
 const SAMPLE_ROWS = [
-    ["2526-sem1-it332-01", "1", "2021-00001", "Dela Cruz", "Juan", "jdelacruz@university.edu", "SkyFlow Project Manager", "Dr. Santos"],
-    ["2526-sem1-it332-01", "2", "2021-00002", "Reyes", "Maria", "mreyes@university.edu", "SkyFlow Project Manager", "Dr. Santos"],
-    ["2526-sem1-it332-01", "3", "2021-00003", "Garcia", "Pedro", "pgarcia@university.edu", "SkyFlow Project Manager", "Dr. Santos"],
+    ["2526-sem1-it332-01", "1", "2021-00001", "Dela Cruz", "Juan", "jdelacruz@university.edu", "Campus Project Tracker", "Dr. Santos"],
+    ["2526-sem1-it332-01", "2", "2021-00002", "Reyes", "Maria", "mreyes@university.edu", "Campus Project Tracker", "Dr. Santos"],
+    ["2526-sem1-it332-01", "3", "2021-00003", "Garcia", "Pedro", "pgarcia@university.edu", "Campus Project Tracker", "Dr. Santos"],
     ["2526-sem1-it332-02", "1", "2021-00004", "Santos", "Ana", "asantos@university.edu", "Smart Campus App", "Prof. Rivera"],
     ["2526-sem1-it332-02", "2", "2021-00005", "Lopez", "Carlos", "clopez@university.edu", "Smart Campus App", "Prof. Rivera"],
 ]

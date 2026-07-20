@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect } from 'react';
 
@@ -9,6 +9,7 @@ export default function ScholarError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+
   useEffect(() => {
     console.error('Scholar portal error:', error);
   }, [error]);

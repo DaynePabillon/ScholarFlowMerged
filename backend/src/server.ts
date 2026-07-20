@@ -30,6 +30,15 @@ import teamGroupRoutes from './routes/team-group.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import wbsRoutes from './routes/wbs.routes';
 import scholarRoutes from './routes/scholar.routes';
+import dependencyRoutes from './routes/dependency.routes';
+import ganttRoutes from './routes/gantt.routes';
+import columnMappingRoutes from './routes/column-mapping.routes';
+import conflictRoutes from './routes/conflict.routes';
+import syncRoutes from './routes/sync.routes';
+import billingRoutes from './routes/billing.routes';
+import ms365Routes from './routes/ms365.routes';
+import exportRoutes from './routes/export.routes';
+import classroomRoutes from './routes/classroom.routes';
 import consultationRoutes from './routes/scholar/consultation.routes';
 import aiRoutes from './routes/scholar/ai.routes';
 import memberJournalsRoutes from './routes/scholar/member-journals.routes';
@@ -122,6 +131,15 @@ app.use('/api/sse', sseRoutes);
 app.use('/api', teamGroupRoutes);
 app.use('/api', analyticsRoutes);
 app.use('/api/wbs', wbsRoutes);
+app.use('/api', dependencyRoutes);
+app.use('/api', ganttRoutes);
+app.use('/api', columnMappingRoutes);
+app.use('/api', conflictRoutes);
+app.use('/api', syncRoutes);
+app.use('/api', billingRoutes);
+app.use('/api', ms365Routes);
+app.use('/api', exportRoutes);
+app.use('/api', classroomRoutes);
 
 // --- CONVENIENCE REDIRECTS ---
 // These handle cases where the /api prefix is omitted (common for manual testing)

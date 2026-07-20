@@ -275,7 +275,7 @@ export default function TaskTimeline({ taskId, currentUserId, onClose }: TaskTim
                                 <MessageSquare className="w-3 h-3 text-cyan-600" />
                             </div>
                             <div className="flex-1">
-                                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 border border-gray-100 dark:border-slate-700">
+                                <div className="bg-gray-50 dark:bg-slate-800 rounded-lg p-3 border border-gray-100 dark:border-slate-700">
                                     <div className="flex items-center justify-between mb-1">
                                         <div className="flex items-center gap-2">
                                             <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
@@ -316,7 +316,7 @@ export default function TaskTimeline({ taskId, currentUserId, onClose }: TaskTim
             </div>
 
             {/* Add Comment Form */}
-            <form onSubmit={handleSubmitComment} className="px-5 py-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/50">
+            <form onSubmit={handleSubmitComment} className="px-5 py-4 border-t border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800">
                 <div className="flex gap-3">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center flex-shrink-0">
                         <User className="w-4 h-4 text-white" />

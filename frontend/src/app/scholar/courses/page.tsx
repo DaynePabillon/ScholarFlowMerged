@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
 import {
@@ -36,6 +36,8 @@ type Course = {
 
 export default function CoursesPage() {
     const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
     const [courses, setCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
     const [canCreate, setCanCreate] = useState(false);
@@ -61,7 +63,15 @@ export default function CoursesPage() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         try {
@@ -122,11 +132,11 @@ export default function CoursesPage() {
 
     if (loading) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex items-center justify-center h-[60vh]">
                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
@@ -135,7 +145,7 @@ export default function CoursesPage() {
     const isAdviser = String(user?.role || '').toLowerCase() === 'adviser';
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-6 space-y-4">
                 <section className="portal-panel-strong p-5 sm:p-6 overflow-hidden relative">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-transparent dark:from-white/8" />
@@ -353,6 +363,6 @@ export default function CoursesPage() {
                     {toast.message}
                 </div>
             )}
-        </SidebarLayout>
+        </AppLayout>
     );
 }

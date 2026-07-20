@@ -211,7 +211,7 @@ export default function ProjectBoardView({
                                                                 onClick={() => canAssign && setAssigningTask(task.id)}
                                                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${task.assigned_to_name
                                                                         ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400'
-                                                                        : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-500/40'
+                                                                        : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700/50 text-gray-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-500/40'
                                                                     } ${canAssign ? 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30' : 'cursor-default'}`}
                                                                 disabled={!canAssign}
                                                             >
@@ -314,7 +314,7 @@ export default function ProjectBoardView({
                                                 onClick={() => canAssign && setAssigningTask(task.id)}
                                                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${task.assigned_to_name
                                                         ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-400'
-                                                        : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700/50 text-gray-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-500/40'
+                                                        : 'bg-gray-50 dark:bg-slate-800 border-gray-200 dark:border-slate-700/50 text-gray-500 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-500/40'
                                                     } ${canAssign ? 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30' : 'cursor-default'}`}
                                                 disabled={!canAssign}
                                             >

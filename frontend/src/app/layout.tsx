@@ -7,8 +7,8 @@ import { ThemeProvider } from "@/contexts/ThemeContext"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "SkyFlow - Project Management Platform",
-  description: "Unified project management suite for teams and organizations",
+  title: "ScholarFlow - Unified Project & Academic Platform",
+  description: "Unified project management and academic suite for teams and organizations",
   generator: "v0.app",
   icons: {
     icon: [
@@ -35,7 +35,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function(){
+            try {
+              var m = localStorage.getItem('themeMode');
+              if (m === 'dark') document.documentElement.classList.add('dark');
+            } catch(e) {}
+          })();
+        `}} />
+      </head>
       <body className={`${inter.className} antialiased`}>
         <ThemeProvider>
           {children}

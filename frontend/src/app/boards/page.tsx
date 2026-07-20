@@ -1,6 +1,7 @@
 "use client"
 
 import apiClient, { API_URL } from '@/lib/api/client'
+import { getTodayLocalDateString } from '@/lib/utils/date'
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
@@ -35,6 +36,8 @@ interface Task {
     created_at: string
     project_id: string | null
     project_name?: string
+    team_id?: string | null
+    team_name?: string
     synced?: boolean
     sheet_name?: string
     comment_count?: number
@@ -61,7 +64,7 @@ interface TeamMember {
 interface Organization {
     id: string
     name: string
-    role: 'admin' | 'manager' | 'member'
+    role: 'admin' | 'manager' | 'member' | 'adviser'
 }
 
 interface TaskComment {
@@ -92,6 +95,9 @@ interface TeamGroup {
     total_checkpoints: number
     completed_checkpoints: number
     proposed_project: string | null
+    project_id?: string | null
+    project_name?: string | null
+    project_status?: string | null
 }
 
 function BoardsContent() {
@@ -401,6 +407,14 @@ function BoardsContent() {
 
     const handleCreateTask = async () => {
         if (!newTask.title || !selectedOrg) return
+
+        // Start date must comply with "latest date is today" — block creation
+        // entirely (rather than silently dropping/clearing the date) when violated.
+        if (newTask.start_date && newTask.start_date > getTodayLocalDateString()) {
+            alert('Start date cannot be later than today.')
+            return
+        }
+
         try {
             const response = await apiClient.post(`/organizations/${selectedOrg.id}/tasks`, {
                 title: newTask.title,
@@ -596,7 +610,7 @@ function BoardsContent() {
         setSelectedTeamGroup(team as TeamGroup)
     }, [])
 
-    const getUserRole = (): 'admin' | 'manager' | 'member' => {
+    const getUserRole = (): 'admin' | 'manager' | 'member' | 'adviser' => {
         return selectedOrg?.role || 'member'
     }
 
@@ -685,10 +699,10 @@ function BoardsContent() {
                             </div>
                             <div>
                                 <h1 className="text-4xl font-black text-gray-900 dark:text-white tracking-tighter uppercase">
-                                    Project <span className="text-blue-500">Boards</span>
+                                    Project <span className="text-blue-500">Teams</span>
                                 </h1>
                                 <p className="text-gray-500 dark:text-slate-500 font-bold text-xs uppercase tracking-[0.2em] mt-1 opacity-70">
-                                    {`Team Overview ΓÇó ${teamGroups.length} Teams`}
+                                    {`Team Groups · ${teamGroups.length} Teams · Click a team to view details`}
                                 </p>
                             </div>
                         </div>
@@ -796,6 +810,7 @@ function BoardsContent() {
                                     <input
                                         type="date"
                                         value={newTask.start_date}
+                                        max={getTodayLocalDateString()}
                                         onChange={(e) => setNewTask({ ...newTask, start_date: e.target.value })}
                                         className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     />
@@ -919,7 +934,7 @@ function BoardsContent() {
 
                             {/* Task Meta Info */}
                             <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                     <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">Due Date</p>
@@ -937,14 +952,14 @@ function BoardsContent() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                     <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">Assigned to</p>
                                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{selectedTask.assigned_to_name || 'Unassigned'}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                     <span className={`px-2 py-1 rounded text-xs font-medium ${selectedTask.priority === 'high' ? 'bg-red-100 text-red-700' :
                                         selectedTask.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
                                             'bg-green-100 text-green-700'
@@ -996,7 +1011,7 @@ function BoardsContent() {
                                         <p className="text-gray-400 text-sm text-center py-4">No comments yet</p>
                                     ) : (
                                         taskComments.map((comment) => (
-                                            <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                            <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
                                                     <span className="text-white text-xs font-bold">
                                                         {comment.user_name?.charAt(0).toUpperCase() || '?'}

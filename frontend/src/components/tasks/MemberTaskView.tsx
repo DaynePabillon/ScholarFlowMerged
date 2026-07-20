@@ -274,7 +274,7 @@ export default function MemberTaskView({ user, organization }: MemberTaskViewPro
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${task.status === 'done' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' :
                       task.status === 'review' ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' :
                         task.status === 'in-progress' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
-                          'bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300'
+                          'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300'
                       }`}>
                       {task.status.replace('-', ' ')}
                     </span>

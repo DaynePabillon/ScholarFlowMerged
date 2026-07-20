@@ -1,10 +1,11 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
+import { getTodayLocalDateString } from '@/lib/utils/date'
 import {
     ArrowLeft,
     Users,
@@ -62,6 +63,12 @@ type Group = {
     consultation_dates: string[];
     comments: string;
     grade: string;
+    // Project integration fields (from team_groups LEFT JOIN projects)
+    project_id: string | null;
+    project_name: string | null;
+    project_status: 'planning' | 'active' | 'on_hold' | 'completed' | 'archived' | null;
+    project_task_total: number;
+    project_task_done: number;
 };
 
 type Comment = {
@@ -143,7 +150,11 @@ export default function CourseDetailsPage() {
 
     // AI & Tab State
     const [user, setUser] = useState<any>(null);
-    const [activeModalTab, setActiveModalTab] = useState<'discussion' | 'journals' | 'consultations' | 'ai'>('discussion');
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
+    const [activeModalTab, setActiveModalTab] = useState<'discussion' | 'project' | 'journals' | 'consultations' | 'ai'>('discussion');
+    const [projectError, setProjectError] = useState<string | null>(null);
+    const [creatingProject, setCreatingProject] = useState(false);
     const [journals, setJournals] = useState<any[]>([]);
     const [consultationLogs, setConsultationLogs] = useState<ConsultationLog[]>([]);
     const [expandedConsultationId, setExpandedConsultationId] = useState<number | null>(null);
@@ -184,8 +195,16 @@ export default function CourseDetailsPage() {
 
     const skyflowUrl = '/boards';
 
-    useEffect(() => {
-        setTodayJournalDate(new Date().toISOString().slice(0, 10));
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
+        setTodayJournalDate(getTodayLocalDateString());
         const token = localStorage.getItem('auth_token');
         if (!token) { router.push('/login'); return; }
         try { 
@@ -219,7 +238,15 @@ export default function CourseDetailsPage() {
         fetchGroups();
     }, [courseId, router]);
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         if (!requestedGroupId) {
             suppressAutoOpenRef.current = false;
             return;
@@ -289,6 +316,8 @@ export default function CourseDetailsPage() {
         setActiveModalTab('discussion');
         setAiResult(null);
         setAiError(null);
+        setProjectError(null);
+        setCreatingProject(false);
         resetJournalForm();
         router.replace(`/scholar/courses/${courseId}`);
     };
@@ -333,6 +362,60 @@ export default function CourseDetailsPage() {
         } finally {
             setIsSubmittingJournal(false);
         }
+    };
+
+    const handleCreateProject = async () => {
+        if (!selectedGroup) return;
+        setCreatingProject(true);
+        setProjectError(null);
+        try {
+            const res = await apiClient.post(`/groups/${selectedGroup.id}/create-project`, {});
+            // Re-fetch groups so group cards update immediately
+            const teamsRes = await apiClient.get(`/courses/${courseId}/teams`);
+            const raw = teamsRes.data;
+            const fresh: Group[] = Array.isArray(raw?.teams) ? raw.teams : (Array.isArray(raw) ? raw : []);
+            setGroups(fresh);
+            const freshGroup = fresh.find((g: Group) => String(g.id) === String(selectedGroup.id));
+            if (freshGroup) setSelectedGroup({ ...freshGroup, ...res.data });
+        } catch (err: any) {
+            setProjectError(err.response?.data?.error || 'Failed to create project.');
+        } finally {
+            setCreatingProject(false);
+        }
+    };
+
+    const projectStatusBadge = (group: Group) => {
+        if (!group.project_id) {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gray-400 bg-gray-50 dark:bg-slate-800 /50 border border-gray-200 dark:border-slate-700 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block" />
+                    No project
+                </span>
+            );
+        }
+        const colorMap: Record<string, string> = {
+            planning:  'bg-amber-50  text-amber-700  border-amber-200',
+            active:    'bg-green-50  text-green-700  border-green-200',
+            on_hold:   'bg-orange-50 text-orange-700 border-orange-200',
+            completed: 'bg-blue-50   text-blue-700   border-blue-200',
+            archived:  'bg-gray-50 dark:bg-slate-800 /50   text-gray-500 dark:text-gray-400   border-gray-200 dark:border-slate-700',
+        };
+        const dotMap: Record<string, string> = {
+            planning:  'bg-amber-400',
+            active:    'bg-green-400',
+            on_hold:   'bg-orange-400',
+            completed: 'bg-blue-400',
+            archived:  'bg-gray-400',
+        };
+        const s = group.project_status ?? '';
+        const cls = colorMap[s] ?? 'bg-gray-50 dark:bg-slate-800 /50 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700';
+        const dot = dotMap[s] ?? 'bg-gray-300';
+        return (
+            <span className={`inline-flex items-center gap-1 text-[11px] font-bold border px-2 py-0.5 rounded-full ${cls}`}>
+                <span className={`w-1.5 h-1.5 rounded-full inline-block ${dot}`} />
+                {s.replace('_', ' ') || 'unknown'}
+            </span>
+        );
     };
 
     const fetchGroupJournals = async (groupName: string) => {
@@ -725,17 +808,17 @@ export default function CourseDetailsPage() {
 
     if (loading) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex items-center justify-center h-[60vh]">
                     <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
     if (error || !course) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-gray-400">
                     <BookOpen className="w-14 h-14 opacity-30" />
                     <p className="text-lg font-medium">{error || 'Course not found'}</p>
@@ -743,15 +826,15 @@ export default function CourseDetailsPage() {
                         ← Back to Courses
                     </button>
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex items-center gap-3 mb-6">
-                    <button onClick={() => router.push('/scholar/courses')} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
+                    <button onClick={() => router.push('/scholar/courses')} className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-100 rounded-xl transition">
                         <ArrowLeft className="w-5 h-5" />
                     </button>
                     <div className="flex-1">
@@ -781,9 +864,9 @@ export default function CourseDetailsPage() {
                 </div>
 
                 {groups.length === 0 ? (
-                    <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-gray-200 text-gray-400">
+                    <div className="text-center py-20 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 text-gray-400">
                         <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                        <p className="font-medium text-gray-500">No groups yet</p>
+                        <p className="font-medium text-gray-500 dark:text-gray-400">No groups yet</p>
                     </div>
                 ) : (
                     <>
@@ -802,7 +885,7 @@ export default function CourseDetailsPage() {
                                             <div
                                                 key={group.id}
                                                 onClick={() => openGroup(group)}
-                                                className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                                className="group relative bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
                                             >
                                                 <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
                                                     TEAM {String(group?.team_number || 0).padStart(2, '0')}
@@ -816,6 +899,10 @@ export default function CourseDetailsPage() {
                                                     <div className="flex items-center gap-2">
                                                         <Users size={14} className="text-cyan-600" />
                                                         <span className="text-sm text-slate-600">{group?.members?.length || group?.groupMembers || 0} Members</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Folder size={14} className="text-indigo-400 flex-shrink-0" />
+                                                        {projectStatusBadge(group)}
                                                     </div>
                                                 </div>
                                             </div>
@@ -833,7 +920,7 @@ export default function CourseDetailsPage() {
                                                 <div
                                                     key={group.id}
                                                     onClick={() => openGroup(group)}
-                                                    className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                                    className="group relative bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
                                                 >
                                                     <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
                                                         TEAM {String(group?.team_number || 0).padStart(2, '0')}
@@ -855,13 +942,13 @@ export default function CourseDetailsPage() {
 
                                         {otherGroups.length > 0 && (
                                             <>
-                                                <div className="w-full mt-2 mb-2 border-t border-gray-200" />
+                                                <div className="w-full mt-2 mb-2 border-t border-gray-200 dark:border-slate-700" />
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                                                     {otherGroups.map((group) => (
                                                         <div
                                                             key={group.id}
                                                             onClick={() => openGroup(group)}
-                                                            className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                                            className="group relative bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
                                                         >
                                                             <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
                                                                 TEAM {String(group?.team_number || 0).padStart(2, '0')}
@@ -893,7 +980,7 @@ export default function CourseDetailsPage() {
                                         <div
                                             key={group.id}
                                             onClick={() => openGroup(group)}
-                                            className="group relative bg-white border border-gray-200 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                            className="group relative bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 cursor-pointer hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
                                         >
                                             <div className="text-[13px] font-semibold text-blue-500 uppercase tracking-widest mb-1">
                                                 TEAM {String(group?.team_number || 0).padStart(2, '0')}
@@ -920,8 +1007,8 @@ export default function CourseDetailsPage() {
 
             {isCustomAnalysisOpen && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="px-8 py-6 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <h2 className="text-2xl font-black text-gray-900 tracking-tight">Course-wide Custom Analysis</h2>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">Admin only • all groups in this course</p>
@@ -939,12 +1026,12 @@ export default function CourseDetailsPage() {
                                     onChange={(e) => setCustomInstruction(e.target.value)}
                                     rows={5}
                                     placeholder="Example: Give me the latest SRS updates for all groups in this course."
-                                    className="w-full px-6 py-4 bg-white border border-gray-200 rounded-[24px] text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 placeholder-gray-300 font-medium resize-none"
+                                    className="w-full px-6 py-4 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-[24px] text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 placeholder-gray-300 font-medium resize-none"
                                 />
                             </div>
 
                             <div className="flex items-center justify-between gap-3">
-                                <p className="text-xs text-gray-500 font-medium">This analyzes consultation data across every group in {course.courseCode}.</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">This analyzes consultation data across every group in {course.courseCode}.</p>
                                 <button
                                     onClick={handleCustomCourseAnalysis}
                                     disabled={customAnalysisLoading || !customInstruction.trim()}
@@ -962,9 +1049,9 @@ export default function CourseDetailsPage() {
                             )}
 
                             {customAnalysisResult && (
-                                <div className="p-6 bg-gray-50 border border-gray-200 rounded-3xl">
+                                <div className="p-6 bg-gray-50 dark:bg-slate-800 /50 border border-gray-200 dark:border-slate-700 rounded-3xl">
                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">AI Result</p>
-                                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{customAnalysisResult}</p>
+                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">{customAnalysisResult}</p>
                                 </div>
                             )}
                         </div>
@@ -974,23 +1061,26 @@ export default function CourseDetailsPage() {
 
             {selectedGroup && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-white">
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="px-8 py-6 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between bg-white">
                             <div className="flex flex-col gap-4">
                                 <h2 className="text-2xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
                                     <Hash className="w-6 h-6 text-blue-600" />
                                     {selectedGroup?.groupName || 'Unnamed Group'}
                                 </h2>
-                                <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-2xl w-fit border border-gray-100">
-                                    {['discussion', 'journals', 'consultations', 'ai'].map((tab) => {
+                                <div className="flex items-center gap-1 bg-gray-50 dark:bg-slate-800 /50 p-1 rounded-2xl w-fit border border-gray-100 dark:border-slate-700">
+                                    {['discussion', 'project', 'journals', 'consultations', 'ai'].map((tab) => {
                                         if (tab === 'ai' && !isAdmin) return null;
                                         return (
                                             <button
                                                 key={tab}
                                                 onClick={() => setActiveModalTab(tab as any)}
-                                                className={`px-6 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all border ${activeModalTab === tab ? 'bg-white text-blue-600 shadow-md ring-1 ring-black/[0.05] border-blue-100' : 'text-gray-600 border-transparent hover:text-gray-800 hover:bg-white/80 hover:border-gray-200'}`}
+                                                className={`px-6 py-2 text-xs font-black uppercase tracking-widest rounded-xl transition-all border ${activeModalTab === tab ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-md ring-1 ring-black/[0.05] border-blue-100' : 'text-gray-600 dark:text-gray-300 border-transparent hover:text-gray-800 dark:text-gray-100 hover:bg-white/80 hover:border-gray-200 dark:border-slate-700'}`}
                                             >
-                                                {tab === 'ai' ? 'Insights' : tab === 'consultations' ? 'Consultation History' : tab}
+                                                {tab === 'ai' ? 'Insights'
+                                                    : tab === 'consultations' ? 'Consultation History'
+                                                    : tab === 'project' ? 'Project'
+                                                    : tab}
                                             </button>
                                         );
                                     })}
@@ -1012,11 +1102,11 @@ export default function CourseDetailsPage() {
                                         <div className="space-y-4">
                                             {selectedGroup.members?.map((member) => (
                                                 <div key={member.email} className="flex items-center gap-3 group/member">
-                                                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-blue-600 font-bold border border-gray-100 group-hover/member:bg-blue-50 transition-colors">
+                                                    <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-slate-800 /50 flex items-center justify-center text-blue-600 font-bold border border-gray-100 dark:border-slate-700 group-hover/member:bg-blue-50 transition-colors">
                                                         {member.member_number}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="text-sm font-bold text-gray-800 flex items-center gap-1.5 uppercase tracking-tight">
+                                                        <p className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-1.5 uppercase tracking-tight">
                                                             {member.name}
                                                             {member.is_leader && <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />}
                                                         </p>
@@ -1026,7 +1116,7 @@ export default function CourseDetailsPage() {
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="col-span-8 p-8 flex flex-col bg-gray-50">
+                                    <div className="col-span-8 p-8 flex flex-col bg-gray-50 dark:bg-slate-800 /50">
                                         <div className="flex items-center gap-2 mb-6">
                                             <MessageSquare className="w-4 h-4 text-green-500" />
                                             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Activity & Feedback</h3>
@@ -1039,17 +1129,17 @@ export default function CourseDetailsPage() {
                                                 </div>
                                             ) : (
                                                 comments.map(c => (
-                                                    <div key={c.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                                                    <div key={c.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 shadow-sm">
                                                         <div className="flex items-center justify-between mb-2">
                                                             <span className="text-[11px] font-black text-blue-600 uppercase tracking-widest">{c.user_name}</span>
                                                             <span className="text-[10px] text-gray-400 font-bold">{formatDateLabel(getCommentDateValue(c))}</span>
                                                         </div>
-                                                        <p className="text-sm text-gray-700 font-medium leading-relaxed">{c.content}</p>
+                                                        <p className="text-sm text-gray-700 dark:text-gray-200 font-medium leading-relaxed">{c.content}</p>
                                                     </div>
                                                 ))
                                             )}
                                         </div>
-                                        <div className="flex gap-3 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm">
+                                        <div className="flex gap-3 bg-white dark:bg-slate-800 p-2 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm">
                                             <input 
                                                 value={newComment}
                                                 onChange={e => setNewComment(e.target.value)}
@@ -1094,7 +1184,7 @@ export default function CourseDetailsPage() {
                                                         setIsJournalFormOpen(false);
                                                         setMemberJournalError(null);
                                                     }}
-                                                    className="text-left group bg-white border border-gray-200 rounded-2xl p-6 hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
+                                                    className="text-left group bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-6 hover:-translate-y-1 hover:border-blue-400 hover:shadow-xl transition-all duration-300"
                                                 >
                                                     <div className="flex items-center gap-3 mb-4">
                                                         <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
@@ -1133,7 +1223,7 @@ export default function CourseDetailsPage() {
                                     </div>
 
                                     {consultationLogs.length === 0 ? (
-                                        <div className="py-20 bg-gray-50 rounded-[32px] border border-dashed border-gray-200 flex flex-col items-center justify-center text-center gap-4">
+                                        <div className="py-20 bg-gray-50 dark:bg-slate-800 /50 rounded-[32px] border border-dashed border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center text-center gap-4">
                                             <ClipboardList className="w-12 h-12 text-gray-200" />
                                             <div>
                                                 <p className="font-black text-gray-400 uppercase tracking-widest">No Consultation Logs Yet</p>
@@ -1143,7 +1233,7 @@ export default function CourseDetailsPage() {
                                     ) : (
                                         <div className="grid grid-cols-1 gap-6 pb-8">
                                             {consultationLogs.map((log: any) => (
-                                                <div key={log.conID} className="bg-white border border-gray-100 rounded-[28px] hover:border-blue-300 transition-all hover:shadow-lg overflow-hidden">
+                                                <div key={log.conID} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-[28px] hover:border-blue-300 transition-all hover:shadow-lg overflow-hidden">
                                                     <button
                                                         type="button"
                                                         onClick={() => setExpandedConsultationId(expandedConsultationId === log.conID ? null : log.conID)}
@@ -1152,10 +1242,10 @@ export default function CourseDetailsPage() {
                                                         <div>
                                                             <h4 className="text-base font-black text-gray-900 uppercase tracking-tight">{log.conMil || log.groupName || selectedGroup.groupName}</h4>
                                                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mt-1">{log.adviser_name || 'Adviser'}</p>
-                                                            <p className="text-xs text-gray-500 mt-2">
+                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                                                                 {formatDateLabel(log.conDate || log.slot_date)}{log.start_time ? ` at ${formatTime12Hour(log.start_time)}` : ''}
                                                             </p>
-                                                            {log.conMil && <p className="text-xs text-gray-500 mt-1">Topic: {log.conMil}</p>}
+                                                            {log.conMil && <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Topic: {log.conMil}</p>}
                                                         </div>
                                                         <div className="flex items-center gap-2">
                                                             <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full ${
@@ -1170,43 +1260,43 @@ export default function CourseDetailsPage() {
                                                     </button>
 
                                                     {expandedConsultationId === log.conID && (
-                                                        <div className="px-6 pb-6 border-t border-gray-100">
+                                                        <div className="px-6 pb-6 border-t border-gray-100 dark:border-slate-700">
                                                             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Consultation Date</p><p className="text-gray-700">{log.conDate || '-'}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Milestone/Topic</p><p className="text-gray-700">{log.conMil || '-'}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Group Name</p><p className="text-gray-700">{log.groupName || '-'}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Course ID</p><p className="text-gray-700">{log.courseID ?? '-'}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Slot ID</p><p className="text-gray-700">{log.slot_id ?? '-'}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Submitted At</p><p className="text-gray-700">{formatDateTimeLabel(log.submitted_at)}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Created At</p><p className="text-gray-700">{formatDateTimeLabel(log.created_at)}</p></div>
-                                                                <div className="bg-gray-50 border border-gray-100 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Updated At</p><p className="text-gray-700">{formatDateTimeLabel(log.updated_at)}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Consultation Date</p><p className="text-gray-700 dark:text-gray-200">{log.conDate || '-'}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Milestone/Topic</p><p className="text-gray-700 dark:text-gray-200">{log.conMil || '-'}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Group Name</p><p className="text-gray-700 dark:text-gray-200">{log.groupName || '-'}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Course ID</p><p className="text-gray-700 dark:text-gray-200">{log.courseID ?? '-'}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Slot ID</p><p className="text-gray-700 dark:text-gray-200">{log.slot_id ?? '-'}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Submitted At</p><p className="text-gray-700 dark:text-gray-200">{formatDateTimeLabel(log.submitted_at)}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Created At</p><p className="text-gray-700 dark:text-gray-200">{formatDateTimeLabel(log.created_at)}</p></div>
+                                                                <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3"><p className="font-black text-gray-400 uppercase tracking-wider mb-1">Updated At</p><p className="text-gray-700 dark:text-gray-200">{formatDateTimeLabel(log.updated_at)}</p></div>
                                                             </div>
 
                                                             {log.conSum && (
-                                                                <div className="mt-4 p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                                                                <div className="mt-4 p-4 bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-2xl">
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Summary</p>
-                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.conSum}</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{log.conSum}</p>
                                                                 </div>
                                                             )}
 
                                                             {log.conAction && (
-                                                                <div className="mt-4 p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                                                                <div className="mt-4 p-4 bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-2xl">
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Action Items</p>
-                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.conAction}</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{log.conAction}</p>
                                                                 </div>
                                                             )}
 
                                                             {log.conConcerns && (
-                                                                <div className="mt-4 p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                                                                <div className="mt-4 p-4 bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-2xl">
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Concerns</p>
-                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.conConcerns}</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{log.conConcerns}</p>
                                                                 </div>
                                                             )}
 
                                                             {log.adviser_notes && (
-                                                                <div className="mt-4 p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                                                                <div className="mt-4 p-4 bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-2xl">
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Adviser Notes</p>
-                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{log.adviser_notes}</p>
+                                                                    <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{log.adviser_notes}</p>
                                                                 </div>
                                                             )}
 
@@ -1215,15 +1305,15 @@ export default function CourseDetailsPage() {
                                                                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Attendance & Participation</p>
                                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                                                         {Object.entries(log.attendance_data).map(([member, status]: [string, any], idx) => (
-                                                                            <div key={idx} className="text-xs p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                                                                <p className="font-bold text-gray-800">{member}</p>
+                                                                            <div key={idx} className="text-xs p-3 bg-gray-50 dark:bg-slate-800 /50 rounded-xl border border-gray-100 dark:border-slate-700">
+                                                                                <p className="font-bold text-gray-800 dark:text-gray-100">{member}</p>
                                                                                 <div className="flex gap-2 mt-1 flex-wrap">
                                                                                     <span className={`text-[10px] font-black px-2 py-0.5 rounded ${status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{String(status)}</span>
                                                                                     {log.participation_data?.[member] && (
                                                                                         <span className={`text-[10px] font-black px-2 py-0.5 rounded ${
                                                                                             log.participation_data[member] === 'High' ? 'bg-blue-100 text-blue-700' :
                                                                                             log.participation_data[member] === 'Moderate' ? 'bg-amber-100 text-amber-700' :
-                                                                                            'bg-gray-100 text-gray-700'
+                                                                                            'bg-gray-100 text-gray-700 dark:text-gray-200'
                                                                                         }`}>{log.participation_data[member]}</span>
                                                                                     )}
                                                                                 </div>
@@ -1239,6 +1329,93 @@ export default function CourseDetailsPage() {
                                         </div>
                                     )}
                                 </div>
+                            ) : activeModalTab === 'project' ? (
+                                <div className="p-8 overflow-y-auto">
+                                    {!selectedGroup?.project_id ? (
+                                        /* ── No project linked ── */
+                                        <div className="flex flex-col items-center justify-center py-20 gap-6">
+                                            <div className="w-20 h-20 bg-indigo-50 rounded-[28px] flex items-center justify-center border border-indigo-100">
+                                                <Folder className="w-10 h-10 text-indigo-400" />
+                                            </div>
+                                            <div className="text-center">
+                                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">No Project Linked</h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 font-medium max-w-sm">
+                                                    This group doesn&apos;t have a SkyFlow project yet. Set one up to track tasks, milestones, and progress.
+                                                </p>
+                                            </div>
+                                            {(isAdmin || effectiveScholarRole === 'Adviser') && (
+                                                <button
+                                                    onClick={handleCreateProject}
+                                                    disabled={creatingProject}
+                                                    className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white rounded-2xl text-sm font-black uppercase tracking-wider hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-lg shadow-indigo-100"
+                                                >
+                                                    {creatingProject
+                                                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</>
+                                                        : <><Plus className="w-4 h-4" /> Set Up Project</>
+                                                    }
+                                                </button>
+                                            )}
+                                            {projectError && (
+                                                <p className="text-sm text-red-600 font-semibold">{projectError}</p>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        /* ── Project linked ── */
+                                        <div className="space-y-5 max-w-2xl mx-auto">
+                                            {/* Project header card */}
+                                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-[28px] p-8 shadow-sm">
+                                                <div className="flex items-start justify-between mb-6">
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-1">SkyFlow Project</p>
+                                                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">{selectedGroup.project_name}</h3>
+                                                    </div>
+                                                    <span className={`text-[11px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${
+                                                        selectedGroup.project_status === 'active'    ? 'bg-green-50  text-green-700  border-green-200'  :
+                                                        selectedGroup.project_status === 'planning'  ? 'bg-amber-50  text-amber-700  border-amber-200'  :
+                                                        selectedGroup.project_status === 'completed' ? 'bg-blue-50   text-blue-700   border-blue-200'   :
+                                                        selectedGroup.project_status === 'on_hold'   ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                                        'bg-gray-50 dark:bg-slate-800 /50 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-slate-700'}`}
+                                                    >
+                                                        {(selectedGroup.project_status ?? 'unknown').replace('_', ' ')}
+                                                    </span>
+                                                </div>
+                                                {/* Progress bar */}
+                                                <div>
+                                                    <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                                        <span>Task Progress</span>
+                                                        <span>{selectedGroup.project_task_done ?? 0} / {selectedGroup.project_task_total ?? 0} done</span>
+                                                    </div>
+                                                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-indigo-500 to-blue-400 rounded-full transition-all duration-500"
+                                                            style={{ width: (selectedGroup.project_task_total ?? 0) > 0 ? `${Math.round(((selectedGroup.project_task_done ?? 0) / (selectedGroup.project_task_total ?? 1)) * 100)}%` : '0%' }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Open full SkyFlow board */}
+                                            <a
+                                                href={`/tasks?project_id=${selectedGroup.project_id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center justify-between w-full px-6 py-4 bg-indigo-50 border border-indigo-100 rounded-2xl hover:bg-indigo-100 transition-all group"
+                                            >
+                                                <span className="text-sm font-black text-indigo-700 uppercase tracking-wider">Open Full SkyFlow Board</span>
+                                                <ExternalLink className="w-4 h-4 text-indigo-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                            </a>
+
+                                            {/* View group task list */}
+                                            <button
+                                                onClick={() => { closeModal(); router.push(`/scholar/courses/${courseId}/groups/${selectedGroup.id}`); }}
+                                                className="flex items-center justify-between w-full px-6 py-4 bg-gray-50 dark:bg-slate-800 /50 border border-gray-200 dark:border-slate-700 rounded-2xl hover:bg-gray-100 transition-all group text-left"
+                                            >
+                                                <span className="text-sm font-black text-gray-700 dark:text-gray-200 uppercase tracking-wider">View Group Task List</span>
+                                                <ExternalLink className="w-4 h-4 text-gray-400 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             ) : (
                                 <div className="p-12 h-full flex flex-col items-center justify-center text-center">
                                     {!aiResult ? (
@@ -1247,17 +1424,17 @@ export default function CourseDetailsPage() {
                                                 <Sparkles className="w-12 h-12" />
                                             </div>
                                             <h3 className="text-3xl font-black text-gray-900 mb-3 uppercase tracking-tight">AI Academic Intelligence</h3>
-                                            <p className="text-gray-500 text-lg mb-12 font-medium">Synthesize progress and analyze group participation with state-of-the-art AI.</p>
+                                            <p className="text-gray-500 dark:text-gray-400 text-lg mb-12 font-medium">Synthesize progress and analyze group participation with state-of-the-art AI.</p>
                                             
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full">
-                                                <button onClick={() => handleAIGenerate('summary')} disabled={generatingAI} className="group bg-white border-2 border-gray-100 p-8 rounded-[40px] hover:border-blue-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
+                                                <button onClick={() => handleAIGenerate('summary')} disabled={generatingAI} className="group bg-white dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 p-8 rounded-[40px] hover:border-blue-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
                                                     <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform"><BookOpen className="w-8 h-8" /></div>
                                                     <div className="text-center">
                                                         <span className="block font-black text-gray-900 uppercase tracking-tight text-xl mb-1">Synthesis</span>
                                                         <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest bg-blue-50 px-3 py-1 rounded-full">{consultationLogs.length} Data Points</span>
                                                     </div>
                                                 </button>
-                                                <button onClick={() => handleAIGenerate('participation')} disabled={generatingAI} className="group bg-white border-2 border-gray-100 p-8 rounded-[40px] hover:border-purple-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
+                                                <button onClick={() => handleAIGenerate('participation')} disabled={generatingAI} className="group bg-white dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 p-8 rounded-[40px] hover:border-purple-400 hover:shadow-2xl transition-all flex flex-col items-center gap-5 disabled:opacity-50">
                                                     <div className="w-16 h-16 bg-purple-50 text-purple-600 rounded-3xl flex items-center justify-center group-hover:scale-110 transition-transform"><TrendingUp className="w-8 h-8" /></div>
                                                     <div className="text-center">
                                                         <span className="block font-black text-gray-900 uppercase tracking-tight text-xl mb-1">Participation</span>
@@ -1275,8 +1452,8 @@ export default function CourseDetailsPage() {
                                         </div>
                                     ) : (
                                         <div className="w-full max-w-4xl animate-in fade-in slide-in-from-bottom-8 duration-700">
-                                            <div className="bg-white border-2 border-gray-100 rounded-[48px] p-12 shadow-2xl shadow-blue-100 relative overflow-hidden">
-                                                <div className="flex items-center justify-between mb-12 pb-8 border-b border-gray-100">
+                                            <div className="bg-white dark:bg-slate-800 border-2 border-gray-100 dark:border-slate-700 rounded-[48px] p-12 shadow-2xl shadow-blue-100 relative overflow-hidden">
+                                                <div className="flex items-center justify-between mb-12 pb-8 border-b border-gray-100 dark:border-slate-700">
                                                     <div className="flex items-center gap-5">
                                                         <div className={`w-16 h-16 rounded-3xl flex items-center justify-center shadow-inner ${aiResult.type === 'summary' ? 'bg-blue-50 text-blue-600' : 'bg-purple-50 text-purple-600'}`}>
                                                             {aiResult.type === 'summary' ? <BookOpen className="w-8 h-8" /> : <TrendingUp className="w-8 h-8" />}
@@ -1294,10 +1471,10 @@ export default function CourseDetailsPage() {
                                                         {generatingAI ? 'Re-analyzing...' : 'Refresh Insights'}
                                                     </button>
                                                 </div>
-                                                <div className="text-left text-gray-700 leading-loose text-lg font-medium whitespace-pre-wrap selection:bg-blue-100 selection:text-blue-900">
+                                                <div className="text-left text-gray-700 dark:text-gray-200 leading-loose text-lg font-medium whitespace-pre-wrap selection:bg-blue-100 selection:text-blue-900">
                                                     {aiResult.content}
                                                 </div>
-                                                <button onClick={() => setAiResult(null)} className="mt-16 flex items-center gap-3 mx-auto px-8 py-3 rounded-full border border-gray-100 text-xs font-black uppercase tracking-[0.2em] text-gray-400 hover:bg-gray-50 transition-all active:scale-95">
+                                                <button onClick={() => setAiResult(null)} className="mt-16 flex items-center gap-3 mx-auto px-8 py-3 rounded-full border border-gray-100 dark:border-slate-700 text-xs font-black uppercase tracking-[0.2em] text-gray-400 hover:bg-gray-50 dark:bg-slate-800 /50 transition-all active:scale-95">
                                                     <ArrowLeft className="w-4 h-4" /> Go Back
                                                 </button>
                                             </div>
@@ -1313,9 +1490,9 @@ export default function CourseDetailsPage() {
                             )}
                         </div>
 
-                        <div className="px-10 py-8 bg-white border-t border-gray-100 flex items-center justify-between">
+                        <div className="px-10 py-8 bg-white dark:bg-slate-800 border-t border-gray-100 dark:border-slate-700 flex items-center justify-between">
                             <a href={skyflowUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-black text-[11px] uppercase tracking-[0.25em] underline underline-offset-8 decoration-2 decoration-blue-200 hover:text-blue-700 transition-colors">
-                                View Full Analytics in SkyFlow
+                                View Full Analytics in ScholarFlow
                             </a>
                             <button onClick={closeModal} className="px-12 py-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black uppercase tracking-[0.2em] rounded-2xl shadow-2xl shadow-blue-200 transition-all active:scale-95">
                                   Close
@@ -1327,8 +1504,8 @@ export default function CourseDetailsPage() {
 
             {selectedMemberFolder && selectedGroup && course && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                        <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between">
+                    <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="px-8 py-6 border-b border-gray-100 dark:border-slate-700 flex items-center justify-between">
                             <div>
                                 <h3 className="text-2xl font-black text-gray-900 tracking-tight">{selectedMemberFolder.name}'s Journal Folder</h3>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.2em] mt-1">{selectedMemberFolder.email}</p>
@@ -1337,7 +1514,7 @@ export default function CourseDetailsPage() {
                                 {isStudent && String(user?.email || '').toLowerCase() === String(selectedMemberFolder.email).toLowerCase() && (
                                     <button
                                         onClick={() => {
-                                            const today = new Date().toISOString().slice(0, 10);
+                                            const today = getTodayLocalDateString();
                                             setMemberJournalForm({ journalDate: today, journalText: '', journalLabel: 'Updates' });
                                             setEditingMemberJournalId(null);
                                             setIsJournalFormOpen(true);
@@ -1373,7 +1550,8 @@ export default function CourseDetailsPage() {
                                             type="date"
                                             value={memberJournalForm.journalDate || todayJournalDate}
                                             onChange={(e) => setMemberJournalForm(prev => ({ ...prev, journalDate: e.target.value }))}
-                                            className="w-full mt-1 px-4 py-3 bg-white border border-blue-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100"
+                                            max={todayJournalDate || getTodayLocalDateString()}
+                                            className="w-full mt-1 px-4 py-3 bg-white dark:bg-slate-800 border border-blue-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100"
                                         />
                                     </div>
                                     <div>
@@ -1381,7 +1559,7 @@ export default function CourseDetailsPage() {
                                         <select
                                             value={memberJournalForm.journalLabel}
                                             onChange={(e) => setMemberJournalForm(prev => ({ ...prev, journalLabel: e.target.value }))}
-                                            className="w-full mt-1 px-4 py-3 bg-white border border-blue-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100"
+                                            className="w-full mt-1 px-4 py-3 bg-white dark:bg-slate-800 border border-blue-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100"
                                         >
                                             <option value="Updates">Updates</option>
                                             <option value="Action Plans">Action Plans</option>
@@ -1395,7 +1573,7 @@ export default function CourseDetailsPage() {
                                             rows={4}
                                             value={memberJournalForm.journalText}
                                             onChange={(e) => setMemberJournalForm(prev => ({ ...prev, journalText: e.target.value }))}
-                                            className="w-full mt-1 px-4 py-3 bg-white border border-blue-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 resize-none"
+                                            className="w-full mt-1 px-4 py-3 bg-white dark:bg-slate-800 border border-blue-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-blue-100 resize-none"
                                             placeholder="Write your journal entry..."
                                         />
                                     </div>
@@ -1422,7 +1600,7 @@ export default function CourseDetailsPage() {
                             )}
 
                             {memberJournals.filter((j) => String(j.member_email).toLowerCase() === String(selectedMemberFolder.email).toLowerCase()).length === 0 ? (
-                                <div className="py-16 bg-gray-50 rounded-3xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center gap-3">
+                                <div className="py-16 bg-gray-50 dark:bg-slate-800 /50 rounded-3xl border border-dashed border-gray-200 dark:border-slate-700 flex flex-col items-center justify-center text-center gap-3">
                                     <FileText className="w-10 h-10 text-gray-300" />
                                     <p className="font-black text-gray-400 uppercase tracking-widest">No Journal Entries Yet</p>
                                 </div>
@@ -1431,7 +1609,7 @@ export default function CourseDetailsPage() {
                                     {memberJournals
                                         .filter((j) => String(j.member_email).toLowerCase() === String(selectedMemberFolder.email).toLowerCase())
                                         .map((entry, idx) => (
-                                            <div key={entry.id} className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+                                            <div key={entry.id} className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                                                 <div className="w-full px-6 py-5 flex items-center justify-between text-left">
                                                     <button
                                                         type="button"
@@ -1447,7 +1625,7 @@ export default function CourseDetailsPage() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setOpenJournalActionMenuId(openJournalActionMenuId === entry.id ? null : entry.id)}
-                                                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                                                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 dark:text-gray-400"
                                                                 aria-label="Open journal actions"
                                                             >
                                                                 <MoreHorizontal className="w-4 h-4" />
@@ -1456,7 +1634,7 @@ export default function CourseDetailsPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => setExpandedMemberJournalId(expandedMemberJournalId === entry.id ? null : entry.id)}
-                                                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                                                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 dark:text-gray-400"
                                                             aria-label="Toggle journal details"
                                                         >
                                                             <ChevronDown className={`w-4 h-4 transition-transform ${expandedMemberJournalId === entry.id ? 'rotate-180' : ''}`} />
@@ -1465,7 +1643,7 @@ export default function CourseDetailsPage() {
                                                 </div>
 
                                                 {canManageMemberJournal(entry) && openJournalActionMenuId === entry.id && (
-                                                    <div className="px-6 pb-4 flex justify-end gap-2 border-t border-gray-100 pt-3">
+                                                    <div className="px-6 pb-4 flex justify-end gap-2 border-t border-gray-100 dark:border-slate-700 pt-3">
                                                         <button
                                                             onClick={() => handleEditMemberJournal(entry)}
                                                             className="px-3 py-2 text-xs font-black uppercase tracking-wider text-blue-700 bg-blue-100 rounded-xl hover:bg-blue-200 transition-colors"
@@ -1482,14 +1660,14 @@ export default function CourseDetailsPage() {
                                                 )}
 
                                                 {expandedMemberJournalId === entry.id && (
-                                                    <div className="px-6 pb-6 border-t border-gray-100 space-y-4">
-                                                        <div className="pt-4 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                                                    <div className="px-6 pb-6 border-t border-gray-100 dark:border-slate-700 space-y-4">
+                                                        <div className="pt-4 bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3">
                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Journal Label</p>
                                                             <p className="inline-flex text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full bg-blue-100 text-blue-700">{entry.journal_label || 'Updates'}</p>
                                                         </div>
-                                                        <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+                                                        <div className="bg-gray-50 dark:bg-slate-800 /50 border border-gray-100 dark:border-slate-700 rounded-xl p-3">
                                                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Journal Text</p>
-                                                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{entry.journal_text || '-'}</p>
+                                                            <p className="text-sm text-gray-700 dark:text-gray-200 whitespace-pre-wrap">{entry.journal_text || '-'}</p>
                                                         </div>
                                                     </div>
                                                 )}
@@ -1501,6 +1679,6 @@ export default function CourseDetailsPage() {
                     </div>
                 </div>
             )}
-        </SidebarLayout>
+        </AppLayout>
     );
 }

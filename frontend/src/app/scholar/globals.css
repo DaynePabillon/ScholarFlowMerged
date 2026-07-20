@@ -72,11 +72,17 @@
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(37, 99, 235, 0.20);  /* blue tinted scrollbar */
   border-radius: 3px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(37, 99, 235, 0.35);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(96, 165, 250, 0.25);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(96, 165, 250, 0.40);
 }
 
 .portal-shell {
@@ -97,11 +103,37 @@
     linear-gradient(180deg, color-mix(in srgb, var(--color-background) 95%, white) 0%, var(--color-background) 42%, color-mix(in srgb, var(--color-background) 90%, black) 100%);
 }
 
+/* ── ScholarSync forced color palette — overrides ThemeContext role colors ── */
+/* Light mode: always sky-blue regardless of user role (admin/manager/member)  */
 .scholar-theme {
+  --color-primary: #2563eb;        /* blue-600   — main accent                */
+  --color-secondary: #0891b2;      /* cyan-600   — secondary accent           */
+  --color-accent: #06b6d4;         /* cyan-500   — highlight                  */
+  --color-background: #f0f9ff;     /* sky-50     — very light blue page bg    */
+  --color-surface: #ffffff;        /* white      — card surface               */
+  --color-text: #0c4a6e;           /* sky-900    — deep blue readable text    */
+  --color-textSecondary: #0369a1;  /* sky-700    — secondary text             */
+  --color-border: #bae6fd;         /* sky-200    — light blue border          */
+  --color-hover: #e0f2fe;          /* sky-100    — hover bg                   */
+  /* Layout */
   position: relative;
   min-height: 100vh;
   color: var(--color-text);
   background: var(--color-background);
+}
+
+/* Dark mode: rich blue-navy palette (not gray-slate)                          */
+/* Fires when .dark class is on <html> AND .scholar-theme wraps content        */
+.dark .scholar-theme {
+  --color-primary: #60a5fa;        /* blue-400   — bright blue accent on dark */
+  --color-secondary: #38bdf8;      /* sky-400    — secondary accent           */
+  --color-accent: #7dd3fc;         /* sky-300    — highlight                  */
+  --color-background: #080f1e;     /* deep navy  — darkest page background    */
+  --color-surface: #0f1e38;        /* navy blue  — card / surface             */
+  --color-text: #e0f2fe;           /* sky-100    — cool light readable text   */
+  --color-textSecondary: #7dd3fc;  /* sky-300    — muted blue secondary text  */
+  --color-border: #1e3a5f;         /* navy blue  — visible border on dark     */
+  --color-hover: rgba(96, 165, 250, 0.10); /* blue-400 at 10% opacity          */
 }
 
 .scholar-theme::before {
@@ -133,32 +165,42 @@
 
 .portal-panel,
 .glass-card {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, white) 0%, color-mix(in srgb, var(--color-surface) 90%, transparent) 100%);
-  backdrop-filter: blur(20px) saturate(1.08);
-  border: 1px solid color-mix(in srgb, var(--color-border) 86%, white);
+  background: #ffffff;
+  backdrop-filter: blur(8px);
+  border: 1px solid #bae6fd;      /* sky-200 — light blue border in light mode */
   border-radius: 1.5rem;
   box-shadow:
-    0 22px 44px -30px rgba(15, 23, 42, 0.32),
-    0 1px 0 0 rgba(255, 255, 255, 0.56) inset;
-  transition: box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease, background 220ms ease, opacity 220ms ease;
+    0 1px 3px rgba(8, 47, 100, 0.07),
+    0 4px 16px rgba(8, 47, 100, 0.05);
+  transition: box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease;
 }
 
 .dark .portal-panel,
 .dark .glass-card {
-  background: color-mix(in srgb, var(--color-surface) 96%, transparent);
+  background: #0f1e38;            /* navy blue card — not gray */
+  border-color: #1e3a5f;          /* blue border — not gray */
   box-shadow:
-    0 24px 44px -28px rgba(0, 0, 0, 0.45),
-    0 1px 0 0 rgba(255, 255, 255, 0.03) inset;
+    0 2px 12px rgba(0, 0, 0, 0.4),
+    0 1px 0 0 rgba(96, 165, 250, 0.05) inset; /* subtle blue highlight edge */
 }
 
 .portal-panel:hover,
 .glass-card:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 68%, white);
+  border-color: #93c5fd;          /* blue-300 — brighter blue hover border */
   box-shadow:
-    0 28px 50px -28px color-mix(in srgb, var(--color-primary) 36%, transparent),
-    0 12px 24px -18px rgba(15, 23, 42, 0.20),
-    0 1px 0 0 rgba(255, 255, 255, 0.72) inset;
+    0 28px 50px -28px rgba(37, 99, 235, 0.28),
+    0 8px 20px -10px rgba(8, 47, 100, 0.14),
+    0 1px 0 0 rgba(255, 255, 255, 0.80) inset;
+  transform: translateY(-2px);
+}
+
+.dark .portal-panel:hover,
+.dark .glass-card:hover {
+  border-color: #1d4ed8;          /* blue-700 — visible blue border in dark */
+  box-shadow:
+    0 24px 48px -24px rgba(96, 165, 250, 0.25),
+    0 8px 20px -8px rgba(0, 0, 0, 0.5),
+    0 1px 0 0 rgba(96, 165, 250, 0.08) inset;
   transform: translateY(-2px);
 }
 
@@ -264,14 +306,22 @@
   text-transform: uppercase;
 }
 
+/* ── Headings — match SkyFlow (Inter, gradient for display) ─────────────── */
 .scholar-display {
-  font-family: var(--font-lilita), var(--font-inter), sans-serif;
-  letter-spacing: 0.01em;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  /* Gradient text matching SkyFlow's page title style */
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .scholar-section-heading {
-  font-family: var(--font-lilita), var(--font-inter), sans-serif;
-  letter-spacing: 0.01em;
+  font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.025em;
 }
 
 .scholar-nav-item {

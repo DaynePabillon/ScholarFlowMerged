@@ -17,6 +17,8 @@ interface TeamGroup {
     total_checkpoints: number
     completed_checkpoints: number
     proposed_project: string | null
+    project_id?: string | null
+    project_name?: string | null
 }
 
 interface TeamCardGridProps {
@@ -128,12 +130,14 @@ export default function TeamCardGrid({ teams, userRole, onTeamClick, onCreateTea
                     </div>
                     <div className="text-center">
                         <h3 className="text-xl font-black text-gray-400 dark:text-slate-400 uppercase tracking-widest">
-                            {searchQuery ? 'No Results' : 'No Teams Yet'}
+                            {searchQuery ? 'No Results' : userRole === 'admin' ? 'No Teams Yet' : 'No Team Assigned'}
                         </h3>
                         <p className="text-xs text-gray-500 dark:text-slate-600 font-bold uppercase tracking-widest mt-2">
                             {searchQuery
                                 ? 'No teams match your search'
-                                : 'Create your first team to get started'}
+                                : userRole === 'admin'
+                                    ? 'Create your first team to get started'
+                                    : 'You have not been added to a team yet — contact your admin'}
                         </p>
                     </div>
                     {userRole === 'admin' && !searchQuery && (

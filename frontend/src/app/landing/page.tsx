@@ -73,7 +73,7 @@ export default function LandingPage() {
 
             {/* Main Heading */}
             <h1 className="text-7xl md:text-8xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 bg-clip-text text-transparent mb-6 tracking-tight">
-              SkyFlow
+              ScholarFlow
             </h1>
 
             {/* Quote */}
@@ -199,7 +199,7 @@ export default function LandingPage() {
               Ready to elevate your workflow?
             </h2>
             <p className="text-xl text-gray-600 mb-8">
-              Join teams already using SkyFlow to achieve more
+              Join teams already using ScholarFlow to achieve more
             </p>
             <button
               onClick={() => router.push('/login')}
@@ -216,7 +216,7 @@ export default function LandingPage() {
           <div className="max-w-7xl mx-auto">
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="text-gray-600 text-sm">
-                © 2025 SkyFlow. Built for organizational excellence.
+                © 2025 ScholarFlow. Built for organizational excellence.
               </div>
               <div className="flex items-center gap-6 text-sm">
                 <a

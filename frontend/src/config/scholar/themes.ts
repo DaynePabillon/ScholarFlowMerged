@@ -34,8 +34,8 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
       accent: '#6366f1',
       background: '#eef2ff',
       surface: '#f8faff',
-      text: '#1e1b4b',
-      textSecondary: '#4c1d95',
+      text: '#0f172a',
+      textSecondary: '#475569',
       border: '#c7d2fe',
       hover: '#e0e7ff',
       success: '#10b981',
@@ -49,7 +49,7 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
       accent: '#a5b4fc',
       background: '#0f172a',
       surface: '#1e293b',
-      text: '#f1f5f9',
+      text: '#e2e8f0',
       textSecondary: '#94a3b8',
       border: '#334155',
       hover: '#334155',
@@ -68,8 +68,8 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
       accent: '#14b8a6',
       background: '#ecfdf5',
       surface: '#f0fdf9',
-      text: '#064e3b',
-      textSecondary: '#065f46',
+      text: '#0f172a',
+      textSecondary: '#475569',
       border: '#a7f3d0',
       hover: '#d1fae5',
       success: '#10b981',
@@ -83,8 +83,8 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
       accent: '#6ee7b7',
       background: '#064e3b',
       surface: '#065f46',
-      text: '#f0fdf4',
-      textSecondary: '#d1fae5',
+      text: '#e2e8f0',
+      textSecondary: '#94a3b8',
       border: '#047857',
       hover: '#047857',
       success: '#34d399',
@@ -94,7 +94,7 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
     },
   },
   member: {
-    name: 'SkyFlow Classic',
+    name: 'ScholarFlow Classic',
     description: 'Focused Productivity',
     light: {
       primary: '#2563eb',
@@ -102,8 +102,8 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
       accent: '#06b6d4',
       background: '#f0f9ff',
       surface: '#ffffff',
-      text: '#0c4a6e',
-      textSecondary: '#0369a1',
+      text: '#0f172a',
+      textSecondary: '#475569',
       border: '#bae6fd',
       hover: '#e0f2fe',
       success: '#10b981',
@@ -117,8 +117,8 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
       accent: '#38bdf8',
       background: '#0c4a6e',
       surface: '#075985',
-      text: '#e0f2fe',
-      textSecondary: '#7dd3fc',
+      text: '#e2e8f0',
+      textSecondary: '#94a3b8',
       border: '#0369a1',
       hover: '#0369a1',
       success: '#34d399',
@@ -130,9 +130,10 @@ export const roleThemes: Record<UserRole, RoleTheme> = {
 };
 
 export const getThemeForRole = (role: UserRole, mode: ThemeMode): ThemeColors => {
-  return roleThemes[role][mode];
+  const roleTheme = roleThemes[role] ?? roleThemes.member;
+  return roleTheme[mode] ?? roleTheme.light;
 };
 
 export const getRoleThemeName = (role: UserRole): string => {
-  return roleThemes[role].name;
+  return (roleThemes[role] ?? roleThemes.member).name;
 };

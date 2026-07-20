@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect, useMemo } from "react"
@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
-import SidebarLayout from "@/components/scholar/SidebarLayout"
+import AppLayout from '@/components/layout/AppLayout'
 
 interface ConsultationSlot {
   slot_id: number
@@ -90,6 +90,8 @@ interface UserGroup {
 export default function BookingPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
   const [userGroup, setUserGroup] = useState<UserGroup | null>(null)
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [bookedSlots, setBookedSlots] = useState<number[]>([])
@@ -104,6 +106,14 @@ export default function BookingPage() {
   const [expandedDate, setExpandedDate] = useState<string | null>(null)
 
   // Auth & Load User Group
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const token = localStorage.getItem("auth_token")
     if (!token) { router.push("/login"); return }
@@ -384,7 +394,7 @@ export default function BookingPage() {
   }
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 
         {/* Header */}
@@ -540,6 +550,6 @@ export default function BookingPage() {
           </div>
         )}
       </div>
-    </SidebarLayout>
+    </AppLayout>
   )
 }
