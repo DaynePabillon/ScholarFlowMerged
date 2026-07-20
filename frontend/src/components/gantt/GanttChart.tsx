@@ -168,7 +168,7 @@ export default function GanttChart({ projectId }: Props) {
 
   if (error) {
     return (
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg p-8 text-center">
+      <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg p-8 text-center">
         <p className="text-red-500 font-medium mb-2">Failed to load Gantt data</p>
         <p className="text-slate-500 text-sm">{error}</p>
         <p className="text-slate-400 text-xs mt-3">
@@ -179,9 +179,9 @@ export default function GanttChart({ projectId }: Props) {
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/40 bg-white/30 gap-3 flex-wrap">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30 gap-3 flex-wrap">
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-sky-500" />
           <span className="font-semibold text-slate-700 dark:text-slate-200 text-sm">Timeline</span>
@@ -212,7 +212,7 @@ export default function GanttChart({ projectId }: Props) {
             {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
           {/* Zoom controls */}
-          <div className="flex items-center gap-1 bg-white/50 backdrop-blur-sm rounded-xl border border-white/40 overflow-hidden p-0.5">
+          <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-xl border border-white/40 dark:border-slate-700/40 overflow-hidden p-0.5">
             {(['day', 'week', 'month'] as ZoomLevel[]).map(z => (
               <button
                 key={z}
@@ -229,7 +229,7 @@ export default function GanttChart({ projectId }: Props) {
       </div>
 
       {/* Grid */}
-      <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 220px)', minHeight: '400px' }}>
+      <div className="overflow-auto bg-white dark:bg-slate-900" style={{ maxHeight: 'calc(100vh - 220px)', minHeight: '400px' }}>
         <div className="flex min-h-full">
           {/* Left panel: task list — sticky so it doesn't scroll away horizontally */}
           <div className="min-w-[300px] w-[300px] border-r border-slate-200 dark:border-slate-700 flex-shrink-0 sticky left-0 z-10 bg-white dark:bg-slate-900">
@@ -396,7 +396,7 @@ export default function GanttChart({ projectId }: Props) {
       </div>
 
       {/* Legend */}
-      <div className="px-4 py-2 border-t border-white/40 bg-white/30 flex items-center gap-4 flex-wrap">
+      <div className="px-4 py-2 border-t border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30 flex items-center gap-4 flex-wrap">
         {Object.entries(STATUS_COLORS).map(([status, color]) => (
           <div key={status} className="flex items-center gap-1.5">
             <div className={`w-3 h-3 rounded-sm ${color}`} />

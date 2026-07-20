@@ -127,7 +127,7 @@ export default function BillingDashboard({ organizationId }: Props) {
   return (
     <div className="space-y-6">
       {/* Current plan summary */}
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg p-5">
+      <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${PLAN_BADGE[currentPlan]}`}>
@@ -202,7 +202,7 @@ export default function BillingDashboard({ organizationId }: Props) {
           const isCurrent = planKey === currentPlan;
           const price = billingCycle === 'annual' ? plan.price_annual : plan.price_monthly;
           return (
-            <div key={planKey} className={`bg-white/70 backdrop-blur-xl rounded-2xl border-2 p-4 flex flex-col shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 ${isCurrent ? PLAN_COLORS[planKey] : 'border-white/40'}`}>
+            <div key={planKey} className={`bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border-2 p-4 flex flex-col shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 ${isCurrent ? PLAN_COLORS[planKey] : 'border-white/40 dark:border-slate-700/40'}`}>
               <div className="flex items-center gap-2 mb-3">
                 <div className={`p-1.5 rounded-lg ${PLAN_BADGE[planKey]}`}>{PLAN_ICONS[planKey]}</div>
                 <h3 className="font-bold text-slate-800 dark:text-slate-100">{plan.name}</h3>
@@ -259,8 +259,8 @@ export default function BillingDashboard({ organizationId }: Props) {
 
       {/* Billing history */}
       {events.length > 0 && (
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-4 border-b border-white/40 bg-white/30">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
             <Receipt className="h-4 w-4 text-sky-500" />
             <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">Billing History</h3>
           </div>

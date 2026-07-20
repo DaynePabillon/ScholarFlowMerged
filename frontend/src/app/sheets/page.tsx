@@ -213,7 +213,7 @@ export default function SheetsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Google Sheets</h1>
-            <p className="text-gray-600 mt-1">Manage your spreadsheets</p>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">Manage your spreadsheets</p>
           </div>
           {/* Search and Actions */}
           <div className="mb-8 flex items-center gap-4">
@@ -224,7 +224,7 @@ export default function SheetsPage() {
                 placeholder="Search spreadsheets..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
               />
             </div>
             <button
@@ -242,10 +242,10 @@ export default function SheetsPage() {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
             </div>
           ) : filteredSheets.length === 0 ? (
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-white/40 shadow-lg">
+            <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-white/40 dark:border-slate-700/40 shadow-lg">
               <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">No spreadsheets found</h3>
-              <p className="text-gray-600 mb-6">Create your first spreadsheet to get started</p>
+              <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">No spreadsheets found</h3>
+              <p className="text-gray-600 dark:text-gray-300 mb-6">Create your first spreadsheet to get started</p>
               <button className="px-6 py-2 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl hover:from-blue-600 hover:to-cyan-600 transition-all shadow-md">
                 Create Spreadsheet
               </button>
@@ -256,7 +256,7 @@ export default function SheetsPage() {
                 <div
                   key={sheet.id}
                   onClick={() => handleSheetClick(sheet)}
-                  className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                  className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 dark:border-slate-700/40 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
                 >
                   <div className="flex items-start justify-between mb-4 overflow-hidden">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -264,8 +264,8 @@ export default function SheetsPage() {
                         <FileText className="w-6 h-6 text-green-600" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-gray-800 truncate">{sheet.name}</h3>
-                        <p className="text-xs text-gray-600">
+                        <h3 className="font-semibold text-gray-800 dark:text-gray-100 truncate">{sheet.name}</h3>
+                        <p className="text-xs text-gray-600 dark:text-gray-300">
                           {new Date(sheet.modifiedTime).toLocaleDateString()}
                         </p>
                       </div>
@@ -278,19 +278,19 @@ export default function SheetsPage() {
                         }}
                         className="p-1 hover:bg-gray-100 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                       >
-                        <MoreVertical className="w-5 h-5 text-gray-500" />
+                        <MoreVertical className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                       </button>
 
                       {/* Dropdown Menu */}
                       {actionMenuId === sheet.id && (
-                        <div className="absolute right-0 top-full mt-1 w-40 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50">
+                        <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 py-1 z-50">
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               handleSheetClick(sheet)
                               setActionMenuId(null)
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:text-blue-600"
                           >
                             <Eye className="w-4 h-4" />
                             Open
@@ -303,7 +303,7 @@ export default function SheetsPage() {
                               setShowSheetModal(true)
                               setActionMenuId(null)
                             }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 hover:text-blue-600"
                           >
                             <Edit3 className="w-4 h-4" />
                             Edit
@@ -323,19 +323,19 @@ export default function SheetsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                  <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
                     <Clock className="w-3 h-3" />
                     <span>Modified {new Date(sheet.modifiedTime).toLocaleDateString()}</span>
                   </div>
 
                   {sheet.owners && sheet.owners.length > 0 && (
-                    <div className="flex items-center gap-2 text-xs text-gray-600 mt-2">
+                    <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300 mt-2">
                       <Users className="w-3 h-3" />
                       <span>{sheet.owners[0].displayName}</span>
                     </div>
                   )}
 
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-slate-700">
                     <button className="flex-1 flex items-center justify-center gap-2 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
                       <Share2 className="w-3 h-3" />
                       Share
@@ -356,16 +356,16 @@ export default function SheetsPage() {
       {showSheetModal && selectedSheet && (
         <Portal>
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col border border-white/40">
+            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col border border-white/40 dark:border-slate-700/40">
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-green-100 rounded-lg">
                     <FileText className="w-6 h-6 text-green-600" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-800 truncate max-w-md">{selectedSheet.name}</h2>
-                    <p className="text-sm text-gray-500">
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate max-w-md">{selectedSheet.name}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       Modified {new Date(selectedSheet.modifiedTime).toLocaleDateString()}
                     </p>
                   </div>
@@ -377,7 +377,7 @@ export default function SheetsPage() {
                       onClick={() => setIsEditMode(false)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${!isEditMode
                         ? 'bg-white text-green-600 shadow-sm'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:bg-slate-800'
                         }`}
                     >
                       <Eye className="w-4 h-4" />
@@ -387,7 +387,7 @@ export default function SheetsPage() {
                       onClick={() => setIsEditMode(true)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${isEditMode
                         ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-sm'
-                        : 'text-gray-600 hover:bg-gray-50'
+                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:bg-slate-800'
                         }`}
                     >
                       <Edit3 className="w-4 h-4" />
@@ -413,7 +413,7 @@ export default function SheetsPage() {
                     }}
                     className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
                   >
-                    <X className="w-5 h-5 text-gray-500" />
+                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                   </button>
                 </div>
               </div>
@@ -438,8 +438,8 @@ export default function SheetsPage() {
       {showCreateModal && (
         <Portal>
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-green-500 to-emerald-500">
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-green-500 to-emerald-500">
                 <div>
                   <h2 className="text-xl font-bold text-white">Create New Spreadsheet</h2>
                   <p className="text-white/80 text-sm">Enter a name for your spreadsheet</p>
@@ -450,22 +450,22 @@ export default function SheetsPage() {
               </div>
 
               <div className="p-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Spreadsheet Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Spreadsheet Name</label>
                 <input
                   type="text"
                   value={newSheetTitle}
                   onChange={(e) => setNewSheetTitle(e.target.value)}
                   placeholder="e.g., Budget 2024"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
+                  className="w-full px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent"
                   autoFocus
                   onKeyDown={(e) => e.key === 'Enter' && createSpreadsheet()}
                 />
               </div>
 
-              <div className="flex gap-3 p-4 bg-gray-50 border-t border-gray-200">
+              <div className="flex gap-3 p-4 bg-gray-50 dark:bg-slate-800 border-t border-gray-200 dark:border-slate-700">
                 <button
                   onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                  className="flex-1 px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>

@@ -80,13 +80,13 @@ const ProfessionalTaskCard = memo(({
     }
 
     const getWbsColor = (wbs?: string) => {
-        if (!wbs) return 'text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/50 border-gray-100 dark:border-slate-600 font-bold'
+        if (!wbs) return 'text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-600 font-bold'
         const level = wbs.split('.').length
         switch (level) {
             case 1: return 'text-white bg-slate-700 dark:bg-slate-600 border-slate-800 dark:border-slate-500 font-extrabold' // Module
             case 2: return 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 font-bold' // Transaction
             case 3: return 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-800 border-gray-200 dark:border-slate-600 font-medium' // Task
-            default: return 'text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-slate-700/50 border-gray-100 dark:border-slate-600 font-normal' // Subtask
+            default: return 'text-gray-400 dark:text-gray-400 bg-gray-50 dark:bg-slate-800 border-gray-100 dark:border-slate-600 font-normal' // Subtask
         }
     }
 

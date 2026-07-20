@@ -79,7 +79,7 @@ export default function TasksPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-cyan-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">No organization selected</p>
+          <p className="text-gray-600 dark:text-gray-300">No organization selected</p>
         </div>
       </div>
     )

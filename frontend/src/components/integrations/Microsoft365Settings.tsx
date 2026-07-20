@@ -135,9 +135,9 @@ export default function Microsoft365Settings({ organizationId, projectId }: Prop
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/40 bg-white/30">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
         <div className="flex items-center gap-3">
           <div className="bg-[#217346] p-1.5 rounded-lg">
             <Grid3x3 className="h-4 w-4 text-white" />

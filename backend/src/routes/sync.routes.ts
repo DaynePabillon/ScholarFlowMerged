@@ -47,12 +47,19 @@ router.get('/sync/status', authenticateToken, async (req: AuthRequest, res: Resp
     const { project_id } = req.query;
     if (!project_id) return res.status(400).json({ error: 'project_id is required' });
 
+    // IMPORTANT: exclude 'rate_limited' rows when determining the last *real* sync.
+    // Each blocked attempt previously inserted a 'rate_limited' row with a fresh
+    // created_at timestamp — if that row were treated as "the last sync", every
+    // subsequent status check (and the /sync/trigger cooldown check below) would
+    // see an ever-more-recent timestamp and the cooldown would never expire,
+    // creating a perpetual lockout. Only successful/failed/in-progress syncs
+    // count as the reference point for cooldown + "last synced" display.
     const result = await query(
       `SELECT created_at, status, synced_count, triggered_by,
               u.name as triggered_by_name
        FROM sync_logs sl
        LEFT JOIN users u ON sl.triggered_by = u.id
-       WHERE sl.project_id = $1
+       WHERE sl.project_id = $1 AND sl.status != 'rate_limited'
        ORDER BY sl.created_at DESC
        LIMIT 1`,
       [project_id]
@@ -108,9 +115,18 @@ router.post('/sync/trigger', authenticateToken, async (req: AuthRequest, res: Re
 
     if (!project_id) return res.status(400).json({ error: 'project_id is required' });
 
-    // Check cooldown
+    // Check cooldown — last sync timestamp
+    // IMPORTANT: exclude 'rate_limited' rows from the lookup. Each blocked
+    // attempt below inserts a 'rate_limited' log row (for the History view).
+    // If THAT row were used as "the last sync", the very next request would
+    // see an even-more-recent timestamp than the original sync, perpetually
+    // resetting the cooldown window — a cascading lockout where the button
+    // never re-enables. Only count real sync attempts (success/failed/in_progress)
+    // as the cooldown reference point.
     const lastResult = await query(
-      `SELECT created_at FROM sync_logs WHERE project_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT created_at FROM sync_logs
+       WHERE project_id = $1 AND status != 'rate_limited'
+       ORDER BY created_at DESC LIMIT 1`,
       [project_id]
     );
 
@@ -118,6 +134,7 @@ router.post('/sync/trigger', authenticateToken, async (req: AuthRequest, res: Re
       const lastSyncTime = new Date(lastResult.rows[0].created_at).getTime();
       const elapsedSeconds = (Date.now() - lastSyncTime) / 1000;
 
+      // Enforce cooldown period — block requests made too soon after the last real sync
       if (elapsedSeconds < SYNC_COOLDOWN_SECONDS) {
         const remaining = Math.ceil(SYNC_COOLDOWN_SECONDS - elapsedSeconds);
         await query(
@@ -125,6 +142,7 @@ router.post('/sync/trigger', authenticateToken, async (req: AuthRequest, res: Re
            VALUES ($1, $2, 'rate_limited', 0)`,
           [project_id, userId]
         );
+        // Show warning message — frontend renders "Please wait before syncing again"
         return res.status(429).json({
           error: 'Sync rate limit active',
           remainingSeconds: remaining,
@@ -132,6 +150,7 @@ router.post('/sync/trigger', authenticateToken, async (req: AuthRequest, res: Re
         });
       }
     }
+    // Cooldown expired (or no prior sync) — allow this sync to proceed
 
     // Perform the actual sync (re-use existing workspace sync logic)
     const { WorkspaceSyncService } = await import('../services/workspace.service');

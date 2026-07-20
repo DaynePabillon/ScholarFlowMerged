@@ -10,6 +10,7 @@ interface TeamMember {
   name: string
   email: string
   role: 'admin' | 'manager' | 'member' | 'adviser'
+  academic_role?: string | null
   profile_picture?: string | null
   joined_at: string
   status: string
@@ -72,6 +73,14 @@ export default function ManagerTeamView({ user, organization }: ManagerTeamViewP
     return badges[role as keyof typeof badges] || badges.member
   }
 
+  // Unified role label — combines this member's SkyFlow org role with their
+  // ScholarSync academic role (e.g. "Member & Student") so both systems' roles
+  // are visible together in one place.
+  const formatMemberRole = (member: TeamMember) => {
+    const base = getRoleBadge(member.role).label
+    return member.academic_role ? `${base} & ${member.academic_role}` : base
+  }
+
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -86,18 +95,18 @@ export default function ManagerTeamView({ user, organization }: ManagerTeamViewP
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Team Members</h1>
-            <p className="text-gray-600 mt-1">View team in {organization.name}</p>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">View team in {organization.name}</p>
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 p-1 bg-gray-100 rounded-xl w-fit mb-6">
+        <div className="flex gap-1 p-1 bg-gray-100 dark:bg-slate-800 rounded-xl w-fit mb-6">
           <button
             onClick={() => setActiveTab('members')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'members'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
             <Users className="w-4 h-4" />
@@ -107,8 +116,8 @@ export default function ManagerTeamView({ user, organization }: ManagerTeamViewP
             onClick={() => setActiveTab('project-teams')}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'project-teams'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
             }`}
           >
             <FolderKanban className="w-4 h-4" />
@@ -125,14 +134,14 @@ export default function ManagerTeamView({ user, organization }: ManagerTeamViewP
             placeholder="Search members..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
           />
         </div>
 
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-blue-50/50 border-b border-gray-200">
+              <thead className="bg-blue-50/50 border-b border-gray-200 dark:border-slate-700">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-blue-600 uppercase tracking-wider">Member</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-blue-600 uppercase tracking-wider">Role</th>
@@ -140,7 +149,7 @@ export default function ManagerTeamView({ user, organization }: ManagerTeamViewP
                   <th className="px-6 py-3 text-left text-xs font-medium text-blue-600 uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                 {filteredMembers.map((member) => (
                   <tr key={member.id} className="hover:bg-blue-50/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -153,18 +162,18 @@ export default function ManagerTeamView({ user, organization }: ManagerTeamViewP
                           </div>
                         )}
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-800">{member.name}</div>
-                          <div className="text-sm text-gray-500">{member.email}</div>
+                          <div className="text-sm font-medium text-gray-800 dark:text-gray-100">{member.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{member.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadge(member.role).color}`}>
                         {getRoleIcon(member.role)}
-                        {getRoleBadge(member.role).label}
+                        {formatMemberRole(member)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
                       {new Date(member.joined_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

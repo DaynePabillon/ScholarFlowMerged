@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client'
+import { getTodayLocalDateString } from '@/lib/utils/date'
 import {
   ClipboardList,
   Printer,
@@ -163,7 +164,7 @@ export default function ConsultationHubPage() {
         )
       default:
         return (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 font-semibold">
+          <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400 font-semibold">
             Not Requested
           </span>
         )
@@ -192,13 +193,13 @@ export default function ConsultationHubPage() {
               <ClipboardList className="w-8 h-8 text-blue-600" />
               Consultation Hub
             </h1>
-            <p className="text-gray-500 mt-1 text-sm">
+            <p className="text-gray-500 dark:text-gray-400 mt-1 text-sm">
               All submitted consultation records across groups and courses
             </p>
           </div>
           <button
             onClick={() => window.print()}
-            className="print:hidden flex items-center gap-2 px-4 py-2.5 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all shadow-sm"
+            className="print:hidden flex items-center gap-2 px-4 py-2.5 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-600 rounded-xl text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-all shadow-sm"
           >
             <Printer className="w-4 h-4" />
             Print Audit Log
@@ -206,10 +207,10 @@ export default function ConsultationHubPage() {
         </div>
 
         {/* ── Filters ── */}
-        <div className="print:hidden bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg p-5 mb-6">
+        <div className="print:hidden bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg p-5 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Filter className="w-4 h-4 text-blue-600" />
-            <span className="text-sm font-semibold text-gray-700">Filters</span>
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Filters</span>
             {(courseFilter || validationFilter || dateFrom || dateTo || searchQuery) && (
               <button
                 onClick={() => {
@@ -219,7 +220,7 @@ export default function ConsultationHubPage() {
                   setDateTo('')
                   setSearchQuery('')
                 }}
-                className="ml-auto text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                className="ml-auto text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 flex items-center gap-1"
               >
                 <X className="w-3 h-3" /> Clear all
               </button>
@@ -227,18 +228,18 @@ export default function ConsultationHubPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="relative">
-              <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+              <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 dark:text-gray-500" />
               <input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Search group or course..."
-                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
             <select
               value={courseFilter}
               onChange={e => setCourseFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+              className="px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
             >
               <option value="">All Courses</option>
               {uniqueCourses.map(c => (
@@ -248,7 +249,7 @@ export default function ConsultationHubPage() {
             <select
               value={validationFilter}
               onChange={e => setValidationFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white"
+              className="px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100"
             >
               <option value="">All Validation Status</option>
               <option value="not_requested">Not Requested</option>
@@ -257,21 +258,23 @@ export default function ConsultationHubPage() {
               <option value="rejected">Rejected</option>
             </select>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-0.5 pl-1">From</label>
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5 pl-1">From</label>
               <input
                 type="date"
                 value={dateFrom}
                 onChange={e => setDateFrom(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                max={getTodayLocalDateString()}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
             <div>
-              <label className="block text-[10px] text-gray-500 mb-0.5 pl-1">To</label>
+              <label className="block text-[10px] text-gray-500 dark:text-gray-400 mb-0.5 pl-1">To</label>
               <input
                 type="date"
                 value={dateTo}
                 onChange={e => setDateTo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                max={getTodayLocalDateString()}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
               />
             </div>
           </div>
@@ -281,7 +284,7 @@ export default function ConsultationHubPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-            <span className="ml-3 text-gray-500">Loading records...</span>
+            <span className="ml-3 text-gray-500 dark:text-gray-400">Loading records...</span>
           </div>
         ) : error ? (
           <div className="bg-red-50 border border-red-200 rounded-2xl p-6 flex items-center gap-3 text-red-700">
@@ -289,48 +292,48 @@ export default function ConsultationHubPage() {
             <p>{error}</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg p-12 text-center">
-            <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 font-medium">No consultation records found</p>
-            <p className="text-gray-400 text-sm mt-1">
+          <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg p-12 text-center">
+            <ClipboardList className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+            <p className="text-gray-500 dark:text-gray-400 font-medium">No consultation records found</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">
               {records.length > 0 ? 'Try adjusting your filters' : 'No consultations have been submitted yet'}
             </p>
           </div>
         ) : (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+          <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
             {/* Print header (hidden on screen) */}
-            <div className="hidden print:block px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">Consultation Audit Log</h2>
-              <p className="text-sm text-gray-500">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
+            <div className="hidden print:block px-6 py-4 border-b border-gray-200 dark:border-slate-600">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Consultation Audit Log</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Generated {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</p>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50/80">
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Group</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Course</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Milestone</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Follow-up</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Validation</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider print:hidden">Actions</th>
+                  <tr className="border-b border-gray-100 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-700/50">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Group</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Course</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Milestone</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Follow-up</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Validation</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider print:hidden">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {filtered.map((record) => (
-                    <tr key={record.con_id} className="hover:bg-blue-50/40 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-800">{record.group_name || '—'}</td>
-                      <td className="px-4 py-3 text-gray-600">
+                    <tr key={record.con_id} className="hover:bg-blue-50/40 dark:hover:bg-blue-900/20 transition-colors">
+                      <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{record.group_name || '—'}</td>
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300">
                         <span className="font-medium">{record.course_code || '—'}</span>
                         {record.course_name && (
-                          <span className="block text-xs text-gray-400">{record.course_name}</span>
+                          <span className="block text-xs text-gray-400 dark:text-gray-500">{record.course_name}</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">
                         {formatDate(record.consultation_date)}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 max-w-[180px]">
+                      <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-[180px]">
                         <span className="truncate block" title={record.milestone || ''}>
                           {record.milestone || '—'}
                         </span>
@@ -342,7 +345,7 @@ export default function ConsultationHubPage() {
                         <div>
                           <ValidationBadge status={record.validation_status} />
                           {record.validated_by && (
-                            <p className="text-[10px] text-gray-400 mt-0.5">by {record.validated_by}</p>
+                            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">by {record.validated_by}</p>
                           )}
                         </div>
                       </td>
@@ -367,7 +370,7 @@ export default function ConsultationHubPage() {
                               onClick={() =>
                                 router.push(`/scholar/adviser/consultation-prep/${record.slot_id}`)
                               }
-                              className="flex items-center gap-1 text-xs px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-all"
+                              className="flex items-center gap-1 text-xs px-3 py-1.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-200 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-slate-600 transition-all"
                             >
                               View <ChevronRight className="w-3 h-3" />
                             </button>
@@ -381,7 +384,7 @@ export default function ConsultationHubPage() {
             </div>
 
             {/* Footer count */}
-            <div className="px-4 py-3 bg-gray-50/80 border-t border-gray-100 text-xs text-gray-500 flex items-center justify-between">
+            <div className="px-4 py-3 bg-gray-50/80 dark:bg-slate-700/50 border-t border-gray-100 dark:border-slate-700 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
               <span>Showing {filtered.length} of {records.length} records</span>
               {records.filter(r => r.validation_status === 'pending').length > 0 && (
                 <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
@@ -397,22 +400,22 @@ export default function ConsultationHubPage() {
       {/* ── Validation Review Modal ── */}
       {validatingId && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 w-full max-w-md p-6">
+          <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 dark:border-slate-700/40 w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Review Consultation Record</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Review Consultation Record</h3>
               <button
                 onClick={() => {
                   setValidatingId(null)
                   setValidationNotes('')
                   setActionError('')
                 }}
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
               >
-                <X className="w-4 h-4 text-gray-600" />
+                <X className="w-4 h-4 text-gray-600 dark:text-gray-300" />
               </button>
             </div>
 
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
               Review this consultation record and add optional notes before approving or rejecting.
             </p>
 
@@ -424,14 +427,14 @@ export default function ConsultationHubPage() {
             )}
 
             <div className="mb-4">
-              <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                Validation Notes <span className="text-gray-400 font-normal">(optional)</span>
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1.5">
+                Validation Notes <span className="text-gray-400 dark:text-gray-500 font-normal">(optional)</span>
               </label>
               <textarea
                 value={validationNotes}
                 onChange={e => setValidationNotes(e.target.value)}
                 placeholder="Add any feedback or comments for the adviser..."
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                className="w-full px-3 py-2.5 border border-gray-200 dark:border-slate-600 rounded-xl text-sm bg-white dark:bg-slate-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
                 rows={3}
               />
             </div>

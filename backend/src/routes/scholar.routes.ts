@@ -1193,7 +1193,20 @@ router.get('/courses/:id/teams', async (req: Request, res: Response) => {
     const role = rawRole || (jwtRole === 'admin' ? 'Admin' : 'Student');
 
     const { rows: allGroups } = await pool.query(
-      'SELECT id, name as "groupName", team_number, adviser_name as adviser, proposed_project, consultation_dates, comments, grade, course_id as "courseID" FROM team_groups WHERE course_id = $1 ORDER BY team_number',
+      `SELECT tg.id, tg.name AS "groupName", tg.team_number,
+              tg.adviser_name AS adviser, tg.proposed_project,
+              tg.consultation_dates, tg.comments, tg.grade,
+              tg.course_id AS "courseID",
+              tg.project_id,
+              p.name   AS project_name,
+              p.status AS project_status,
+              (SELECT COUNT(*)::int FROM tasks WHERE tg.project_id IS NOT NULL AND project_id = tg.project_id)       AS project_task_total,
+              (SELECT COUNT(*)::int FROM tasks WHERE tg.project_id IS NOT NULL AND project_id = tg.project_id
+                 AND status IN ('completed', 'done', 'Done'))                                                      AS project_task_done
+       FROM team_groups tg
+       LEFT JOIN projects p ON p.id = tg.project_id
+       WHERE tg.course_id = $1
+       ORDER BY tg.team_number`,
       [courseId]
     );
 
@@ -1439,8 +1452,103 @@ router.get('/groups/:id', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/groups/:id/tasks', async (_req: Request, res: Response) => {
-  return res.json([]);
+router.get('/groups/:id/tasks', async (req: Request, res: Response) => {
+  const token = (req.headers.authorization || '').split(' ')[1];
+  if (!token) return res.sendStatus(401);
+  try {
+    jwt.verify(token, process.env.JWT_SECRET || 'default-secret-key');
+    const groupId = String(req.params.id || '').trim();
+    if (!groupId || groupId === 'null') return res.status(400).json({ error: 'Invalid group id' });
+
+    const { rows: groupRows } = await pool.query(
+      'SELECT project_id, organization_id FROM team_groups WHERE id = $1',
+      [groupId]
+    );
+    if (!groupRows[0]) return res.status(404).json({ error: 'Group not found' });
+
+    const { project_id } = groupRows[0];
+    if (!project_id) return res.json({ tasks: [], project_id: null });
+
+    const { rows: tasks } = await pool.query(
+      `SELECT t.id, t.title, t.description, t.status, t.priority, t.due_date,
+              t.created_at, t.project_id, p.name AS project_name,
+              u.name  AS assignee_name, u.email AS assignee_email,
+              (SELECT COUNT(*)::int FROM task_comments WHERE task_id = t.id) AS comment_count
+       FROM tasks t
+       LEFT JOIN projects p ON p.id = t.project_id
+       LEFT JOIN users u    ON u.id = t.assigned_to
+       WHERE t.project_id = $1 AND t.status != 'archived'
+       ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC`,
+      [project_id]
+    );
+    return res.json({ tasks, project_id });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/groups/:id/create-project', verifyInstructor, async (req: Request, res: Response) => {
+  try {
+    const groupId = String(req.params.id || '').trim();
+    if (!groupId || groupId === 'null') return res.status(400).json({ error: 'Invalid group id' });
+
+    const { rows: groupRows } = await pool.query(
+      `SELECT tg.id, tg.name, tg.organization_id, tg.project_id, sc."courseCode"
+       FROM team_groups tg
+       LEFT JOIN ss_courses sc ON sc.id = tg.course_id
+       WHERE tg.id = $1`,
+      [groupId]
+    );
+    if (!groupRows[0]) return res.status(404).json({ error: 'Group not found' });
+    const group = groupRows[0];
+    if (group.project_id) return res.status(409).json({ error: 'Group already has a linked project', project_id: group.project_id });
+    if (!group.organization_id) return res.status(422).json({ error: 'Group has no linked SkyFlow organization' });
+
+    const courseCode = String(group.courseCode || '').trim();
+    const groupName  = String(group.name || '').trim();
+    const projectName = courseCode ? `${courseCode} — ${groupName}` : groupName;
+
+    const callerEmail = String((req as any).user?.email || '').trim().toLowerCase();
+    let creatorId: string | null = null;
+    if (callerEmail) {
+      const { rows: userRows } = await pool.query(
+        'SELECT id FROM users WHERE LOWER(email) = $1 LIMIT 1', [callerEmail]
+      );
+      creatorId = userRows[0]?.id ?? null;
+    }
+
+    const { rows: projectRows } = await pool.query(
+      `INSERT INTO projects (organization_id, name, description, status, priority, created_by)
+       VALUES ($1, $2, $3, 'active', 'medium', $4)
+       RETURNING id, name, status, priority`,
+      [group.organization_id, projectName,
+       `Auto-created for ${groupName} from ScholarSync`, creatorId]
+    );
+    const project = projectRows[0];
+
+    if (creatorId) {
+      await pool.query(
+        `INSERT INTO project_members (project_id, user_id, role, assigned_by)
+         VALUES ($1, $2, 'lead', $2) ON CONFLICT (project_id, user_id) DO NOTHING`,
+        [project.id, creatorId]
+      );
+    }
+
+    await pool.query(
+      'UPDATE team_groups SET project_id = $1, updated_at = NOW() WHERE id = $2',
+      [project.id, groupId]
+    );
+
+    return res.status(201).json({
+      project_id: project.id,
+      project_name: project.name,
+      project_status: project.status,
+      project_task_total: 0,
+      project_task_done: 0,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 router.get('/group/by-member/:email', verifyToken, async (req: Request, res: Response) => {

@@ -74,7 +74,7 @@ export default function ConnectedSheetsPanel({ projectId, organizationId }: Prop
       const createRes = await apiClient.post('/workspaces', {
         organizationId,
         folderId: 'root',
-        folderName: 'SkyFlow Default'
+        folderName: 'ScholarFlow Default'
       });
       return createRes.data.workspaceId || null;
     } catch {
@@ -194,9 +194,9 @@ export default function ConnectedSheetsPanel({ projectId, organizationId }: Prop
   const busy = step === 'previewing' || step === 'connecting';
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/40 bg-white/30">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
         <div className="flex items-center gap-2">
           <Link2 className="h-4 w-4 text-violet-500" />
           <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">Connected Google Sheets</span>
@@ -259,7 +259,7 @@ export default function ConnectedSheetsPanel({ projectId, organizationId }: Prop
           sheets.length > 0 && (
             <div className="space-y-2">
               {sheets.map(s => (
-                <div key={s.id} className="flex items-center justify-between bg-gray-50/80 rounded-xl px-4 py-3 border border-white/40">
+                <div key={s.id} className="flex items-center justify-between bg-gray-50/80 dark:bg-slate-700/60 rounded-xl px-4 py-3 border border-white/40 dark:border-slate-700/40">
                   <div className="flex items-center gap-3 min-w-0">
                     <FileSpreadsheet className="h-4 w-4 text-emerald-500 flex-shrink-0" />
                     <div className="min-w-0">

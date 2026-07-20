@@ -114,9 +114,9 @@ export default function SyncControlPanel({ projectId }: Props) {
   };
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/40 bg-white/30">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
         <div className="flex items-center gap-2">
           <RefreshCw className="h-4 w-4 text-sky-500" />
           <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">Manual Sync</span>
@@ -175,7 +175,7 @@ export default function SyncControlPanel({ projectId }: Props) {
         {/* Cooldown warning modal */}
         {showWarning && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 p-6 max-w-sm w-full">
+            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 dark:border-slate-700/40 p-6 max-w-sm w-full">
               <div className="flex items-center gap-3 mb-3">
                 <AlertCircle className="h-6 w-6 text-amber-500" />
                 <h3 className="font-semibold text-slate-800 dark:text-slate-100">Sync Rate Limit</h3>

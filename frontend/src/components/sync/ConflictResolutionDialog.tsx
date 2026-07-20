@@ -86,9 +86,9 @@ export default function ConflictResolutionDialog({ projectId, onClose }: Props) 
   );
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/40 bg-white/30">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-amber-500" />
           <h2 className="font-semibold text-slate-800 dark:text-slate-100">Conflict Resolution</h2>
@@ -99,7 +99,7 @@ export default function ConflictResolutionDialog({ projectId, onClose }: Props) 
           )}
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex gap-1 bg-white/50 backdrop-blur-sm rounded-xl border border-white/40 p-1 text-xs">
+          <div className="flex gap-1 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-xl border border-white/40 dark:border-slate-700/40 p-1 text-xs">
             <button
               onClick={() => setTab('conflicts')}
               className={`px-3 py-1.5 rounded-lg transition-all duration-200 ${tab === 'conflicts' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm' : 'text-slate-600 hover:bg-white/60'}`}

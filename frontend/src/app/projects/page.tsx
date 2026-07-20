@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import apiClient from "@/lib/api/client"
 import AppLayout from "@/components/layout/AppLayout"
+import { getTodayLocalDateString } from "@/lib/utils/date"
 import {
   Layers, Plus, Search, X, Edit3, Trash2, ChevronRight,
   Calendar, CheckSquare, AlertCircle, Clock,
@@ -35,6 +36,7 @@ interface Project {
   user_role?: string
   task_count?: number
   completed_tasks?: number
+  is_overdue?: boolean
 }
 
 interface FormData {
@@ -54,14 +56,14 @@ const STATUS_CONFIG: Record<Project["status"], { label: string; color: string; i
   active:    { label: "Active",    color: "bg-emerald-100 text-emerald-700", icon: TrendingUp },
   on_hold:   { label: "On Hold",   color: "bg-amber-100 text-amber-700",   icon: PauseCircle },
   completed: { label: "Completed", color: "bg-blue-100 text-blue-700",     icon: CheckSquare },
-  archived:  { label: "Archived",  color: "bg-gray-100 text-gray-500",     icon: Archive },
+  archived:  { label: "Archived",  color: "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-gray-400",     icon: Archive },
 }
 
 const PRIORITY_CONFIG: Record<Project["priority"], { label: string; color: string }> = {
   low:      { label: "Low",      color: "bg-green-50 text-green-700 border border-green-200" },
   medium:   { label: "Medium",   color: "bg-yellow-50 text-yellow-700 border border-yellow-200" },
   high:     { label: "High",     color: "bg-orange-50 text-orange-700 border border-orange-200" },
-  critical: { label: "Critical", color: "bg-red-50 text-red-700 border border-red-200" },
+  critical: { label: "Critical", color: "bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800/40" },
 }
 
 const EMPTY_FORM: FormData = {
@@ -76,7 +78,7 @@ const STATUS_FILTERS = ["all", "planning", "active", "on_hold", "completed", "ar
 function ProjectModal({ children }: { children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-      <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+      <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 dark:border-slate-700/40 w-full max-w-lg max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
         {children}
       </div>
     </div>
@@ -99,14 +101,14 @@ function ProjectForm({ formData, setFormData, formError, submitting, onSubmit, o
   return (
     <div className="space-y-4">
       {formError && (
-        <div className="flex items-center gap-2 p-3 bg-red-50 rounded-xl text-sm text-red-700">
+        <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/30 rounded-xl text-sm text-red-700 dark:text-red-400">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {formError}
         </div>
       )}
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
           Project Name <span className="text-red-500">*</span>
         </label>
         <input
@@ -114,28 +116,28 @@ function ProjectForm({ formData, setFormData, formError, submitting, onSubmit, o
           value={formData.name}
           onChange={e => setFormData(f => ({ ...f, name: e.target.value }))}
           placeholder="e.g. Website Redesign"
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+          className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Description</label>
         <textarea
           value={formData.description}
           onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
           rows={3}
           placeholder="What is this project about?"
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm resize-none"
+          className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm resize-none"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Status</label>
           <select
             value={formData.status}
             onChange={e => setFormData(f => ({ ...f, status: e.target.value as Project["status"] }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
           >
             <option value="planning">Planning</option>
             <option value="active">Active</option>
@@ -145,11 +147,11 @@ function ProjectForm({ formData, setFormData, formError, submitting, onSubmit, o
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Priority</label>
           <select
             value={formData.priority}
             onChange={e => setFormData(f => ({ ...f, priority: e.target.value as Project["priority"] }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
           >
             <option value="low">Low</option>
             <option value="medium">Medium</option>
@@ -161,27 +163,28 @@ function ProjectForm({ formData, setFormData, formError, submitting, onSubmit, o
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Start Date</label>
           <input
             type="date"
             value={formData.start_date}
+            max={getTodayLocalDateString()}
             onChange={e => setFormData(f => ({ ...f, start_date: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">End Date</label>
           <input
             type="date"
             value={formData.end_date}
             onChange={e => setFormData(f => ({ ...f, end_date: e.target.value }))}
-            className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+            className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Budget (optional)</label>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Budget (optional)</label>
         <input
           type="number"
           min="0"
@@ -189,7 +192,7 @@ function ProjectForm({ formData, setFormData, formError, submitting, onSubmit, o
           value={formData.budget}
           onChange={e => setFormData(f => ({ ...f, budget: e.target.value }))}
           placeholder="e.g. 50000"
-          className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+          className="w-full px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
         />
       </div>
 
@@ -197,7 +200,7 @@ function ProjectForm({ formData, setFormData, formError, submitting, onSubmit, o
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 dark:bg-slate-800 transition-colors"
         >
           Cancel
         </button>
@@ -326,6 +329,14 @@ export default function ProjectsPage() {
   // Create
   const handleCreate = async () => {
     if (!formData.name.trim() || !selectedOrg) return
+
+    // Start date must comply with "latest date is today" — block creation
+    // entirely (rather than silently dropping/clearing the date) when violated.
+    if (formData.start_date && formData.start_date > getTodayLocalDateString()) {
+      setFormError("Start date cannot be later than today.")
+      return
+    }
+
     setSubmitting(true)
     setFormError("")
     try {
@@ -366,10 +377,32 @@ export default function ProjectsPage() {
 
   const handleUpdate = async () => {
     if (!editingProject || !formData.name.trim()) return
+
+    // Start date must comply with "latest date is today" — block the update
+    // entirely (rather than silently dropping/clearing the date) when violated.
+    if (formData.start_date && formData.start_date > getTodayLocalDateString()) {
+      setFormError("Start date cannot be later than today.")
+      return
+    }
+
+    const becomingCompletedOrArchived =
+      (formData.status === "completed" || formData.status === "archived") &&
+      formData.status !== editingProject.status
+
+    if (becomingCompletedOrArchived) {
+      const taskHint = (editingProject.task_count ?? 0) > 0
+        ? `This may archive up to ${editingProject.task_count} task(s) in this project that aren't already done/archived.`
+        : `Any open tasks in this project will be archived.`
+      const confirmed = window.confirm(
+        `Mark "${editingProject.name}" as ${formData.status === "completed" ? "Completed" : "Archived"}?\n\n${taskHint}`
+      )
+      if (!confirmed) return
+    }
+
     setSubmitting(true)
     setFormError("")
     try {
-      await apiClient.put(`/projects/${editingProject.id}`, {
+      const res = await apiClient.put(`/projects/${editingProject.id}`, {
         name: formData.name.trim(),
         description: formData.description || null,
         status: formData.status,
@@ -381,10 +414,33 @@ export default function ProjectsPage() {
       setEditingProject(null)
       setFormData({ ...EMPTY_FORM })
       if (selectedOrg) fetchProjects(selectedOrg.id)
+      const cascaded = res.data?.cascaded_task_count ?? 0
+      if (cascaded > 0) {
+        alert(`${cascaded} open task${cascaded === 1 ? "" : "s"} ${cascaded === 1 ? "was" : "were"} archived.`)
+      }
     } catch (err: any) {
       setFormError(err?.response?.data?.error || "Failed to update project.")
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // Quick status update from the overdue action banner (Mark Complete / Archive)
+  const handleQuickStatusUpdate = async (project: Project, newStatus: "completed" | "archived") => {
+    const confirmed = window.confirm(
+      `Mark "${project.name}" as ${newStatus === "completed" ? "Completed" : "Archived"}? ` +
+      `Any open tasks in this project will be archived automatically.`
+    )
+    if (!confirmed) return
+    try {
+      const res = await apiClient.put(`/projects/${project.id}`, { status: newStatus })
+      if (selectedOrg) fetchProjects(selectedOrg.id)
+      const cascaded = res.data?.cascaded_task_count ?? 0
+      if (cascaded > 0) {
+        alert(`${cascaded} open task${cascaded === 1 ? "" : "s"} in "${project.name}" ${cascaded === 1 ? "was" : "were"} archived.`)
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.error || "Failed to update project status.")
     }
   }
 
@@ -447,7 +503,7 @@ export default function ProjectsPage() {
                 <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                   Projects
                 </h1>
-                <p className="text-sm text-gray-500 mt-0.5">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                   {selectedOrg?.name} · {projects.length} project{projects.length !== 1 ? "s" : ""}
                 </p>
               </div>
@@ -473,7 +529,7 @@ export default function ProjectsPage() {
                 placeholder="Search projects…"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                className="w-full pl-9 pr-4 py-2.5 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
 
@@ -485,7 +541,7 @@ export default function ProjectsPage() {
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                     statusFilter === s
                       ? "bg-indigo-500 text-white shadow-sm"
-                      : "bg-white/70 text-gray-600 border border-gray-200 hover:bg-gray-50"
+                      : "bg-white/70 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:bg-slate-800"
                   }`}
                 >
                   {s === "all" ? "All" : s === "on_hold" ? "On Hold" : s.charAt(0).toUpperCase() + s.slice(1)}
@@ -498,7 +554,7 @@ export default function ProjectsPage() {
 
         {/* Error */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+          <div className="mb-6 flex items-center gap-3 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 rounded-xl text-red-700 dark:text-red-400 text-sm">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
             {error}
           </div>
@@ -508,7 +564,7 @@ export default function ProjectsPage() {
         {loading && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[1, 2, 3].map(i => (
-              <div key={i} className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg p-6 animate-pulse">
+              <div key={i} className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg p-6 animate-pulse">
                 <div className="h-4 bg-gray-200 rounded w-1/3 mb-3" />
                 <div className="h-5 bg-gray-200 rounded w-2/3 mb-2" />
                 <div className="h-3 bg-gray-200 rounded w-full mb-1" />
@@ -524,10 +580,10 @@ export default function ProjectsPage() {
             <div className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-3xl mb-6">
               <FolderOpen className="w-16 h-16 text-indigo-300 mx-auto" />
             </div>
-            <h3 className="text-xl font-bold text-gray-700 mb-2">
+            <h3 className="text-xl font-bold text-gray-700 dark:text-gray-200 mb-2">
               {searchQuery || statusFilter !== "all" ? "No projects match your filters" : "No projects yet"}
             </h3>
-            <p className="text-gray-500 text-sm mb-6 max-w-sm">
+            <p className="text-gray-500 dark:text-gray-400 text-sm mb-6 max-w-sm">
               {searchQuery || statusFilter !== "all"
                 ? "Try adjusting your search or filter."
                 : canManage
@@ -568,7 +624,7 @@ export default function ProjectsPage() {
               return (
                 <div
                   key={project.id}
-                  className="group bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex flex-col overflow-hidden"
+                  className="group bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 flex flex-col overflow-hidden"
                 >
                   {/* Priority accent bar */}
                   <div className={`h-1 w-full ${
@@ -588,16 +644,22 @@ export default function ProjectsPage() {
                       <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${priorityCfg.color}`}>
                         {priorityCfg.label}
                       </span>
+                      {project.is_overdue && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700 dark:text-red-400">
+                          <AlertCircle className="w-3 h-3" />
+                          Overdue
+                        </span>
+                      )}
                     </div>
 
                     {/* Name */}
-                    <h3 className="text-lg font-bold text-gray-800 leading-snug mb-2 group-hover:text-indigo-700 transition-colors">
+                    <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 leading-snug mb-2 group-hover:text-indigo-700 transition-colors">
                       {project.name}
                     </h3>
 
                     {/* Description */}
                     {project.description && (
-                      <p className="text-sm text-gray-500 line-clamp-2 mb-4 flex-1">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-4 flex-1">
                         {project.description}
                       </p>
                     )}
@@ -612,14 +674,44 @@ export default function ProjectsPage() {
                       </div>
                     )}
 
+                    {/* Overdue action banner */}
+                    {project.is_overdue && canManage && (
+                      <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 rounded-xl">
+                        <p className="text-xs text-red-700 dark:text-red-400 font-medium mb-2 flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5" />
+                          This project is past its end date.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleQuickStatusUpdate(project, "completed")}
+                            className="px-3 py-1 text-xs font-semibold bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                          >
+                            Mark Complete
+                          </button>
+                          <button
+                            onClick={() => handleQuickStatusUpdate(project, "archived")}
+                            className="px-3 py-1 text-xs font-semibold bg-gray-50 dark:bg-slate-8000 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                          >
+                            Archive Project
+                          </button>
+                          <button
+                            onClick={() => openEdit(project)}
+                            className="px-3 py-1 text-xs font-semibold bg-white border border-red-300 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-50 dark:bg-red-950/30 transition-colors"
+                          >
+                            Extend Deadline
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Progress bar */}
                     {total > 0 && (
                       <div className="mb-4">
-                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
                           <span>{done}/{total} tasks done</span>
                           <span>{pct}%</span>
                         </div>
-                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
                             style={{ width: `${pct}%` }}
@@ -631,7 +723,7 @@ export default function ProjectsPage() {
                     {/* Budget */}
                     {project.budget != null && (
                       <div className="text-xs text-gray-400 mb-4">
-                        Budget: <span className="font-semibold text-gray-600">${Number(project.budget).toLocaleString()}</span>
+                        Budget: <span className="font-semibold text-gray-600 dark:text-gray-300">${Number(project.budget).toLocaleString()}</span>
                       </div>
                     )}
 
@@ -669,7 +761,7 @@ export default function ProjectsPage() {
                     })()}
 
                     {/* Actions */}
-                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-700">
                       <a
                         href="/tasks"
                         className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
@@ -691,7 +783,7 @@ export default function ProjectsPage() {
                           {canDelete && (
                             <button
                               onClick={() => setDeletingProject(project)}
-                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:bg-red-950/30 rounded-lg transition-colors"
                               title="Delete project"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -711,15 +803,15 @@ export default function ProjectsPage() {
       {/* Create modal */}
       {showCreateModal && (
         <ProjectModal>
-          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
                 <Layers className="w-5 h-5 text-indigo-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800">New Project</h2>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">New Project</h2>
             </div>
-            <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <X className="w-5 h-5 text-gray-500" />
+            <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-gray-100 dark:bg-slate-800 rounded-lg transition-colors">
+              <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
           </div>
           <div className="p-6">
@@ -738,15 +830,15 @@ export default function ProjectsPage() {
       {/* Edit modal */}
       {editingProject && (
         <ProjectModal>
-          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl">
                 <Edit3 className="w-5 h-5 text-indigo-600" />
               </div>
-              <h2 className="text-xl font-bold text-gray-800">Edit Project</h2>
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">Edit Project</h2>
             </div>
-            <button onClick={() => setEditingProject(null)} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <X className="w-5 h-5 text-gray-500" />
+            <button onClick={() => setEditingProject(null)} className="p-2 hover:bg-gray-100 dark:bg-slate-800 rounded-lg transition-colors">
+              <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
             </button>
           </div>
           <div className="p-6">
@@ -765,16 +857,16 @@ export default function ProjectsPage() {
       {/* Delete confirm */}
       {deletingProject && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 w-full max-w-md animate-in zoom-in-95 duration-200 p-6">
+          <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl border border-white/40 dark:border-slate-700/40 w-full max-w-md animate-in zoom-in-95 duration-200 p-6">
             <div className="flex items-start gap-4 mb-6">
               <div className="p-3 bg-red-100 rounded-xl flex-shrink-0">
                 <Trash2 className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-gray-800 mb-1">Delete Project</h2>
-                <p className="text-sm text-gray-500">
+                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-1">Delete Project</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   Are you sure you want to delete{" "}
-                  <span className="font-semibold text-gray-700">"{deletingProject.name}"</span>?
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">"{deletingProject.name}"</span>?
                   This action cannot be undone. Tasks linked to this project will be unlinked.
                 </p>
               </div>
@@ -782,7 +874,7 @@ export default function ProjectsPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setDeletingProject(null)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-2.5 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 rounded-xl text-sm font-medium hover:bg-gray-50 dark:bg-slate-800 transition-colors"
               >
                 Cancel
               </button>

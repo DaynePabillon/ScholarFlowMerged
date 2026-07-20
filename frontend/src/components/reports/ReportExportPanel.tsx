@@ -86,6 +86,14 @@ function primaryAssignee(task: Task): string {
   return 'Unassigned';
 }
 
+// Priority rank used to sort report task lists in descending order (highest priority first).
+// Matches the `priority` CHECK constraint values defined in migration.service.ts
+// ('low' | 'medium' | 'high' | 'critical') — unknown/missing values sort last.
+const PRIORITY_RANK: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+function priorityRank(p: string | null | undefined): number {
+  return PRIORITY_RANK[(p || '').toLowerCase()] ?? 0;
+}
+
 // ─── PDF native table helpers ─────────────────────────────────────────────────
 
 function truncateText(doc: any, text: string, maxW: number): string {
@@ -234,6 +242,12 @@ async function generatePDF(
 
   const today = new Date();
 
+  // Sort all task lists by priority in descending order — highest priority first.
+  // Applies uniformly across every report type (Sprint Summary, Task Status, Team
+  // Performance, Dependency Report, Custom) so "Priority" columns and groupings
+  // consistently read Critical → High → Medium → Low.
+  tasks = [...tasks].sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
+
   // ────────────────────────────────────────────────────────────────────────────
   // SPRINT SUMMARY — velocity, carry-overs, full task list
   // ────────────────────────────────────────────────────────────────────────────
@@ -308,7 +322,11 @@ async function generatePDF(
       y,
       ['Priority', 'Count', '% of Total'],
       [90, 30, 40],
-      Object.entries(priorityGroups).map(([p, c]) => [cap(p), String(c), `${Math.round(c / tasks.length * 100)}%`]),
+      // Order rows by priority level descending (Critical → High → Medium → Low),
+      // not by count — keeps the breakdown table consistent with the task lists below it
+      Object.entries(priorityGroups)
+        .sort((a, b) => priorityRank(b[0]) - priorityRank(a[0]))
+        .map(([p, c]) => [cap(p), String(c), `${Math.round(c / tasks.length * 100)}%`]),
       7,
     );
     y += 5;
@@ -611,8 +629,8 @@ export default function ReportExportPanel({ projectId, organizationId, projectNa
   return (
     <div className="space-y-6">
       {/* Generate Report Form */}
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/40 bg-white/30">
+      <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
           <FileText className="h-4 w-4 text-sky-500" />
           <h2 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">Generate Report</h2>
         </div>
@@ -629,7 +647,7 @@ export default function ReportExportPanel({ projectId, organizationId, projectNa
                   className={`text-xs py-2.5 px-3 rounded-xl text-left transition-all duration-200 ${
                     reportType === t.value
                       ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium shadow-md'
-                      : 'bg-white/50 border border-gray-200 text-slate-600 hover:bg-white/80 hover:border-gray-300'
+                      : 'bg-white/50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 text-slate-600 hover:bg-white/80 dark:hover:bg-slate-600 hover:border-gray-300 dark:hover:border-slate-500'
                   }`}
                 >
                   <div className="font-semibold">{t.label}</div>
@@ -650,7 +668,7 @@ export default function ReportExportPanel({ projectId, organizationId, projectNa
                   className={`flex items-center gap-1.5 text-xs py-2 px-4 rounded-xl transition-all duration-200 ${
                     format === f.value
                       ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium shadow-md'
-                      : 'bg-white/50 border border-gray-200 text-slate-600 hover:bg-white/80'
+                      : 'bg-white/50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 text-slate-600 hover:bg-white/80 dark:hover:bg-slate-600'
                   }`}
                 >
                   <span>{f.icon}</span>
@@ -716,8 +734,8 @@ export default function ReportExportPanel({ projectId, organizationId, projectNa
       </div>
 
       {/* Report History */}
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
-        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/40 bg-white/30">
+      <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
           <Clock className="h-4 w-4 text-sky-500" />
           <h2 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">Report History</h2>
         </div>
@@ -729,7 +747,7 @@ export default function ReportExportPanel({ projectId, organizationId, projectNa
         ) : (
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {reports.map(report => (
-              <div key={report.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50/80 transition-colors">
+              <div key={report.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50/80 dark:hover:bg-slate-700 transition-colors">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{report.title}</p>
                   <p className="text-xs text-slate-400">

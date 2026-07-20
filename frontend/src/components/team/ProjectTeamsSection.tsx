@@ -168,7 +168,7 @@ export default function ProjectTeamsSection({ organizationId, orgMembers, canMan
             placeholder="Search projects..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="pl-9 pr-4 py-2 text-sm bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="pl-9 pr-4 py-2 text-sm bg-white/70 dark:bg-slate-800/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
         </div>
       </div>
@@ -187,7 +187,7 @@ export default function ProjectTeamsSection({ organizationId, orgMembers, canMan
         const availableToAdd = orgMembers.filter(m => !alreadyAdded.has(m.id))
 
         return (
-          <div key={project.id} className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-md overflow-hidden">
+          <div key={project.id} className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-md overflow-hidden">
             {/* Project header row */}
             <button
               onClick={() => toggleExpand(project.id)}

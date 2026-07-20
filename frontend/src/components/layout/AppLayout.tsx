@@ -35,10 +35,14 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
 
   const onScholarPath = pathname?.startsWith('/scholar') ?? false
   const isAdviser = selectedOrg?.role === 'adviser'
-  // Advisers are primarily ScholarSync users — default their sidebar to ScholarSync expanded
-  const [skyflowOpen, setSkyflowOpen] = useState(!onScholarPath && !isAdviser)
-  const [scholarOpen, setScholarOpen] = useState(onScholarPath || isAdviser)
-  const [workspaceOpen, setWorkspaceOpen] = useState(true)
+  // ScholarFlow is ONE unified platform — the sidebar is organized by what a feature
+  // *does* (Projects & Tasks / Academics / Tools & Integrations / Administration),
+  // not by which legacy subsystem ("SkyFlow" vs. "ScholarSync") it originated from.
+  // Advisers work primarily in the Academics area, so default their sidebar to that expanded.
+  const [projectsOpen, setProjectsOpen] = useState(!onScholarPath && !isAdviser)
+  const [academicsOpen, setAcademicsOpen] = useState(onScholarPath || isAdviser)
+  const [toolsOpen, setToolsOpen] = useState(true)
+  const [adminOpen, setAdminOpen] = useState(false)
   const [scholarRole, setScholarRole] = useState('')
 
   // Update theme role when organization changes
@@ -96,6 +100,14 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
     return badges[role as keyof typeof badges] || badges.member
   }
 
+  // Unified role label — combines the organization (project-management) role with
+  // the academic role so a user's full identity within ScholarFlow as a single
+  // platform (e.g. "Member & Student") is visible in one place.
+  const combinedRoleLabel = (orgRole: string) => {
+    const base = getRoleBadge(orgRole).label
+    return scholarRole ? `${base} & ${scholarRole}` : base
+  }
+
   return (
     <div className="min-h-screen relative overflow-hidden transition-colors duration-500 bg-white/50 dark:bg-slate-950/20">
       <AnnouncementBanner />
@@ -122,11 +134,14 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 <Cloud className="w-6 h-6 text-white" />
               </div>
               <div className="flex flex-col">
-                <h1 className="text-2xl font-bold bg-clip-text text-transparent"
-                  style={{
-                    backgroundImage: `linear-gradient(90deg, var(--color-primary), var(--color-secondary))`
-                  }}
-                >ScholarFlow</h1>
+                <div className="flex items-baseline gap-1.5">
+                  <h1 className="text-2xl font-bold bg-clip-text text-transparent"
+                    style={{
+                      backgroundImage: `linear-gradient(90deg, var(--color-primary), var(--color-secondary))`
+                    }}
+                  >ScholarFlow</h1>
+                  <span className="text-xs font-bold" style={{ color: 'var(--color-textSecondary)' }}>v2</span>
+                </div>
                 <p className="text-xs font-medium" style={{ color: 'var(--color-textSecondary)' }}>Unified Platform</p>
               </div>
             </div>
@@ -145,7 +160,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                     </span>
                     {selectedOrg && (
                       <span className={`text-xs px-2 py-0.5 rounded-full ${getRoleBadge(selectedOrg.role).color}`}>
-                        {getRoleBadge(selectedOrg.role).label}
+                        {combinedRoleLabel(selectedOrg.role)}
                       </span>
                     )}
                     <ChevronDown className="w-4 h-4 text-gray-600 dark:text-gray-400" />
@@ -174,7 +189,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                             <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{org.name}</p>
                           </div>
                           <span className={`text-xs px-2 py-0.5 rounded-full ${getRoleBadge(org.role).color}`}>
-                            {getRoleBadge(org.role).label}
+                            {combinedRoleLabel(org.role)}
                           </span>
                         </button>
                       ))}
@@ -205,7 +220,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 flex items-center justify-center">
                   <Cloud className="w-5 h-5 text-white" />
                 </div>
-                <span className="font-bold text-lg dark:text-white">ScholarFlow</span>
+                <span className="font-bold text-lg dark:text-white">ScholarFlow <span className="text-xs font-semibold opacity-60">v2</span></span>
               </div>
               <button onClick={() => setIsMenuOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg">
                 <X className="w-6 h-6 dark:text-gray-400" />
@@ -231,7 +246,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                     <Building2 className="w-4 h-4" />
                     <span className="text-sm font-medium flex-1 text-left">{org.name}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${getRoleBadge(org.role).color}`}>
-                      {org.role}
+                      {combinedRoleLabel(org.role)}
                     </span>
                   </button>
                 ))}
@@ -240,20 +255,17 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
 
             {/* Navigation links */}
             <div className="space-y-1">
-              <a href="/" className="flex items-center gap-3 px-3 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
+              <a href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-blue-600 dark:text-blue-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all">
                 <LayoutDashboard className="w-5 h-5" />
-                <span className="text-sm font-medium">Portal</span>
+                <span className="text-sm font-medium">Dashboard</span>
               </a>
-              {/* Mobile SkyFlow group */}
-              <button onClick={() => setSkyflowOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
-                <span className="flex items-center gap-1.5"><Cloud className="w-3.5 h-3.5"/>SkyFlow</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${skyflowOpen ? 'rotate-180' : ''}`} />
+              {/* Mobile Projects & Tasks group */}
+              <button onClick={() => setProjectsOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                <span className="flex items-center gap-1.5"><FolderKanban className="w-3.5 h-3.5"/>Projects & Tasks</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${projectsOpen ? 'rotate-180' : ''}`} />
               </button>
-              {skyflowOpen && (
+              {projectsOpen && (
                 <>
-                  <a href="/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                    <LayoutDashboard className="w-4 h-4" /><span className="text-sm font-medium">Dashboard</span>
-                  </a>
                   <a href="/boards" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <FolderKanban className="w-4 h-4" /><span className="text-sm font-medium">Boards</span>
                   </a>
@@ -272,27 +284,16 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                   <a href="/reports" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <FileText className="w-4 h-4" /><span className="text-sm font-medium">Reports</span>
                   </a>
-                  <a href="/integrations" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                    <Plug className="w-4 h-4" /><span className="text-sm font-medium">Integrations</span>
-                  </a>
-                  {selectedOrg?.role !== 'member' && (
-                    <a href="/billing" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                      <CreditCard className="w-4 h-4" /><span className="text-sm font-medium">Billing</span>
-                    </a>
-                  )}
                 </>
               )}
 
-              {/* Mobile ScholarSync group */}
-              <button onClick={() => setScholarOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
-                <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5"/>ScholarSync</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${scholarOpen ? 'rotate-180' : ''}`} />
+              {/* Mobile Academics group */}
+              <button onClick={() => setAcademicsOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5"/>Academics</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${academicsOpen ? 'rotate-180' : ''}`} />
               </button>
-              {scholarOpen && (
+              {academicsOpen && (
                 <>
-                  <a href="/scholar/dashboard" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                    <LayoutDashboard className="w-4 h-4" /><span className="text-sm font-medium">Academic Dashboard</span>
-                  </a>
                   <a href="/scholar/courses" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <BookOpen className="w-4 h-4" /><span className="text-sm font-medium">Courses</span>
                   </a>
@@ -310,32 +311,22 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                       <ClipboardList className="w-4 h-4" /><span className="text-sm font-medium">Consultation Hub</span>
                     </a>
                   )}
-                  <a href="/scholar/workspace-sync" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                    <RefreshCw className="w-4 h-4" /><span className="text-sm font-medium">Workspace Sync</span>
-                  </a>
-                  {scholarRole === 'Admin' && (
-                    <>
-                      <a href="/scholar/admin/accounts" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                        <Shield className="w-4 h-4" /><span className="text-sm font-medium">Accounts</span>
-                      </a>
-                      <a href="/scholar/admin/adviser-availability" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                        <Users className="w-4 h-4" /><span className="text-sm font-medium">Adviser Availability</span>
-                      </a>
-                      <a href="/scholar/admin/semester-readiness" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                        <ClipboardList className="w-4 h-4" /><span className="text-sm font-medium">Semester Readiness</span>
-                      </a>
-                    </>
-                  )}
                 </>
               )}
 
-              {/* Mobile Google Workspace group */}
-              <button onClick={() => setWorkspaceOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
-                <span className="flex items-center gap-1.5"><FolderOpen className="w-3.5 h-3.5"/>Google Workspace</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${workspaceOpen ? 'rotate-180' : ''}`} />
+              {/* Mobile Tools & Integrations group */}
+              <button onClick={() => setToolsOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                <span className="flex items-center gap-1.5"><Plug className="w-3.5 h-3.5"/>Tools & Integrations</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${toolsOpen ? 'rotate-180' : ''}`} />
               </button>
-              {workspaceOpen && (
+              {toolsOpen && (
                 <>
+                  <a href="/integrations" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <Plug className="w-4 h-4" /><span className="text-sm font-medium">Integrations</span>
+                  </a>
+                  <a href="/scholar/workspace-sync" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                    <RefreshCw className="w-4 h-4" /><span className="text-sm font-medium">Workspace Sync</span>
+                  </a>
                   <a href="/calendar" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <Calendar className="w-4 h-4" /><span className="text-sm font-medium">Calendar</span>
                   </a>
@@ -350,6 +341,41 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                       <a href="/analytics" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                         <BarChart3 className="w-4 h-4" /><span className="text-sm font-medium">Analytics</span>
                       </a>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* Mobile Administration group — every admin tool unified in one place */}
+              {(scholarRole === 'Admin' || selectedOrg?.role !== 'member') && (
+                <>
+                  <button onClick={() => setAdminOpen(o => !o)} className="w-full flex items-center justify-between px-2 py-2 mt-2 rounded-lg text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 transition-all">
+                    <span className="flex items-center gap-1.5"><Shield className="w-3.5 h-3.5"/>Administration</span>
+                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${adminOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {adminOpen && (
+                    <>
+                      {scholarRole === 'Admin' && (
+                        <>
+                          <a href="/scholar/admin/accounts" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                            <Shield className="w-4 h-4" /><span className="text-sm font-medium">Accounts</span>
+                          </a>
+                          <a href="/scholar/admin/data-integrity" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                            <AlertTriangle className="w-4 h-4" /><span className="text-sm font-medium">Data Integrity</span>
+                          </a>
+                          <a href="/scholar/admin/adviser-availability" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                            <Users className="w-4 h-4" /><span className="text-sm font-medium">Adviser Availability</span>
+                          </a>
+                          <a href="/scholar/admin/semester-readiness" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                            <ClipboardList className="w-4 h-4" /><span className="text-sm font-medium">Semester Readiness</span>
+                          </a>
+                        </>
+                      )}
+                      {selectedOrg?.role !== 'member' && (
+                        <a href="/billing" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
+                          <CreditCard className="w-4 h-4" /><span className="text-sm font-medium">Billing</span>
+                        </a>
+                      )}
                     </>
                   )}
                 </>
@@ -379,7 +405,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
           <div className="p-6 flex flex-col h-full">
             {/* Navigation Section */}
             <nav className="mb-6 space-y-2">
-              <a href="/" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" 
+              <a href="/dashboard" className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md"
                 style={{ color: 'var(--color-text)' }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundImage = 'linear-gradient(90deg, var(--color-primary), var(--color-secondary))';
@@ -389,28 +415,24 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 }}
               >
                 <LayoutDashboard className="w-5 h-5 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                <span>Portal Home</span>
+                <span>Dashboard</span>
               </a>
             </nav>
 
-            {/* ── SkyFlow Section ── */}
+            {/* ── Projects & Tasks — unified project-management workspace ── */}
             <div className="pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
               <button
-                onClick={() => setSkyflowOpen(o => !o)}
+                onClick={() => setProjectsOpen(o => !o)}
                 className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200 group"
                 style={{ color: 'var(--color-textSecondary)' }}
               >
                 <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
-                  <Cloud className="w-3.5 h-3.5" /> SkyFlow
+                  <FolderKanban className="w-3.5 h-3.5" /> Projects & Tasks
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${skyflowOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${projectsOpen ? 'rotate-180' : ''}`} />
               </button>
-              {skyflowOpen && (
+              {projectsOpen && (
                 <nav className="space-y-1 mt-1 ml-1">
-                  <a href="/dashboard" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                    <LayoutDashboard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                    <span>Dashboard</span>
-                  </a>
                   <a href="/boards" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <FolderKanban className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                     <span>Boards</span>
@@ -435,38 +457,24 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                     <FileText className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                     <span>Reports</span>
                   </a>
-                  <a href="/integrations" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                    <Plug className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                    <span>Integrations</span>
-                  </a>
-                  {selectedOrg?.role !== 'member' && (
-                    <a href="/billing" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                      <CreditCard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                      <span>Billing</span>
-                    </a>
-                  )}
                 </nav>
               )}
             </div>
 
-            {/* ── ScholarSync Section ── */}
+            {/* ── Academics — courses, advising & consultations ── */}
             <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
               <button
-                onClick={() => setScholarOpen(o => !o)}
+                onClick={() => setAcademicsOpen(o => !o)}
                 className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200"
                 style={{ color: 'var(--color-textSecondary)' }}
               >
                 <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
-                  <GraduationCap className="w-3.5 h-3.5" /> ScholarSync
+                  <GraduationCap className="w-3.5 h-3.5" /> Academics
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${scholarOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${academicsOpen ? 'rotate-180' : ''}`} />
               </button>
-              {scholarOpen && (
+              {academicsOpen && (
                 <nav className="space-y-1 mt-1 ml-1">
-                  <a href="/scholar/dashboard" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                    <LayoutDashboard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                    <span>Academic Dashboard</span>
-                  </a>
                   <a href="/scholar/courses" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <BookOpen className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                     <span>Courses</span>
@@ -488,48 +496,32 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                       <span>Consultation Hub</span>
                     </a>
                   )}
-                  <a href="/scholar/workspace-sync" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                    <RefreshCw className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                    <span>Workspace Sync</span>
-                  </a>
-                  {scholarRole === 'Admin' && (
-                    <>
-                      <a href="/scholar/admin/accounts" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                        <Shield className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                        <span>Accounts</span>
-                      </a>
-                      <a href="/scholar/admin/data-integrity" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                        <AlertTriangle className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                        <span>Data Integrity</span>
-                      </a>
-                      <a href="/scholar/admin/adviser-availability" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                        <Users className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                        <span>Adviser Availability</span>
-                      </a>
-                      <a href="/scholar/admin/semester-readiness" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-indigo-500 hover:to-purple-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
-                        <ClipboardList className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                        <span>Semester Readiness</span>
-                      </a>
-                    </>
-                  )}
                 </nav>
               )}
             </div>
 
-            {/* ── Google Workspace Section ── */}
+            {/* ── Tools & Integrations — sync, scheduling & Google Workspace utilities ── */}
             <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
               <button
-                onClick={() => setWorkspaceOpen(o => !o)}
+                onClick={() => setToolsOpen(o => !o)}
                 className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200"
                 style={{ color: 'var(--color-textSecondary)' }}
               >
                 <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
-                  <FolderOpen className="w-3.5 h-3.5" /> Google Workspace
+                  <Plug className="w-3.5 h-3.5" /> Tools & Integrations
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${workspaceOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${toolsOpen ? 'rotate-180' : ''}`} />
               </button>
-              {workspaceOpen && (
+              {toolsOpen && (
                 <nav className="space-y-1 mt-1 ml-1">
+                  <a href="/integrations" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <Plug className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Integrations</span>
+                  </a>
+                  <a href="/scholar/workspace-sync" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                    <RefreshCw className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                    <span>Workspace Sync</span>
+                  </a>
                   <a href="/calendar" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <Calendar className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
                     <span>Calendar</span>
@@ -553,6 +545,52 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 </nav>
               )}
             </div>
+
+            {/* ── Administration — every admin-facing tool lives in one place ── */}
+            {(scholarRole === 'Admin' || selectedOrg?.role !== 'member') && (
+              <div className="mt-3 pt-4" style={{ borderTop: `1px solid var(--color-border)` }}>
+                <button
+                  onClick={() => setAdminOpen(o => !o)}
+                  className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-white/30 transition-all duration-200"
+                  style={{ color: 'var(--color-textSecondary)' }}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
+                    <Shield className="w-3.5 h-3.5" /> Administration
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${adminOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {adminOpen && (
+                  <nav className="space-y-1 mt-1 ml-1">
+                    {scholarRole === 'Admin' && (
+                      <>
+                        <a href="/scholar/admin/accounts" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                          <Shield className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                          <span>Accounts</span>
+                        </a>
+                        <a href="/scholar/admin/data-integrity" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                          <AlertTriangle className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                          <span>Data Integrity</span>
+                        </a>
+                        <a href="/scholar/admin/adviser-availability" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                          <Users className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                          <span>Adviser Availability</span>
+                        </a>
+                        <a href="/scholar/admin/semester-readiness" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                          <ClipboardList className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                          <span>Semester Readiness</span>
+                        </a>
+                      </>
+                    )}
+                    {selectedOrg?.role !== 'member' && (
+                      <a href="/billing" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-gray-500 hover:to-gray-600 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
+                        <CreditCard className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
+                        <span>Billing</span>
+                      </a>
+                    )}
+                  </nav>
+                )}
+              </div>
+            )}
 
             {/* Logout button */}
             <div className="pt-3 mt-3" style={{ borderTop: `1px solid var(--color-border)` }}>
@@ -590,7 +628,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                 <p className="text-sm font-medium" style={{ color: 'var(--color-text)' }}>{user?.name || 'Loading...'}</p>
                 {selectedOrg && (
                   <span className={`text-xs px-2 py-1 rounded-md inline-block w-fit mt-2 ${getRoleBadge(selectedOrg.role).color}`}>
-                    {getRoleBadge(selectedOrg.role).label}
+                    {combinedRoleLabel(selectedOrg.role)}
                   </span>
                 )}
               </div>

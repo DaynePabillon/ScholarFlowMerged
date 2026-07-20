@@ -167,7 +167,7 @@ export default function SettingsPage() {
                         </div>
                         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
                     </div>
-                    <p className="text-gray-500">Customize your SkyFlow experience</p>
+                    <p className="text-gray-500">Customize your ScholarFlow experience</p>
                 </div>
 
                 {/* Account Section */}

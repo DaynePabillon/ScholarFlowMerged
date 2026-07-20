@@ -85,7 +85,7 @@ export default function ActivityFeed({ organizationId, limit = 20 }: ActivityFee
 
     if (isLoading) {
         return (
-            <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40">
+            <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 dark:border-slate-700/40">
                 <div className="animate-pulse space-y-4">
                     {[1, 2, 3].map(i => (
                         <div key={i} className="flex items-center gap-3">
@@ -99,7 +99,7 @@ export default function ActivityFeed({ organizationId, limit = 20 }: ActivityFee
     }
 
     return (
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
             <div className="px-4 py-3 bg-gradient-to-r from-blue-500 to-cyan-500">
                 <h3 className="text-white font-semibold flex items-center gap-2">
                     <Clock className="w-4 h-4" />

@@ -258,7 +258,7 @@ export default function WorkspaceSyncPage() {
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                             Workspace Sync
                         </h1>
-                        <p className="text-gray-500 mt-1.5">Detect your Google Sheets and import class teams directly into a course</p>
+                        <p className="text-gray-500 dark:text-gray-400 mt-1.5">Detect your Google Sheets and import class teams directly into a course</p>
                     </div>
                 </div>
 
@@ -267,7 +267,7 @@ export default function WorkspaceSyncPage() {
                     {/* ── SECTION 1: Detected Google Sheets ── */}
                     <div className="glass-card p-6">
                         <div className="flex items-center justify-between mb-5">
-                            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                                 <FileSpreadsheet className="w-5 h-5 text-green-500" />
                                 Google Sheets in Your Drive
                             </h2>
@@ -277,7 +277,7 @@ export default function WorkspaceSyncPage() {
                                     <input
                                         type="text"
                                         placeholder="Search sheets…"
-                                        className="pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        className="pl-9 pr-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                         value={searchQuery}
                                         onChange={e => setSearchQuery(e.target.value)}
                                     />
@@ -300,11 +300,11 @@ export default function WorkspaceSyncPage() {
                         )}
 
                         {!loadingSheets && driveSheets.length === 0 && !sheetsError && (
-                            <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-2xl border border-dashed border-gray-200">
-                                <div className="p-4 bg-white rounded-2xl shadow-sm inline-flex mb-4">
+                            <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-2xl border border-dashed border-gray-200 dark:border-slate-700">
+                                <div className="p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-sm inline-flex mb-4">
                                     <FileSpreadsheet className="w-10 h-10 text-gray-400" />
                                 </div>
-                                <p className="font-semibold text-gray-700 mb-1">No sheets found</p>
+                                <p className="font-semibold text-gray-700 dark:text-gray-200 mb-1">No sheets found</p>
                                 <p className="text-gray-400 text-sm mb-4">You do not have any Google Sheets connected to this application.</p>
                             </div>
                         )}
@@ -321,13 +321,13 @@ export default function WorkspaceSyncPage() {
                                 {filteredSheets.map((sheet, idx) => {
                                     const gradients = ['from-green-500 to-emerald-500', 'from-blue-500 to-cyan-500', 'from-purple-500 to-pink-500', 'from-orange-500 to-amber-500', 'from-teal-500 to-green-400'];
                                     return (
-                                        <div key={sheet.id} className="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md hover:border-blue-200 transition-all group">
+                                        <div key={sheet.id} className="bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-4 hover:shadow-md hover:border-blue-200 transition-all group">
                                             <div className="flex items-start gap-3 mb-3">
                                                 <div className={`p-2.5 bg-gradient-to-br ${gradients[idx % gradients.length]} rounded-xl shadow-sm flex-shrink-0`}>
                                                     <FileSpreadsheet className="w-4 h-4 text-white" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="font-semibold text-gray-800 text-sm leading-snug truncate group-hover:text-blue-600 transition-colors" title={sheet.name}>{sheet.name}</p>
+                                                    <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm leading-snug truncate group-hover:text-blue-600 transition-colors" title={sheet.name}>{sheet.name}</p>
                                                     {sheet.owners?.[0] && <p className="text-xs text-gray-400 mt-0.5 truncate">{sheet.owners[0].displayName}</p>}
                                                 </div>
                                             </div>
@@ -338,14 +338,14 @@ export default function WorkspaceSyncPage() {
                                                 {/* View embedded */}
                                                 <button
                                                     onClick={() => { setEmbeddedSheetId(sheet.id); setEmbeddedSheetName(sheet.name); setShowEmbeddedSheet(true); }}
-                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-xl text-xs font-medium transition"
+                                                    className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-blue-50 hover:text-blue-600 rounded-xl text-xs font-medium transition"
                                                 >
                                                     <Maximize2 className="w-3.5 h-3.5" /> Preview
                                                 </button>
 
                                                 {/* Open in Google */}
                                                 <a href={`https://docs.google.com/spreadsheets/d/${sheet.id}`} target="_blank" rel="noopener noreferrer"
-                                                    className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-xl transition" title="Open in Google Sheets">
+                                                    className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:bg-slate-800 rounded-xl transition" title="Open in Google Sheets">
                                                     <ExternalLink className="w-4 h-4" />
                                                 </a>
 
@@ -369,7 +369,7 @@ export default function WorkspaceSyncPage() {
 
                         {/* Course Sidebar */}
                         <div className="col-span-4 glass-card p-5">
-                            <h2 className="text-base font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <h2 className="text-base font-bold text-gray-800 dark:text-gray-100 mb-4 flex items-center gap-2">
                                 <BookOpen className="w-4 h-4 text-blue-500" /> Your Courses
                             </h2>
                             {courses.length === 0 ? (
@@ -388,13 +388,13 @@ export default function WorkspaceSyncPage() {
                                             onClick={() => handleSelectCourse(course)}
                                             className={`p-3 rounded-xl cursor-pointer transition-all border ${selectedCourse?.id === course.id
                                                 ? 'bg-blue-50 border-blue-300 shadow-sm'
-                                                : 'bg-gray-50 hover:bg-gray-100 border-transparent'}`}
+                                                : 'bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 border-transparent'}`}
                                         >
                                             <div className="flex items-center gap-2">
                                                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${selectedCourse?.id === course.id ? 'bg-blue-500' : 'bg-gray-300'}`} />
-                                                <p className="font-semibold text-gray-800 text-sm truncate">{course.courseName}</p>
+                                                <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{course.courseName}</p>
                                             </div>
-                                            <p className="text-xs text-gray-500 mt-0.5 ml-4">{course.courseCode} · {course.courseSection}</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 ml-4">{course.courseCode} · {course.courseSection}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -411,30 +411,30 @@ export default function WorkspaceSyncPage() {
                             ) : (
                                 <>
                                     <div className="mb-5">
-                                        <h2 className="text-lg font-bold text-gray-800">{selectedCourse.courseName}</h2>
+                                        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">{selectedCourse.courseName}</h2>
                                         <p className="text-gray-400 text-sm mt-0.5">{selectedCourse.courseCode} · {selectedCourse.courseSection} · {selectedCourse.courseTerm}</p>
                                     </div>
 
-                                    <h3 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-2">
                                         <FolderSync className="w-4 h-4 text-blue-400" /> Imported Sheets
                                     </h3>
 
                                     {connectedSheets.length === 0 ? (
-                                        <div className="text-center py-10 bg-gray-50 rounded-2xl text-gray-400 border border-dashed border-gray-200">
+                                        <div className="text-center py-10 bg-gray-50 dark:bg-slate-800 rounded-2xl text-gray-400 border border-dashed border-gray-200 dark:border-slate-700">
                                             <FileSpreadsheet className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                                            <p className="text-sm font-medium text-gray-500">No sheets imported yet</p>
+                                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No sheets imported yet</p>
                                             <p className="text-xs mt-1">Use the "Detect My Sheets" button above to find a sheet and import it here</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-3">
                                             {connectedSheets.map(sheet => (
-                                                <div key={sheet.id} className="p-4 bg-gray-50 border border-gray-100 hover:border-blue-200 rounded-2xl flex items-center justify-between transition-all">
+                                                <div key={sheet.id} className="p-4 bg-gray-50 dark:bg-slate-800 border border-gray-100 dark:border-slate-700 hover:border-blue-200 rounded-2xl flex items-center justify-between transition-all">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
                                                             <FileSpreadsheet className="w-5 h-5 text-green-600" />
                                                         </div>
                                                         <div>
-                                                            <p className="font-semibold text-gray-800 text-sm">{sheet.sheetName}</p>
+                                                            <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{sheet.sheetName}</p>
                                                             <p className="text-xs text-gray-400 mt-0.5">
                                                                 {sheet.groupCount} groups · Imported {formatDate(sheet.createdAt)}
                                                             </p>
@@ -451,7 +451,7 @@ export default function WorkspaceSyncPage() {
                                                             <Maximize2 className="w-3.5 h-3.5 inline mr-1" /> View
                                                         </button>
                                                         <a href={`https://docs.google.com/spreadsheets/d/${sheet.sheetId}`} target="_blank" rel="noopener noreferrer"
-                                                            className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition">
+                                                            className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-100 rounded-xl transition">
                                                             <ExternalLink className="w-4 h-4" />
                                                         </a>
                                                         <button onClick={() => deleteConnectedSheet(sheet.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition">
@@ -472,8 +472,8 @@ export default function WorkspaceSyncPage() {
             {/* ── Import Modal ── */}
             {showImportModal && pendingSheet && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-7 relative">
-                        <button onClick={() => setShowImportModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-7 relative">
+                        <button onClick={() => setShowImportModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-300 p-1 rounded-lg hover:bg-gray-100">
                             <X className="w-5 h-5" />
                         </button>
 
@@ -482,8 +482,8 @@ export default function WorkspaceSyncPage() {
                                 <Upload className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                                <h2 className="text-lg font-bold text-gray-800">Import as Teams</h2>
-                                <p className="text-xs text-gray-400">Into a course from your ScholarSync</p>
+                                <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">Import as Teams</h2>
+                                <p className="text-xs text-gray-400">Into one of your academic courses</p>
                             </div>
                         </div>
 
@@ -491,7 +491,7 @@ export default function WorkspaceSyncPage() {
                         <div className="mb-5 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
                             <FileSpreadsheet className="w-5 h-5 text-green-600 flex-shrink-0" />
                             <div className="min-w-0">
-                                <p className="font-semibold text-gray-800 text-sm truncate">{pendingSheet.name}</p>
+                                <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{pendingSheet.name}</p>
                                 <p className="text-xs text-gray-400">Modified {formatDate(pendingSheet.modifiedTime)}</p>
                             </div>
                         </div>
@@ -530,7 +530,7 @@ export default function WorkspaceSyncPage() {
                         )}
 
                         <div className="flex gap-3">
-                            <button onClick={() => setShowImportModal(false)} className="flex-1 py-3 border border-gray-200 text-gray-600 rounded-xl font-medium hover:bg-gray-50 text-sm transition">
+                            <button onClick={() => setShowImportModal(false)} className="flex-1 py-3 border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:bg-slate-800 text-sm transition">
                                 {importResult?.type === 'success' ? 'Close' : importResult?.type === 'conflict' ? 'Skip' : 'Cancel'}
                             </button>
                             {importResult?.type === 'conflict' ? (
@@ -561,20 +561,20 @@ export default function WorkspaceSyncPage() {
             {/* ── Embedded Sheet Viewer ── */}
             {showEmbeddedSheet && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col">
-                        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                    <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col">
+                        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-700">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-green-100 rounded-xl">
                                     <FileSpreadsheet className="w-5 h-5 text-green-600" />
                                 </div>
-                                <h2 className="font-bold text-gray-800">{embeddedSheetName}</h2>
+                                <h2 className="font-bold text-gray-800 dark:text-gray-100">{embeddedSheetName}</h2>
                             </div>
                             <div className="flex items-center gap-2">
                                 <a href={`https://docs.google.com/spreadsheets/d/${embeddedSheetId}`} target="_blank" rel="noopener noreferrer"
                                     className="flex items-center gap-1 px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg text-sm transition">
                                     <ExternalLink className="w-4 h-4" /> Open
                                 </a>
-                                <button onClick={() => setShowEmbeddedSheet(false)} className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg">
+                                <button onClick={() => setShowEmbeddedSheet(false)} className="p-2 text-gray-400 hover:text-gray-600 dark:text-gray-300 hover:bg-gray-100 rounded-lg">
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>

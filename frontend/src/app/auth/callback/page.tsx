@@ -108,7 +108,7 @@ function AuthCallbackContent() {
               // Best-effort — user can retry the invite link if this fails
             }
             setStatus('success')
-            setMessage('Welcome to SkyFlow!')
+            setMessage('Welcome to ScholarFlow!')
             router.push('/dashboard')
             return
           }
@@ -119,7 +119,7 @@ function AuthCallbackContent() {
           }
 
           setStatus('success')
-          setMessage('Welcome to SkyFlow!')
+          setMessage('Welcome to ScholarFlow!')
 
           const postLoginRedirect = localStorage.getItem('post_login_redirect') || '/dashboard'
           localStorage.removeItem('post_login_redirect')

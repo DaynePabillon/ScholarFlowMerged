@@ -3,6 +3,7 @@
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from 'react'
 import { Clock, Plus, Trash2, Calendar } from 'lucide-react'
+import { getTodayLocalDateString } from '@/lib/utils/date'
 
 interface TimeEntry {
     id: string
@@ -23,7 +24,7 @@ export default function TimeTracker({ taskId, compact = false }: TimeTrackerProp
     const [totalHours, setTotalHours] = useState(0)
     const [isLoading, setIsLoading] = useState(true)
     const [showForm, setShowForm] = useState(false)
-    const [newEntry, setNewEntry] = useState({ hours: '', date: new Date().toISOString().split('T')[0], notes: '' })
+    const [newEntry, setNewEntry] = useState({ hours: '', date: getTodayLocalDateString(), notes: '' })
 
     useEffect(() => {
         fetchTimeEntries()
@@ -72,7 +73,7 @@ export default function TimeTracker({ taskId, compact = false }: TimeTrackerProp
             )
 
             if (response.ok) {
-                setNewEntry({ hours: '', date: new Date().toISOString().split('T')[0], notes: '' })
+                setNewEntry({ hours: '', date: getTodayLocalDateString(), notes: '' })
                 setShowForm(false)
                 fetchTimeEntries()
             }
@@ -148,6 +149,7 @@ export default function TimeTracker({ taskId, compact = false }: TimeTrackerProp
                                 type="date"
                                 value={newEntry.date}
                                 onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })}
+                                max={getTodayLocalDateString()}
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
                             />
                         </div>

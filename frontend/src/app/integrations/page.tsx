@@ -94,7 +94,7 @@ export default function IntegrationsPage() {
             <select
               value={selectedProject}
               onChange={e => setSelectedProject(e.target.value)}
-              className="border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white/70 backdrop-blur-sm shadow-sm"
+              className="border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm shadow-sm"
               style={{ color: 'var(--color-text)' }}
             >
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -103,7 +103,7 @@ export default function IntegrationsPage() {
         </div>
 
         {/* Tab nav */}
-        <div className="flex gap-1 bg-white/50 backdrop-blur-sm rounded-2xl p-1.5 border border-white/40 shadow-sm w-fit mb-8">
+        <div className="flex gap-1 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm rounded-2xl p-1.5 border border-white/40 dark:border-slate-700/40 shadow-sm w-fit mb-8">
           {TABS.map(t => {
             const Icon = t.icon;
             return (
@@ -113,7 +113,7 @@ export default function IntegrationsPage() {
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                   tab === t.id
                     ? 'bg-gradient-to-r from-violet-500 to-purple-500 text-white shadow-md'
-                    : 'hover:bg-white/60 transition-colors'
+                    : 'hover:bg-white/60 dark:hover:bg-slate-700/60 transition-colors'
                 }`}
                 style={tab !== t.id ? { color: 'var(--color-text)' } : undefined}
               >

@@ -5,6 +5,589 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-06-22 · Kanban Performance, Overdue Handling & Course-Integrated Project Management
+
+### Task 1 — Kanban Performance: Backend Task Filtering & Pagination
+
+**Problem**
+`GET /api/organizations/:id/tasks` returned every task in the org with no filtering
+beyond an optional `team_id`. Done/completed/archived tasks piled up in the Kanban
+forever, slowing the board and cluttering the UI.
+
+**Changed**
+- `backend/src/routes/organization.routes.ts` — added `status`, `exclude_status`,
+  `project_id`, `limit`, and `offset` query params to the UNION ALL query. Both
+  `tasks` and `sheet_tasks` branches are filtered identically. The UNION is wrapped
+  in a subquery for consistent LIMIT/OFFSET pagination.
+- `frontend/src/components/tasks/AdminTaskView.tsx` — new state: `selectedProjectId`,
+  `showCompleted`, `completedCount`. `fetchTasks` now builds query params with
+  `exclude_status=done,completed,archived` by default. Added project filter dropdown,
+  "Show completed (N)" toggle, and paginated Archived section with "Load more" button.
+- `frontend/src/components/tasks/ManagerTaskView.tsx` — same filter/pagination changes
+  as AdminTaskView.
+
+**Result**
+Kanban loads only active tasks by default. Completed tasks are one toggle away,
+archived tasks paginate 12 at a time. Project filter narrows the board to one project.
+
+---
+
+### Task 2 — Project Overdue Handling (`is_overdue` Computed Flag)
+
+**Problem**
+`projects.end_date` existed but was never compared to `NOW()`. Nothing indicated when
+a project had blown past its deadline.
+
+**Changed**
+- `backend/src/routes/project.routes.ts` — added computed column
+  `(p.end_date < NOW() AND p.status NOT IN ('completed','archived')) AS is_overdue`
+  to both `GET /` and `GET /:id` queries.
+- `frontend/src/app/projects/page.tsx` — added `is_overdue` to `Project` interface;
+  red "Overdue" badge with `AlertCircle` icon on project cards; action banner
+  (Mark Complete / Archive Project / Extend Deadline) for managers/admins on overdue
+  projects.
+
+---
+
+### Task 3 — Cascade-Archive on Project Completion
+
+**Problem**
+Setting a project to `completed` or `archived` left its open tasks scattered across
+the active Kanban indefinitely.
+
+**Changed**
+- `backend/src/routes/project.routes.ts` — `PUT /api/projects/:id` now detects when
+  status changes to `completed`/`archived` and runs
+  `UPDATE tasks SET status = 'archived' WHERE project_id = $1 AND status NOT IN
+  ('done','completed','archived')`. Returns `cascaded_task_count` in the response.
+- `frontend/src/app/projects/page.tsx` — added `handleQuickStatusUpdate` handler with
+  `window.confirm` before submission; alerts the cascaded task count after success.
+  Edit modal's `handleUpdate` also confirms before status changes to
+  completed/archived.
+
+---
+
+### Task 4 — Course-Integrated Project Management
+
+**Problem**
+Project management (tasks, kanban, project status) lived on separate `/projects` and
+`/tasks` pages with no path from a course group to its project. Since users must be
+in an organization and a course, and course groups almost always correspond to group
+projects, project management should be accessible inside the course context.
+
+**Changed — Backend (`backend/src/routes/scholar.routes.ts`)**
+- `GET /courses/:id/teams` — replaced plain `team_groups` SELECT with LEFT JOIN to
+  `projects`, returning `project_id`, `project_name`, `project_status`,
+  `project_task_total`, `project_task_done` per group.
+- `GET /groups/:id/tasks` — replaced hard-coded `return res.json([])` stub with real
+  implementation that queries SkyFlow `tasks` by the group's linked `project_id`,
+  returns `{ tasks, project_id }`.
+- `POST /groups/:id/create-project` — new endpoint (admin/adviser only via
+  `verifyInstructor`). Auto-creates a SkyFlow project named
+  `"<courseCode> — <groupName>"`, links it to `team_groups.project_id`, adds caller
+  as project lead.
+
+**Changed — Course Page (`frontend/src/app/scholar/courses/[id]/page.tsx`)**
+- Extended `Group` type with `project_id`, `project_name`, `project_status`,
+  `project_task_total`, `project_task_done`.
+- Added `projectStatusBadge()` helper — colored status pill on all 3 group card
+  render paths (adviser/admin/default).
+- Added "Project" tab in group detail modal between Discussion and Journals.
+  - No project: empty state + "Set Up Project" button (admin/adviser only).
+  - With project: name, status badge, progress bar, "Open Full SkyFlow Board" link,
+    "View Group Task List" button.
+
+**Changed — Group Detail Page (`frontend/src/app/scholar/courses/[id]/groups/[groupId]/page.tsx`)**
+- Replaced old `Task` type with `SkyFlowTask` shape matching the new endpoint.
+- Tasks tab now shows: no-project-linked empty state, inline add-task row (title +
+  priority + due date), task cards with left accent bar by status, inline status
+  `<select>` with optimistic update, priority pill, due date, assignee badge,
+  comment count, "Open" external link to SkyFlow.
+- Removed old `showTaskModal` dialog entirely.
+
+**Result**
+Advisers/admins can create a project for a group directly from the course page.
+Students see their group's tasks inline with status updates and task creation — no
+need to navigate to separate SkyFlow pages.
+
+---
+
+## [Unreleased] — 2026-06-08 · Centralized Roles, Sync Rate-Limiter Fix, Calendar & Reports Polish
+
+### Task 1 — Unified Roles Across SkyFlow & ScholarSync
+
+**Problem**
+SkyFlow (`organization_members.role`: admin/manager/member/adviser) and ScholarSync
+(`ss_account.accountRole`: Student/Adviser/Admin/External Leader) were two separate
+role systems for the same person, bridged only by a destructive trigger
+(`trg_sync_academic_role`, migration 039) that *overwrote* a user's SkyFlow org role
+whenever their academic role changed — e.g. an org "manager" who was also a
+ScholarSync "Student" would silently get demoted to "member".
+
+**Changed**
+- `backend/src/services/migration.service.ts` — added migration
+  `053_unify_roles_remove_overwrite_trigger` which drops the destructive
+  `trg_sync_academic_role` trigger and `sync_academic_role_to_org()` function so the
+  two role systems coexist instead of clobbering each other.
+- `backend/src/routes/organization.routes.ts` — `GET /api/organizations/:id/members`
+  now returns each member's `academic_role` via a correlated subquery against
+  `ss_account` (matched by the `user_id` bridge from migration 038, falling back to
+  a case-insensitive email match).
+- `frontend/src/components/layout/AppLayout.tsx` — added `combinedRoleLabel()` helper
+  that merges the SkyFlow org role badge with the cached ScholarSync role
+  (`scholar_profile` in localStorage), e.g. **"Member & Student"**, **"Admin & Adviser"**.
+  Applied to the org switcher button, org dropdown list, mobile menu, and the
+  sidebar user-info footer badge.
+- `frontend/src/components/team/{AdminTeamView,ManagerTeamView,MemberTeamView}.tsx` —
+  added `academic_role` to the `TeamMember` interface and a `formatMemberRole()`
+  helper so the Team page member list shows each person's unified role
+  (e.g. "Member & Student") instead of just their SkyFlow role.
+
+**Result**
+A user can now be simultaneously recognized as, for example, a SkyFlow "Member" and a
+ScholarSync "Student" — both roles are visible together everywhere roles are
+displayed, and changing one no longer silently overwrites the other.
+
+---
+
+### Task 2 — Manual Sync Rate-Limiter: Fixed Cascading Lockout Bug
+
+**Problem**
+The cooldown logic in `POST /api/sync/trigger` and `GET /api/sync/status` determined
+"the last sync time" by selecting the most recent `sync_logs` row for the project —
+but blocked attempts themselves **insert a `rate_limited` row** (for the History
+log). That row's fresh `created_at` was then picked up as the new "last sync"
+reference on the very next check, which reset the 30-second cooldown window again.
+The result: once a user was rate-limited, *every* subsequent click re-triggered the
+limiter and inserted another `rate_limited` row — a perpetual lockout where the
+"Sync Now" button could never re-enable itself (countdown effectively never reached
+zero against the server's view of "last sync").
+
+**Changed**
+- `backend/src/routes/sync.routes.ts`
+  - `GET /sync/status` and `POST /sync/trigger` now exclude `status = 'rate_limited'`
+    rows when querying for the last sync timestamp
+    (`WHERE project_id = $1 AND status != 'rate_limited'`), so only real sync
+    attempts (`success` / `failed` / `in_progress`) anchor the cooldown window.
+  - Added inline comments documenting each step of the spec'd flow: check last sync
+    timestamp → enforce 30s cooldown → insert `rate_limited` log + return 429 with
+    `remainingSeconds` → allow sync once the cooldown has genuinely expired.
+
+**Verified existing (already correct, no change needed)**
+- `frontend/src/components/sync/SyncControlPanel.tsx` already implements the full
+  spec: live countdown timer, "Wait Xs" disabled button state, amber "Sync Rate
+  Limit" warning popup ("Please wait N seconds before syncing again…"), "Last
+  synced [time] by [user]" status indicator, and a History log with status badges.
+
+**Result**
+The cooldown now correctly expires 30 seconds after the last *real* sync — the
+button re-enables, the countdown reaches zero, and the warning popup only appears
+while genuinely within the cooldown window.
+
+---
+
+### Task 3 — Calendar/Date Pickers: Cap Selectable Date at Today
+
+**Request**
+"The latest date should be the current day when selecting a date" — date pickers
+across the app should not let a user pick a date beyond today.
+
+**Approach**
+Surveyed all 18 files containing `<input type="date">` / `type="datetime-local"`.
+Applied `max={today}` (`new Date().toISOString().split('T')[0]`) only to fields that
+**record something that has already happened** — where a future date would be
+nonsensical or a data-entry error. Left future-planning fields (task due dates,
+project start/end dates, checkpoint deadlines, calendar event times, consultation
+*slot* availability, announcement expiry) untouched, since those legitimately need
+to accept future dates.
+
+**Changed — `max={today}` added to:**
+- `frontend/src/components/time/TimeTracker.tsx` — time-entry "Date" (can't log hours for a future day)
+- `frontend/src/app/scholar/adviser/consultation-prep/[bookingId]/page.tsx` — "Consultation Date" (recording when a session occurred)
+- `frontend/src/app/scholar/schedule/page.tsx` — adviser "Consultation Date" record field (`conDate`, line ~1841 — same retrospective use as above; the *slot creation* date fields at lines ~1283/1710 were left untouched since those schedule future availability)
+- `frontend/src/app/scholar/adviser/consultation-hub/page.tsx` — "From"/"To" history filter date range (consultation records can't exist in the future)
+- `frontend/src/app/scholar/courses/[id]/page.tsx` — "Journal Date" for member journal entries (capped to `todayJournalDate`, recording a reflection that already took place)
+
+**Result**
+Retrospective date fields now reject any date later than today directly in the
+native date-picker UI, preventing accidental future-dated log entries while
+preserving normal future-date entry for scheduling/planning fields.
+
+---
+
+### Task 4 — Reports: Sort Task Priorities in Descending Order
+
+**Request**
+"Project priorities for reports should be descending order from highest priority" —
+PDF reports listing tasks should present higher-priority items first instead of in
+arbitrary/insertion order.
+
+**Root cause**
+`generatePDF()` in `ReportExportPanel.tsx` rendered every report's task tables
+(`tasks.map(...)`) directly from the array returned by the API, with no sort applied.
+The "Priority Breakdown" table in the Task Status report also grouped by priority via
+`Object.entries(priorityGroups)`, which iterates in first-seen insertion order rather
+than by priority level. The project's `priority` column allows four levels —
+`'low' | 'medium' | 'high' | 'critical'` (per the `CHECK` constraint in
+`migration.service.ts`) — with no ranking applied anywhere in the report pipeline.
+
+**Changed — `frontend/src/components/reports/ReportExportPanel.tsx`**
+- Added a `PRIORITY_RANK` map (`{ critical: 4, high: 3, medium: 2, low: 1 }`) and a
+  `priorityRank()` helper (case-insensitive, unknown values rank lowest) near the
+  existing `primaryAssignee` helper.
+- In `generatePDF()`, immediately after `const today = new Date();`, the `tasks`
+  array is now re-sorted **once**, globally:
+  `tasks = [...tasks].sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority))`
+  — so every report type (Sprint Summary, Task Status, Team Performance, Dependency
+  Report, Custom Report) lists tasks Critical → High → Medium → Low without needing
+  per-table changes.
+- Updated the Task Status report's "Priority Breakdown" table to sort its rows by
+  priority level descending (`Object.entries(priorityGroups).sort((a, b) =>
+  priorityRank(b[0]) - priorityRank(a[0]))`) instead of insertion order, so the
+  breakdown table visually matches the descending-priority task lists below it.
+- "Task Details by Member" in the Team Performance report re-sorts the global list
+  alphabetically by assignee (`[...tasks].sort(...localeCompare...)`); because
+  `Array.prototype.sort` is stable (ES2019+) and `tasks` is now pre-sorted by
+  priority descending, each assignee's task group automatically retains
+  highest-to-lowest priority ordering as a secondary sort — no extra code needed.
+
+**Result**
+Every PDF report now lists/groups tasks with the highest-priority items first
+(Critical → High → Medium → Low), consistently across all five report types.
+
+---
+
+### Task 5 — Unify the Platform: Remove "SkyFlow" vs. "ScholarSync" Separation
+
+**Request**
+"I need the whole system to be unified, no more separation of the systems, have
+everything as under scholarflow, arrange the features on the sidebar appropriately."
+
+**Root cause**
+Although Task 1 unified the *role* model, the product still visually presented
+itself as two competing systems: the launchpad (`app/page.tsx`) rendered two
+separately-branded cards ("SkyFlow" in a blue-indigo gradient vs. "ScholarSync" in
+a sky-blue gradient, each with its own icon and feature carousel), the sidebar in
+`AppLayout.tsx` grouped nav links by *which legacy subsystem they came from*
+("SkyFlow" / "ScholarSync" / "Google Workspace" sections), and ~20 user-facing
+strings across pages, components, alerts, theme names, and template data still
+referred to "SkyFlow" or "ScholarSync" by name — reinforcing the impression of two
+separate products bolted together rather than one cohesive "ScholarFlow" platform.
+
+**Changed — Sidebar reorganized by function, not by origin (`components/layout/AppLayout.tsx`)**
+- Replaced the three subsystem-based collapsible groups (SkyFlow / ScholarSync /
+  Google Workspace) with four function-based groups that intermix features
+  regardless of their legacy origin:
+  - **Projects & Tasks** (`FolderKanban`): Dashboard, Boards, Tasks, Projects, Team,
+    Timeline, Reports
+  - **Academics** (`GraduationCap`): Academic Dashboard, Courses, role-conditional
+    Consultation/Schedule, Consultation Hub
+  - **Tools & Integrations** (`Plug`): Integrations, Workspace Sync, Calendar,
+    Drive, Sheets, Analytics — e.g. "Workspace Sync" (a former ScholarSync feature)
+    now sits alongside "Calendar"/"Drive" (former Google Workspace features)
+  - **Administration** (`Shield`): all admin-only pages consolidated into one group
+    — Accounts, Data Integrity, Adviser Availability, Semester Readiness, *and*
+    Billing (previously scattered across two different system groups)
+- Renamed state variables from `skyflowOpen`/`scholarOpen`/`workspaceOpen` to
+  `projectsOpen`/`academicsOpen`/`toolsOpen`/`adminOpen`, with advisers defaulting
+  to the Academics group expanded. Mirrored the same four groups in the mobile menu
+  (and added "Data Integrity" there, which was previously desktop-only).
+- Updated the `combinedRoleLabel` comment to describe the unified identity model
+  without naming the legacy subsystems.
+
+**Changed — Launchpad redesigned as one workspace, not two products (`app/page.tsx`)**
+- Replaced the two competing-gradient cards ("SkyFlow" in blue-indigo with a
+  `Cloud` icon vs. "ScholarSync" in sky-blue with a `GraduationCap` icon) with two
+  cards that share **one consistent blue → indigo gradient family** (only the
+  gradient stops are reordered between them) and the same icon-badge/button
+  treatment, presented as two *areas* of a single platform:
+  - "Projects & Tasks" (`FolderKanban` icon, "Boards, Team & Timelines")
+  - "Academics" (`GraduationCap` icon, "Courses, Schedules & Consultations")
+- Renamed the underlying feature-list constants `SKYFLOW_FEATURES` →
+  `PROJECT_FEATURES` and `SCHOLAR_FEATURES` → `ACADEMIC_FEATURES`; removed the
+  now-unused `Cloud` icon import.
+
+**Changed — Removed "SkyFlow"/"ScholarSync" brand names from ~20 user-facing strings**
+| File | Before → After |
+|---|---|
+| `app/landing/page.tsx` | Hero "SkyFlow" → "ScholarFlow"; CTA copy + footer copyright |
+| `app/login/page.tsx` | Footer copyright "© 2025 SkyFlow" → "© 2025 ScholarFlow" |
+| `components/auth/login-page.tsx` | Logo heading + "Sign in to SkyFlow" → "ScholarFlow" |
+| `app/layout.tsx` | `<title>` metadata "SkyFlow - Project Management Platform" → "ScholarFlow - Unified Project & Academic Platform" |
+| `app/invite/accept/page.tsx` | "SkyFlow Invitation" → "ScholarFlow Invitation" |
+| `app/auth/callback/page.tsx` | "Welcome to SkyFlow!" → "Welcome to ScholarFlow!" |
+| `app/settings/page.tsx` | "Customize your SkyFlow experience" → "...ScholarFlow experience" |
+| `app/dashboard/page.tsx` | "Import from ScholarSync to get started" / "...to SkyFlow" → neutral "Academic Portal" / "your workspace" phrasing |
+| `app/analytics/page.tsx` | "Import your class data from ScholarSync..." → "...from the Academic Portal..." |
+| `app/scholar/courses/[id]/page.tsx` | "View Full Analytics in SkyFlow" → "...in ScholarFlow" |
+| `app/scholar/workspace-sync/page.tsx` | "Into a course from your ScholarSync" → "Into one of your academic courses" |
+| `components/organization/OrganizationGateway.tsx` | "...imports your team from ScholarSync..." / "← Back to ScholarSync" → "...from the Academic Portal..." / "← Back to Academics" |
+| `components/tasks/{Admin,Manager}TaskView.tsx` | Sync-delete alert "...removed from SkyFlow upon the next synchronization" → "...removed from ScholarFlow..." |
+| `components/teams/SheetTemplateModal.tsx` | Sample project name "SkyFlow Project Manager" → "Campus Project Tracker" |
+| `components/sync/ConnectedSheetsPanel.tsx` | Default workspace folder name `'SkyFlow Default'` → `'ScholarFlow Default'` |
+| `config/themes.ts` + `config/scholar/themes.ts` | Theme preset name "SkyFlow Classic" → "ScholarFlow Classic" |
+
+Internal-only references (code comments, `console.log` debug lines, CSS class
+names like `.scholar-theme`, localStorage key names like `ss_user`/`auth_token`,
+and the `syncTokenFromScholarSync`/`syncTokenToScholarSync` utility functions in
+`utils/tokenSync.ts`) were intentionally left untouched — renaming them risks
+breaking the token-bridging logic and the scoped dark-mode CSS rules for no
+user-visible benefit; they document *how* the legacy systems were merged, not
+brand the product as separate.
+
+**Result**
+ScholarFlow now presents as one unified platform end-to-end: the sidebar groups
+every feature by what it *does* (Projects & Tasks / Academics / Tools &
+Integrations / Administration) instead of which legacy subsystem it came from,
+the launchpad's two areas share one gradient language instead of competing
+palettes, and no remaining user-facing text refers to "SkyFlow" or "ScholarSync"
+as separate products — every visible mention now reads "ScholarFlow."
+
+---
+
+### Task 6 — Merged Role Picker: Scrollable Dropdown + Academic Role in One Place
+
+**Problem**
+On the Team → Role Management screen, the role-picker dropdown had no
+`max-height`/`overflow-y-auto`, so when there wasn't enough room below the trigger
+button it clipped/overflowed and the lower options (e.g. "Adviser") were
+unreachable — "I cannot scroll through the different roles." Separately, setting
+someone's *academic* role (Student/Adviser/Admin/External Leader) required leaving
+the Team page entirely and visiting the standalone `/scholar/admin/accounts`
+page — "it is also a hassle to give the user the roles for the academics."
+
+**Changed**
+- `frontend/src/components/team/RoleManagement.tsx`
+  - Made the role dropdown scrollable: `w-72 max-h-96 overflow-y-auto` on the
+    dropdown container, fixing the clipping/overflow issue.
+  - Merged academic-role assignment into the SAME dropdown: added an
+    `ACADEMIC_ROLE_CONFIG` map (Student / Adviser / Admin / External Leader, each
+    with its own icon/color/description) and a second labeled section
+    ("Academic Role") below the existing "Organization Role" section — both
+    independently selectable, consistent with migration 053's "two role systems
+    coexist independently" design.
+  - Added an `academic_role` field to the `Member` interface and an
+    `onAcademicRoleChange` prop; the trigger button now also shows a small
+    badge with the member's current academic role (e.g. "Manager · 🎓 Student")
+    so both roles are visible at a glance.
+- `backend/src/routes/organization.routes.ts` — added
+  `PATCH /api/organizations/:orgId/members/:memberId/academic-role`, gated by the
+  SAME org-admin check as the existing role-change route (querying
+  `organization_members` for `role = 'admin'` — **not** the academic-admin-gated
+  `verifyAdmin` middleware, which would incorrectly 403 an org-admin who isn't
+  also an academic Admin). It upserts `ss_account` by email (the same
+  `ON CONFLICT ("accountEmail") DO UPDATE` pattern already used for the
+  adviser-role cascade) and never touches `organization_members.role`, keeping
+  the two role systems independent.
+- `frontend/src/components/team/AdminTeamView.tsx` — threaded `academic_role`
+  through from the already-available `GET /api/organizations/:id/members`
+  response into `<RoleManagement>`'s `members` prop (it was being silently
+  dropped despite already being on the `TeamMember` interface and returned by
+  the API), and added a `handleAcademicRoleChange()` handler that calls the new
+  endpoint and refreshes the member list.
+
+**Result**
+Admins can now scroll through every role option without anything clipping, and
+can set both a person's organization role (Admin/Manager/Member/Adviser) *and*
+their academic role (Student/Adviser/Admin/External Leader) from one unified
+picker on the Team page — no more trip to a separate Academics admin page.
+
+---
+
+### Task 7 — Date Pickers: Fixed UTC-vs-Local-Timezone "Today" Bug
+
+**Request**
+"Date selector with calendar still allows picking a past date than the current,
+I also need the time to be localized per user since I think it still uses UTC."
+
+**Root cause**
+Task 3's `max={today}` fix (above) computed "today" with
+`new Date().toISOString().split('T')[0]` — but `toISOString()` always returns the
+date in **UTC**, not the browser's local date. Depending on how far the user's
+timezone is offset from UTC, the calculated "today" could be off by a full day:
+- Users **ahead of UTC** (e.g. UTC+8 in the evening) get *tomorrow's* UTC date as
+  "today", so the `max` cap doesn't actually block the day after their real today.
+- Users **behind UTC** (e.g. UTC-5 late at night) get *yesterday's* UTC date, so
+  the `max` cap incorrectly blocks them from picking their own actual today.
+
+This is exactly the symptom reported — the cap looked like it was both "still
+allowing a wrong date" and "still using UTC," because it was.
+
+**Fix**
+Added `frontend/src/lib/utils/date.ts` with timezone-safe helpers that read a
+`Date`'s **local** accessors (`getFullYear`/`getMonth`/`getDate`/`getHours`/
+`getMinutes`) instead of normalizing through UTC:
+- `getLocalDateString(date?)` → `YYYY-MM-DD` in the browser's local timezone
+- `getLocalDateTimeString(date?)` → `YYYY-MM-DDTHH:mm` in the local timezone
+- `getTodayLocalDateString()` → today's date as `YYYY-MM-DD`, local timezone
+
+Replaced every `new Date().toISOString().split('T')[0]` / `.slice(0, 10)`
+occurrence used for date-picker `value`/`min`/`max` computation — 14 occurrences
+across 7 files — with `getTodayLocalDateString()`:
+- `frontend/src/components/time/TimeTracker.tsx` (initial state, reset-after-submit, `max`)
+- `frontend/src/app/scholar/adviser/consultation-hub/page.tsx` ("From"/"To" filter `max`)
+- `frontend/src/app/scholar/adviser/consultation-prep/[bookingId]/page.tsx` (Consultation Date `max`)
+- `frontend/src/app/scholar/courses/[id]/page.tsx` (`todayJournalDate` state, journal-form `today` const, `max` fallback)
+- `frontend/src/app/scholar/schedule/page.tsx` (Consultation Date record `max`)
+- `frontend/src/components/tasks/AdminTaskView.tsx` (due-date picker `min` ×2)
+- `frontend/src/components/tasks/ManagerTaskView.tsx` (due-date picker `min` ×2)
+
+**Result**
+"Today" in every date picker now always matches the date on the user's own wall
+clock, regardless of their timezone offset from UTC — eliminating both the
+off-by-one-day cap and the perceived "still uses UTC" behavior. (Display-side
+time formatting elsewhere in the app, e.g. `toLocaleTimeString()`/`toLocaleDateString()`,
+was already timezone-correct and required no changes.)
+
+---
+
+### Task 8 — Start Date: Block Creation Instead of Silently Dropping Non-Compliant Dates
+
+**Request**
+"Instead of removing the start date if it doesn't comply to the latest date
+being the current day, don't allow the creation of it."
+
+**Approach**
+"Start Date" fields record when something *actually began* — a retrospective
+fact, not a plan — so they fall under the same "latest date is today" rule as
+Task 3/7's other retrospective fields. Rather than relying solely on the native
+`max` attribute (which can let a stale/typed-in value slip through silently and
+get nulled at submit time), explicit validation now runs at submission and
+**blocks the create/update entirely** with a visible error message
+("Start date cannot be later than today.") whenever the chosen start date is
+later than the user's local today — computed via the same timezone-safe
+`getTodayLocalDateString()` helper added in Task 7.
+
+**Changed — `max={getTodayLocalDateString()}` cap + submit-time block on:**
+- `frontend/src/components/tasks/AdminTaskView.tsx` — Create & Edit Task "Start Date" (`handleCreateTask`/`handleUpdateTask`)
+- `frontend/src/components/tasks/ManagerTaskView.tsx` — Create & Edit Task "Start Date" (`handleCreateTask`/`handleUpdateTask`)
+- `frontend/src/app/boards/page.tsx` — Create Task "Start Date" (`handleCreateTask`)
+- `frontend/src/app/projects/page.tsx` — Create & Edit Project "Start Date" (`handleCreate`/`handleUpdate`)
+- `frontend/src/app/scholar/schedule/page.tsx` — Consultation record "Consultation Date" (`handleSaveConsultation`)
+
+**Result**
+Picking a future start/consultation date now surfaces an explicit, blocking
+error ("Start date cannot be later than today.") and prevents the
+record from being created or updated — instead of the date being silently
+stripped (`start_date || null`) and the record saved without it.
+
+---
+
+### Task 9 — Google Classroom Import Now Populates ScholarSync Academics
+
+**Request**
+"Find out how the academics part of the project works, especially how to add
+courses and students enrolled in them, then make the google classroom
+integration work with it."
+
+**How ScholarSync academics works (research summary)**
+- **Courses** live in `ss_courses` (`id`, `courseName`, `courseCode`,
+  `courseSection`, `courseTerm`, `courseKey`, `courseAmount`, `courseAdviser`,
+  `courseImportedBy`). `POST /api/courses` (Admin-only, `scholar.routes.ts`)
+  creates a row with a random 8-character `courseKey`.
+- **Enrollment** is a many-to-many link in `ss_enrollments` (`account_id`
+  → `ss_account.account_id`, `course_id` → `ss_courses.id`, unique pair).
+  `POST /api/enroll` lets a logged-in Student self-enroll by submitting a
+  course's `courseKey`; it inserts the `ss_enrollments` row and increments
+  `ss_courses.courseAmount`.
+- **`GET /api/courses`** is role-scoped: Admins see every course, Advisers see
+  courses where they're `courseAdviser` (or lead a `team_groups` row for that
+  course), and Students see only courses they're enrolled in via
+  `ss_enrollments` (with a `team_group_members`-email fallback for
+  WBS-imported students).
+- Previously, **`POST /api/classroom/import`** (`classroom.routes.ts`) only
+  created SkyFlow `organization_invitations` (role `member`) and upserted
+  `ss_account` rows (role `Student`) — it never touched `ss_courses` /
+  `ss_enrollments`, so imported Classroom rosters were invisible to the
+  academics side of the app.
+
+**Changed**
+- `backend/src/services/migration.service.ts` — added migration
+  `055_ss_courses_classroom_link`, which adds a nullable
+  `ss_courses."classroomCourseId"` column with a partial unique index, so a
+  Classroom course can be matched/re-synced to its `ss_courses` row across
+  multiple imports instead of creating duplicates.
+- `backend/src/routes/classroom.routes.ts` — `POST /classroom/import` now
+  additionally accepts `course_name` / `course_section` and:
+  1. Looks up an `ss_courses` row by `classroomCourseId`; if none exists,
+     creates one (`courseName`/`courseSection` from Classroom, `courseCode`
+     from the section or `GC-<last 6 chars of course_id>`, `courseTerm` =
+     current year, a freshly generated `courseKey`, `courseAdviser`/
+     `courseImportedBy` set from the importing user).
+  2. For each imported student, the `ss_account` upsert now returns
+     `account_id`, which is used to insert an `ss_enrollments` row
+     (`ON CONFLICT DO NOTHING`) linking the student to that course.
+  3. Recomputes `ss_courses.courseAmount` from the live `ss_enrollments`
+     count after the import, and returns `{ imported, skipped, total,
+     enrolled, course }` (`course` = `{ id, courseName, courseCode,
+     courseKey }` or `null` if no `course_id` was supplied).
+- `frontend/src/components/integrations/ClassroomIntegrationPanel.tsx` —
+  `handleImport` now sends `course_id`, `course_name`, and `course_section`
+  for the selected Classroom course, and the success message reports the
+  ScholarSync course students were enrolled into and how many enrollments
+  were created (e.g. "Imported 12 student(s) from Google Classroom · Enrolled
+  10 in ScholarSync course \"CS101\" (CS101-A)").
+
+**Result**
+Importing a Google Classroom roster now creates (or re-uses, on subsequent
+imports) a matching ScholarSync course in `ss_courses` and enrolls each
+imported student in `ss_enrollments` — so the course immediately appears in
+`GET /api/courses` for Admins/Advisers, and enrolled students see it on their
+ScholarSync dashboard, without any manual course creation or enrollment step.
+
+> **Migration note:** `055_ss_courses_classroom_link` runs automatically on
+> the next backend restart (same as the still-pending `054` migration).
+
+---
+
+### Task 10 — Org Admins Are Immediately Admins in ScholarSync Too
+
+**Request**
+"I want that if a user is an admin, they are immediately admin for both the
+project management and consultation part of the system."
+
+**Context**
+SkyFlow `organization_members.role = 'admin'` (project management) and
+ScholarSync `ss_account.accountRole = 'Admin'` (consultation/academics —
+gates `verifyAdmin`/`verifyInstructor` in `scholar.routes.ts`, the
+Consultation Hub, and validation workflows) are two independent role systems
+(migration 053). Previously only the `'adviser'` role change cascaded into
+`ss_account`; becoming an org admin did not.
+
+**Changed**
+- `backend/src/services/ssAccountSync.service.ts` (new) — exports
+  `syncScholarSyncAdminRole(email, name, userId)`, which upserts
+  `ss_account` with `"accountRole" = 'Admin'` for the given email
+  (non-fatal if `ss_account` doesn't exist).
+- `backend/src/routes/organization.routes.ts`:
+  - `POST /api/organizations` — after the creator is inserted as
+    `organization_members.role = 'admin'`, immediately syncs them to
+    ScholarSync Admin.
+  - `PATCH /:orgId/members/:memberId/role` — added an `else if (role ===
+    'admin')` branch (alongside the existing `'adviser'` branch) that syncs
+    the promoted member to ScholarSync Admin.
+- `backend/src/routes/invitation.routes.ts` — `POST /invitations/accept`
+  now syncs the accepting user to ScholarSync Admin if the invitation's role
+  is `'admin'`.
+- `backend/src/services/migration.service.ts` — added migration
+  `056_backfill_admin_to_scholarsync`, which upserts `ss_account.accountRole
+  = 'Admin'` (by email) for every user who is already an active org admin in
+  any organization, so existing admins get consultation-side Admin access
+  without waiting for a role change.
+
+**Result**
+Any user who is (or becomes) an org admin — via org creation, a role change,
+or accepting an "admin" invitation — immediately has `ss_account.accountRole
+= 'Admin'`, granting them Admin access on the consultation/academics side
+(Consultation Hub, validation workflows, course management) with no extra
+steps.
+
+> **Migration note:** `056_backfill_admin_to_scholarsync` runs automatically
+> on the next backend restart (same as the still-pending `054`/`055`
+> migrations).
+
+---
+
 ## [Unreleased] — 2026-05-27
 
 ### Summary

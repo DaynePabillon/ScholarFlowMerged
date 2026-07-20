@@ -1796,7 +1796,26 @@ router.get('/all-records', authenticate, async (req: any, res: Response) => {
     const userEmail = req.user?.email;
     if (!userEmail) return res.status(401).json({ error: 'Unauthorized' });
 
-    // Fetch all consultation records, optionally filtered by adviser's courses
+    // Check if validation columns exist (migration 057 may not have run yet)
+    const { rows: colCheck } = await client.query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'ss_consultation' AND column_name = 'validation_status'
+    `);
+    const hasValidation = colCheck.length > 0;
+    if (!hasValidation) console.warn('[consultation] validation columns not found — migration 057 may not have run');
+
+    const validationCols = hasValidation
+      ? `COALESCE(c."validation_status", 'not_requested') AS validation_status,
+         c."validated_by",
+         c."validated_at",
+         c."validation_requested_at",
+         c."validation_notes",`
+      : `'not_requested' AS validation_status,
+         NULL AS validated_by,
+         NULL AS validated_at,
+         NULL AS validation_requested_at,
+         NULL AS validation_notes,`;
+
     const { rows } = await client.query(`
       SELECT
         c."conID"                    AS con_id,
@@ -1810,16 +1829,12 @@ router.get('/all-records', authenticate, async (req: any, res: Response) => {
         c."status",
         c."follow_up_status",
         c."submitted_at",
-        COALESCE(c."validation_status", 'not_requested') AS validation_status,
-        c."validated_by",
-        c."validated_at",
-        c."validation_requested_at",
-        c."validation_notes",
+        ${validationCols}
         COALESCE(sc."courseCode", '') AS course_code,
         COALESCE(sc."courseName", '') AS course_name,
         COALESCE(sc."courseSection", '') AS course_section
       FROM ss_consultation c
-      LEFT JOIN ss_courses sc ON c."courseID" = sc."courseID"
+      LEFT JOIN ss_courses sc ON c."courseID" = sc.id
       WHERE c."status" = 'SUBMITTED' OR c."status" = 'COMPLETED'
       ORDER BY c."submitted_at" DESC NULLS LAST, c."conID" DESC
       LIMIT 200

@@ -83,7 +83,7 @@ export default function GanttPage() {
             <select
               value={selectedProject}
               onChange={e => setSelectedProject(e.target.value)}
-              className="border border-gray-200 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white/70 backdrop-blur-sm shadow-sm"
+              className="border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm shadow-sm"
               style={{ color: 'var(--color-text)' }}
             >
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}

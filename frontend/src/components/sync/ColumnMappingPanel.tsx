@@ -98,9 +98,9 @@ export default function ColumnMappingPanel({ projectId, syncedSheetId, sheetColu
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/40 bg-white/30">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
         <div className="flex items-center gap-2">
           <Columns className="h-4 w-4 text-sky-500" />
           <span className="font-semibold text-sm text-slate-700 dark:text-slate-200">Column Mapping</span>

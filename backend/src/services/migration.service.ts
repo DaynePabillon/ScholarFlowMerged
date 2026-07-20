@@ -1460,6 +1460,90 @@ async function runMigrations(): Promise<void> {
         ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS progress_percent NUMERIC DEFAULT 0;
         ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS luxury_weight INTEGER DEFAULT 1;
       `
+    },
+    {
+      name: '053_unify_roles_remove_overwrite_trigger',
+      sql: `
+        -- Role unification: SkyFlow (organization_members.role) and ScholarSync
+        -- (ss_account.accountRole) are two independent role systems for the SAME
+        -- person. Migration 039 added a trigger that OVERWROTE a user's SkyFlow
+        -- org role whenever their academic role changed (e.g. an org 'manager'
+        -- who is also a ScholarSync 'Student' would silently get demoted to
+        -- 'member'). That conflicts with the goal of having both roles unified
+        -- and visible together (e.g. "Member & Student", "Admin & Adviser").
+        --
+        -- Drop the destructive overwrite trigger/function — both roles now
+        -- coexist independently and are surfaced together by the API/UI
+        -- (see GET /api/organizations/:id/members → academic_role, and
+        -- AppLayout.tsx → combinedRoleLabel()).
+        DROP TRIGGER IF EXISTS trg_sync_academic_role ON ss_account;
+        DROP FUNCTION IF EXISTS sync_academic_role_to_org();
+      `
+    },
+    {
+      name: '054_sync_logs_event_type_nullable',
+      sql: `
+        -- POST /api/sync/trigger has been failing with 500 ("null value in column
+        -- 'event_type' of relation 'sync_logs' violates not-null constraint").
+        --
+        -- Root cause: sync_logs was originally created in migration 016 with an
+        -- old workspace-event-log shape — (workspace_id, event_type NOT NULL,
+        -- event_data, details) — used by WorkspaceSyncService.logSync(). Migrations
+        -- 045/049 layered a SECOND, newer shape onto the SAME table — (project_id,
+        -- organization_id, triggered_by, status, synced_count, error_message) —
+        -- used by the /sync/trigger and /sync/status routes, because
+        -- "CREATE TABLE IF NOT EXISTS sync_logs" was a no-op (the table already
+        -- existed). Every INSERT from /sync/trigger omits event_type entirely,
+        -- so it always violated the inherited NOT NULL constraint and 500'd.
+        --
+        -- Fix: relax event_type to nullable. WorkspaceSyncService.logSync() still
+        -- always supplies it, so its rows are unaffected; rows written by the
+        -- newer /sync/trigger code path (which has no concept of "event type")
+        -- can now insert successfully with event_type = NULL.
+        ALTER TABLE sync_logs ALTER COLUMN event_type DROP NOT NULL;
+      `
+    },
+    {
+      name: '055_ss_courses_classroom_link',
+      sql: `
+        -- Link an ss_courses row to the Google Classroom course it was imported
+        -- from, so POST /api/classroom/import can find-or-create the matching
+        -- ScholarSync course and re-sync enrollments on subsequent imports
+        -- instead of creating duplicate course rows each time.
+        ALTER TABLE ss_courses ADD COLUMN IF NOT EXISTS "classroomCourseId" VARCHAR(255);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ss_courses_classroom_course_id
+          ON ss_courses("classroomCourseId") WHERE "classroomCourseId" IS NOT NULL;
+      `
+    },
+    {
+      name: '056_backfill_admin_to_scholarsync',
+      sql: `
+        -- "If a user is an admin, they are immediately admin for both the
+        -- project management and consultation part of the system."
+        --
+        -- Going forward, becoming an org admin (org creation, role change, or
+        -- invitation acceptance) upserts ss_account.accountRole = 'Admin'
+        -- (see ssAccountSync.service.ts). This backfills that for users who
+        -- were ALREADY an org admin before that sync existed: for every
+        -- active organization_members row with role = 'admin', upsert a
+        -- matching ss_account row (by email) with accountRole = 'Admin'.
+        INSERT INTO ss_account ("accountName", "accountEmail", "accountRole", user_id)
+        SELECT DISTINCT COALESCE(u.name, ''), u.email, 'Admin', u.id
+        FROM organization_members om
+        JOIN users u ON u.id = om.user_id
+        WHERE om.role = 'admin' AND om.status = 'active' AND u.email IS NOT NULL
+        ON CONFLICT ("accountEmail") DO UPDATE SET "accountRole" = 'Admin', user_id = COALESCE(ss_account.user_id, EXCLUDED.user_id);
+      `
+    },
+    {
+      name: '057_ss_consultation_validation_columns',
+      sql: `
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_status VARCHAR(20) DEFAULT 'not_requested';
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_requested_at TIMESTAMP;
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validated_by VARCHAR(255);
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP;
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_notes TEXT;
+      `
     }
   ];
 

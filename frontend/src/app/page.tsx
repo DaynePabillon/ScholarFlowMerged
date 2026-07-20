@@ -1,7 +1,7 @@
 "use client"
 
 import {
-  Cloud, GraduationCap, ArrowRight, Sparkles, FolderKanban,
+  GraduationCap, ArrowRight, Sparkles, FolderKanban,
   CheckSquare, Users, BookOpen, Calendar, BarChart3, FileText,
   Plug, AlertTriangle, ChevronLeft, ChevronRight, LayoutDashboard, RefreshCw
 } from "lucide-react"
@@ -12,22 +12,16 @@ import InteractiveGuide from "@/components/onboarding/InteractiveGuide"
 
 // ── Feature data ────────────────────────────────────────────────────────────
 
-const SKYFLOW_FEATURES = [
-  { href: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard'    },
-  { href: '/boards',       icon: FolderKanban,    label: 'Boards'       },
-  { href: '/tasks',        icon: CheckSquare,     label: 'Tasks'        },
-  { href: '/team',         icon: Users,           label: 'Team'         },
-  { href: '/gantt',        icon: BarChart3,       label: 'Timeline'     },
-  { href: '/reports',      icon: FileText,        label: 'Reports'      },
-  { href: '/integrations', icon: Plug,            label: 'Integrations' },
-]
-
-const SCHOLAR_FEATURES = [
-  { href: '/scholar/dashboard',      icon: LayoutDashboard, label: 'Dashboard'      },
+const FEATURES = [
+  { href: '/dashboard',              icon: LayoutDashboard, label: 'Dashboard'      },
+  { href: '/boards',                 icon: FolderKanban,    label: 'Boards'         },
+  { href: '/tasks',                  icon: CheckSquare,     label: 'Tasks'          },
+  { href: '/team',                   icon: Users,           label: 'Team'           },
+  { href: '/gantt',                  icon: BarChart3,       label: 'Timeline'       },
+  { href: '/reports',                icon: FileText,        label: 'Reports'        },
   { href: '/scholar/courses',        icon: BookOpen,        label: 'Courses'        },
   { href: '/scholar/booking',        icon: Calendar,        label: 'Consultation'   },
-  { href: '/scholar/schedule',       icon: Calendar,        label: 'Schedule'       },
-  { href: '/calendar',               icon: Calendar,        label: 'Calendar'       },
+  { href: '/integrations',           icon: Plug,            label: 'Integrations'   },
   { href: '/scholar/workspace-sync', icon: RefreshCw,       label: 'Workspace Sync' },
 ]
 
@@ -195,57 +189,27 @@ function RootPortalContent() {
           <p className="text-gray-400 text-sm">Where would you like to go today?</p>
         </div>
 
-        {/* ── Portal cards (stacked) ── */}
+        {/* ── Unified workspace ── */}
         <div className="space-y-4 mb-7">
-
-          {/* SkyFlow */}
           <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-5 sm:p-6 shadow-2xl border border-blue-500/20">
-            {/* Header row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <Cloud className="w-5 h-5 text-white" />
+                  <Sparkles className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-base font-bold text-white leading-tight">SkyFlow</p>
-                  <p className="text-blue-200 text-xs">Project Management</p>
+                  <p className="text-base font-bold text-white leading-tight">ScholarFlow</p>
+                  <p className="text-blue-200 text-xs">Projects, Courses &amp; Collaboration</p>
                 </div>
               </div>
               <button
                 onClick={() => router.push('/dashboard')}
                 className="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-xl transition-all group flex-shrink-0"
               >
-                Open <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                Open Dashboard <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </button>
             </div>
-
-            {/* Feature carousel */}
-            <FeatureCarousel features={SKYFLOW_FEATURES} onNavigate={(href) => router.push(href)} />
-          </div>
-
-          {/* ScholarSync */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-sky-500 to-blue-600 rounded-3xl p-5 sm:p-6 shadow-2xl border border-sky-400/20">
-            {/* Header row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center flex-shrink-0">
-                  <GraduationCap className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-base font-bold text-white leading-tight">ScholarSync</p>
-                  <p className="text-sky-100 text-xs">Academic Portal</p>
-                </div>
-              </div>
-              <button
-                onClick={() => router.push('/scholar/dashboard')}
-                className="inline-flex items-center gap-1.5 bg-white/20 hover:bg-white/30 text-white text-xs sm:text-sm font-semibold px-3 py-2 rounded-xl transition-all group flex-shrink-0"
-              >
-                Open <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-              </button>
-            </div>
-
-            {/* Feature carousel */}
-            <FeatureCarousel features={SCHOLAR_FEATURES} onNavigate={(href) => router.push(href)} />
+            <FeatureCarousel features={FEATURES} onNavigate={(href) => router.push(href)} />
           </div>
         </div>
 

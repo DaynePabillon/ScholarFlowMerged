@@ -1,6 +1,7 @@
 "use client"
 
 import apiClient, { API_URL } from '@/lib/api/client'
+import { getTodayLocalDateString } from '@/lib/utils/date'
 import { useState, useEffect, Suspense, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import AppLayout from "@/components/layout/AppLayout"
@@ -406,6 +407,14 @@ function BoardsContent() {
 
     const handleCreateTask = async () => {
         if (!newTask.title || !selectedOrg) return
+
+        // Start date must comply with "latest date is today" — block creation
+        // entirely (rather than silently dropping/clearing the date) when violated.
+        if (newTask.start_date && newTask.start_date > getTodayLocalDateString()) {
+            alert('Start date cannot be later than today.')
+            return
+        }
+
         try {
             const response = await apiClient.post(`/organizations/${selectedOrg.id}/tasks`, {
                 title: newTask.title,
@@ -801,6 +810,7 @@ function BoardsContent() {
                                     <input
                                         type="date"
                                         value={newTask.start_date}
+                                        max={getTodayLocalDateString()}
                                         onChange={(e) => setNewTask({ ...newTask, start_date: e.target.value })}
                                         className="w-full px-4 py-2 border border-gray-200 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 dark:placeholder-gray-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
                                     />
@@ -924,7 +934,7 @@ function BoardsContent() {
 
                             {/* Task Meta Info */}
                             <div className="grid grid-cols-2 gap-4 mb-6">
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                     <Calendar className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">Due Date</p>
@@ -942,14 +952,14 @@ function BoardsContent() {
                                         )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                     <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                     <div>
                                         <p className="text-xs text-gray-500 dark:text-gray-400">Assigned to</p>
                                         <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{selectedTask.assigned_to_name || 'Unassigned'}</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                     <span className={`px-2 py-1 rounded text-xs font-medium ${selectedTask.priority === 'high' ? 'bg-red-100 text-red-700' :
                                         selectedTask.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
                                             'bg-green-100 text-green-700'
@@ -1001,7 +1011,7 @@ function BoardsContent() {
                                         <p className="text-gray-400 text-sm text-center py-4">No comments yet</p>
                                     ) : (
                                         taskComments.map((comment) => (
-                                            <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                                            <div key={comment.id} className="flex gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
                                                 <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center flex-shrink-0">
                                                     <span className="text-white text-xs font-bold">
                                                         {comment.user_name?.charAt(0).toUpperCase() || '?'}

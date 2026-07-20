@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import AppLayout from '@/components/layout/AppLayout'
 import apiClient from '@/lib/api/client';
+import { getTodayLocalDateString } from '@/lib/utils/date'
 import {
   X,
   AlertCircle,
@@ -730,6 +731,7 @@ export default function ConsultationPrepPage() {
                           type="date"
                           value={consultationForm.conDate}
                           onChange={(e) => setConsultationForm({ ...consultationForm, conDate: e.target.value })}
+                          max={getTodayLocalDateString()}
                           className="w-full px-3 py-2.5 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                         />
                       </div>

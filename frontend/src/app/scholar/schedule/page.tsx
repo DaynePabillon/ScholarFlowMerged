@@ -16,6 +16,7 @@ import {
 import { useRouter, useSearchParams } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
 import AppLayout from '@/components/layout/AppLayout'
+import { getTodayLocalDateString } from '@/lib/utils/date'
 
 interface ConsultationSlot {
   slot_id: number
@@ -839,6 +840,13 @@ function ScheduleContent() {
 
   const handleSaveConsultation = async () => {
     if (isSavingConsultation || !currentBooking) return
+
+    // Consultation date must comply with "latest date is today" — block saving
+    // entirely (rather than silently dropping/clearing the date) when violated.
+    if (consultationForm.conDate && consultationForm.conDate > getTodayLocalDateString()) {
+      setConsultationError('Consultation date cannot be later than today.')
+      return
+    }
 
     setIsSavingConsultation(true)
     setConsultationError('')
@@ -1841,6 +1849,7 @@ function ScheduleContent() {
                     type="date"
                     value={consultationForm.conDate}
                     onChange={(e) => setConsultationForm({...consultationForm, conDate: e.target.value})}
+                    max={getTodayLocalDateString()}
                     className="portal-input text-sm"
                     placeholder="YYYY-MM-DD"
                   />

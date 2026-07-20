@@ -92,15 +92,24 @@ export default function ClassroomIntegrationPanel({ organizationId }: Props) {
         email: s.profile?.emailAddress || manualEmails[s.userId] || ''
       }));
 
+      // Include the selected course's name/section so the backend can
+      // find-or-create the matching ScholarSync academics course
+      // (ss_courses) and enroll these students into it (ss_enrollments).
+      const courseObj = courses.find(c => c.id === selectedCourse);
+
       const res = await apiClient.post('/classroom/import', {
         organization_id: organizationId,
+        course_id: selectedCourse,
+        course_name: courseObj?.name,
+        course_section: courseObj?.section,
         students
       });
       setFeedback({
         type: 'success',
         message: [
           `Imported ${res.data.imported || 0} student(s) from Google Classroom`,
-          res.data.skipped ? ` · ${res.data.skipped} skipped (no email)` : ''
+          res.data.skipped ? ` · ${res.data.skipped} skipped (no email)` : '',
+          res.data.course ? ` · Enrolled ${res.data.enrolled || 0} in ScholarSync course "${res.data.course.courseName}" (${res.data.course.courseCode})` : ''
         ].join('')
       });
       setConfirmed(false);
@@ -122,9 +131,9 @@ export default function ClassroomIntegrationPanel({ organizationId }: Props) {
   }
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+    <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/40 bg-white/30">
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/40 dark:border-slate-700/40 bg-white/30 dark:bg-slate-800/30">
         <div className="bg-[#1a73e8] p-1.5 rounded-lg">
           <BookOpen className="h-4 w-4 text-white" />
         </div>
@@ -228,7 +237,7 @@ export default function ClassroomIntegrationPanel({ organizationId }: Props) {
                     )}
                   </div>
 
-                  <div className="bg-gray-50/80 backdrop-blur-sm rounded-xl overflow-hidden border border-white/40">
+                  <div className="bg-gray-50/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl overflow-hidden border border-white/40 dark:border-slate-600/40">
                     <div className="bg-white/30 grid grid-cols-2 px-4 py-2 text-xs font-semibold text-slate-500 uppercase">
                       <span>Name</span>
                       <span className="flex items-center gap-1">

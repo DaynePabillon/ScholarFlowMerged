@@ -76,7 +76,8 @@ router.get('/classroom/courses/:courseId/students', authenticateToken, async (re
 
 /**
  * POST /api/classroom/import
- * Import students as org member invitations.
+ * Import students as org member invitations, AND link them into the
+ * ScholarSync academics system (ss_courses / ss_enrollments).
  *
  * Accepts either:
  *   { organization_id, students: [{userId, name, email}] }   ← frontend pre-built list (preferred)
@@ -85,10 +86,20 @@ router.get('/classroom/courses/:courseId/students', authenticateToken, async (re
  * The pre-built list path is used so the frontend can merge Classroom emails
  * with admin-entered manual emails for personal-Gmail classrooms where
  * profile.emailAddress is null.
+ *
+ * Optional fields used for academics linking:
+ *   course_id      ← Google Classroom course ID. When present, the import
+ *                     finds (by classroomCourseId) or creates a matching
+ *                     ss_courses row, and enrolls each imported student
+ *                     into it via ss_enrollments.
+ *   course_name    ← Classroom course name, used when creating a new
+ *                     ss_courses row for the first time.
+ *   course_section ← Classroom course section, used for ss_courses.courseSection
+ *                     and (when present) courseCode.
  */
 router.post('/classroom/import', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
-    const { course_id, organization_id, students: providedStudents } = req.body;
+    const { course_id, organization_id, students: providedStudents, course_name, course_section } = req.body;
     if (!organization_id) {
       return res.status(400).json({ error: 'organization_id is required' });
     }
@@ -123,8 +134,49 @@ router.post('/classroom/import', authenticateToken, async (req: AuthRequest, res
       return res.status(400).json({ error: 'Either students array or course_id is required' });
     }
 
+    // ─── ScholarSync academics link ────────────────────────────────────────
+    // Find or create the ss_courses row for this Classroom course (matched by
+    // classroomCourseId), so imported students can be enrolled via
+    // ss_enrollments. If course_id is absent (e.g. a manually-built student
+    // list with no course context) academics linking is skipped entirely —
+    // the import still behaves as before (org invitations + ss_account only).
+    let academicCourse: { id: number; courseName: string; courseCode: string; courseKey: string } | null = null;
+    if (course_id) {
+      try {
+        const existing = await query(
+          'SELECT id, "courseName", "courseCode", "courseKey" FROM ss_courses WHERE "classroomCourseId" = $1',
+          [String(course_id)]
+        );
+        if (existing.rows.length > 0) {
+          academicCourse = existing.rows[0];
+        } else {
+          const importerRes = await query('SELECT name, email FROM users WHERE id = $1', [req.user!.id]);
+          const importer = importerRes.rows[0];
+
+          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+          const courseKey = Array.from({ length: 8 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+          const courseName = String(course_name || 'Imported from Google Classroom').substring(0, 255);
+          const courseSection = String(course_section || 'N/A').substring(0, 50);
+          const courseCode = String(course_section || `GC-${String(course_id).slice(-6)}`).substring(0, 50);
+          const courseTerm = String(new Date().getFullYear());
+
+          const inserted = await query(
+            `INSERT INTO ss_courses ("courseName", "courseCode", "courseSection", "courseTerm", "courseKey", "courseAmount", "courseAdviser", "courseImportedBy", "classroomCourseId")
+             VALUES ($1, $2, $3, $4, $5, 0, $6, $7, $8)
+             RETURNING id, "courseName", "courseCode", "courseKey"`,
+            [courseName, courseCode, courseSection, courseTerm, courseKey, importer?.email || null, importer?.name || null, String(course_id)]
+          );
+          academicCourse = inserted.rows[0];
+        }
+      } catch (courseErr) {
+        console.error('Error linking Classroom course to ScholarSync academics:', courseErr);
+        academicCourse = null;
+      }
+    }
+
     let imported = 0;
     let skipped  = 0;
+    let enrolled = 0;
 
     for (const student of studentList) {
       const { email, name } = student;
@@ -143,25 +195,64 @@ router.post('/classroom/import', authenticateToken, async (req: AuthRequest, res
       );
 
       // 2. Upsert ScholarSync ss_account with role = 'Student'
+      let accountId: number | null = null;
       try {
-        await query(
+        const acctRes = await query(
           `INSERT INTO ss_account ("accountName", "accountEmail", "accountRole")
            VALUES ($1, $2, 'Student')
            ON CONFLICT ("accountEmail") DO UPDATE
              SET "accountRole" = CASE
                WHEN ss_account."accountRole" = 'Admin' THEN ss_account."accountRole"
                ELSE 'Student'
-             END`,
+             END
+           RETURNING account_id`,
           [name, email]
         );
+        accountId = acctRes.rows[0]?.account_id ?? null;
       } catch (_ssErr) {
         // ss_account may not exist in all environments — non-fatal
+      }
+
+      // 3. Enroll into the linked ScholarSync course (ss_enrollments)
+      if (academicCourse && accountId) {
+        try {
+          const enrollRes = await query(
+            `INSERT INTO ss_enrollments (account_id, course_id)
+             VALUES ($1, $2)
+             ON CONFLICT (account_id, course_id) DO NOTHING
+             RETURNING id`,
+            [accountId, academicCourse.id]
+          );
+          if (enrollRes.rows.length > 0) enrolled++;
+        } catch (_enrollErr) {
+          // Non-fatal — student is still imported into the org
+        }
       }
 
       imported++;
     }
 
-    res.json({ imported, skipped, total: studentList.length });
+    // Keep ss_courses.courseAmount in sync with actual enrollment count
+    if (academicCourse) {
+      try {
+        await query(
+          `UPDATE ss_courses SET "courseAmount" = (SELECT COUNT(*) FROM ss_enrollments WHERE course_id = $1) WHERE id = $1`,
+          [academicCourse.id]
+        );
+      } catch (_countErr) {
+        // Non-fatal
+      }
+    }
+
+    res.json({
+      imported,
+      skipped,
+      total: studentList.length,
+      enrolled,
+      course: academicCourse
+        ? { id: academicCourse.id, courseName: academicCourse.courseName, courseCode: academicCourse.courseCode, courseKey: academicCourse.courseKey }
+        : null
+    });
   } catch (error: any) {
     console.error('Error importing classroom students:', error);
     res.status(500).json({ error: 'Failed to import students', details: error.message });
