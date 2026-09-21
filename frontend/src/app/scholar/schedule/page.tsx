@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect, useMemo, useRef, Suspense } from "react"
@@ -15,7 +15,8 @@ import {
 } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { jwtDecode } from "jwt-decode"
-import SidebarLayout from "@/components/scholar/SidebarLayout"
+import AppLayout from '@/components/layout/AppLayout'
+import { getTodayLocalDateString } from '@/lib/utils/date'
 
 interface ConsultationSlot {
   slot_id: number
@@ -121,6 +122,8 @@ function ScheduleContent() {
   const searchParams = useSearchParams()
   const autoRecordHandledRef = useRef(false)
   const [user, setUser] = useState<any>(null)
+  const [organizations, setOrganizations] = useState<any[]>([])
+  const [selectedOrg, setSelectedOrg] = useState<any>(null)
   const [slots, setSlots] = useState<ConsultationSlot[]>([])
   const [courses, setCourses] = useState<any[]>([])
   const [groups, setGroups] = useState<any[]>([])
@@ -194,6 +197,14 @@ function ScheduleContent() {
   const autoCourseId = Number(searchParams.get('courseId') || 0)
 
   // Auth
+
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
   useEffect(() => {
     const token = localStorage.getItem("auth_token")
     if (!token) { router.push("/login"); return }
@@ -770,6 +781,7 @@ function ScheduleContent() {
     setShowConsultationForm(true)
   }
 
+
   useEffect(() => {
     if (!user?.id || !autoOpenRecord || autoRecordHandledRef.current) return
     if (!Number.isFinite(autoSlotId) || autoSlotId <= 0) return
@@ -828,6 +840,13 @@ function ScheduleContent() {
 
   const handleSaveConsultation = async () => {
     if (isSavingConsultation || !currentBooking) return
+
+    // Consultation date must comply with "latest date is today" — block saving
+    // entirely (rather than silently dropping/clearing the date) when violated.
+    if (consultationForm.conDate && consultationForm.conDate > getTodayLocalDateString()) {
+      setConsultationError('Consultation date cannot be later than today.')
+      return
+    }
 
     setIsSavingConsultation(true)
     setConsultationError('')
@@ -1182,7 +1201,7 @@ function ScheduleContent() {
   }
 
   return (
-    <SidebarLayout>
+    <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 
         {/* Header */}
@@ -1830,6 +1849,7 @@ function ScheduleContent() {
                     type="date"
                     value={consultationForm.conDate}
                     onChange={(e) => setConsultationForm({...consultationForm, conDate: e.target.value})}
+                    max={getTodayLocalDateString()}
                     className="portal-input text-sm"
                     placeholder="YYYY-MM-DD"
                   />
@@ -2091,7 +2111,7 @@ function ScheduleContent() {
           </div>
         )}
       </div>
-    </SidebarLayout>
+    </AppLayout>
   )
 }
 

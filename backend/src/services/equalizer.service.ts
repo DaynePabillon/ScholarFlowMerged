@@ -166,6 +166,23 @@ export class EqualizerService {
           [invitation.id]
         );
 
+        // If invited as adviser, sync to ss_account so ScholarSync recognises the role
+        if (invitation.role === 'adviser') {
+          try {
+            const nameResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
+            const userName = nameResult.rows[0]?.name || '';
+            await query(
+              `INSERT INTO ss_account ("accountName", "accountEmail", "accountRole")
+               VALUES ($1, $2, 'Adviser')
+               ON CONFLICT ("accountEmail") DO UPDATE SET "accountRole" = 'Adviser'`,
+              [userName, email]
+            );
+            logger.info(`Equalizer: ss_account Adviser role set for ${email}`);
+          } catch (ssErr) {
+            logger.warn('Equalizer: could not upsert ss_account for adviser (table may not exist):', ssErr);
+          }
+        }
+
         accepted++;
       }
 

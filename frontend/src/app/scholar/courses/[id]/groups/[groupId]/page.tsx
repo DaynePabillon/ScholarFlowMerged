@@ -1,13 +1,13 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import AIResultModal from '@/components/scholar/AIResultModal';
 import { useAIStore } from '@/store/scholar/ai.store';
 import { apiClient } from '@/lib/api/client';
 import { jwtDecode } from 'jwt-decode';
-import { Sparkles, TrendingUp, ChevronDown } from 'lucide-react';
+import { Sparkles, TrendingUp, ChevronDown, ExternalLink } from 'lucide-react';
 
 type Group = {
     smallgroupID: number;
@@ -19,13 +19,19 @@ type Group = {
     member5: string | null; roleFive: string | null;
 };
 
-type Task = {
-    taskID: number;
-    taskTitle: string;
-    taskAssign: string;
-    taskDeadline: string;
-    taskInfo: string;
-    groupID: number;
+type SkyFlowTask = {
+    id: string;
+    title: string;
+    description: string | null;
+    status: string;
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    due_date: string | null;
+    created_at: string;
+    project_id: string;
+    project_name: string | null;
+    assignee_name: string | null;
+    assignee_email: string | null;
+    comment_count: number;
 };
 
 export default function GroupPage() {
@@ -36,8 +42,11 @@ export default function GroupPage() {
     const groupId = params.groupId as string;
 
     const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([])
+    const [selectedOrg, setSelectedOrg] = useState<any>(null)
     const [group, setGroup] = useState<Group | null>(null);
-    const [tasks, setTasks] = useState<Task[]>([]);
+    const [tasks, setTasks] = useState<SkyFlowTask[]>([]);
+    const [projectId, setProjectId] = useState<string | null>(null);
     const [journals, setJournals] = useState<any[]>([]);
     const [consultationLogs, setConsultationLogs] = useState<any[]>([]);
     const [expandedConsultationId, setExpandedConsultationId] = useState<number | null>(null);
@@ -55,13 +64,14 @@ export default function GroupPage() {
     const [fetchingJournalDetails, setFetchingJournalDetails] = useState(false);
     const [exportingDocs, setExportingDocs] = useState(false);
 
-    // Task Creation Modal State
-    const [showTaskModal, setShowTaskModal] = useState(false);
-    const [taskTitle, setTaskTitle] = useState('');
-    const [taskAssign, setTaskAssign] = useState('');
-    const [taskDeadline, setTaskDeadline] = useState('');
-    const [taskInfo, setTaskInfo] = useState('');
+    // Inline task creation state
+    const [showAddTaskRow, setShowAddTaskRow] = useState(false);
+    const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium');
+    const [newTaskDueDate, setNewTaskDueDate] = useState('');
     const [creatingTask, setCreatingTask] = useState(false);
+    const [addTaskError, setAddTaskError] = useState<string | null>(null);
+    const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null);
 
     const formatDateLabel = (value: any) => {
         if (!value) return 'No date';
@@ -95,7 +105,9 @@ export default function GroupPage() {
             setGroup(groupRes.data);
 
             const tasksRes = await apiClient.get(`/groups/${groupId}/tasks`);
-            setTasks(tasksRes.data);
+            const tasksPayload = tasksRes.data;
+            setTasks(Array.isArray(tasksPayload?.tasks) ? tasksPayload.tasks : []);
+            setProjectId(tasksPayload?.project_id ?? null);
 
             const consRes = await apiClient.get(`/courses/${courseId}/consultations`);
             // Filter down to published consultations associated specifically with this exact group Name
@@ -122,7 +134,15 @@ export default function GroupPage() {
         }
     };
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const token = localStorage.getItem('auth_token');
         if (!token) {
             router.push('/login');
@@ -140,7 +160,15 @@ export default function GroupPage() {
         fetchGroupData();
     }, [groupId, router]);
 
-    useEffect(() => {
+  
+  // Load org context for unified AppLayout sidebar
+  useEffect(() => {
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         const fetchDetails = async () => {
             if (!selectedJournal) {
                 setJournalAttendance({});
@@ -185,25 +213,40 @@ export default function GroupPage() {
         }
     };
 
-    const handleCreateTask = async () => {
-        if (!taskTitle || !taskAssign || !taskDeadline) {
-            alert("Title, Assignee, and Deadline are required.");
+    const handleStatusChange = async (taskId: string, newStatus: string) => {
+        setUpdatingTaskId(taskId);
+        try {
+            await apiClient.patch(`/tasks/${taskId}/status`, { status: newStatus });
+            setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+        } catch (err: any) {
+            alert(err.response?.data?.error || 'Failed to update status');
+        } finally {
+            setUpdatingTaskId(null);
+        }
+    };
+
+    const handleAddTask = async () => {
+        if (!newTaskTitle.trim() || !projectId) {
+            setAddTaskError('Title is required and a project must be linked to this group.');
             return;
         }
-
+        setCreatingTask(true);
+        setAddTaskError(null);
         try {
-            setCreatingTask(true);
-            await apiClient.post(`/groups/${groupId}/tasks`, { taskTitle, taskAssign, taskDeadline, taskInfo });
-
-            setShowTaskModal(false);
-            setTaskTitle('');
-            setTaskAssign('');
-            setTaskDeadline('');
-            setTaskInfo('');
-            
-            await fetchGroupData();
+            const res = await apiClient.post('/tasks', {
+                project_id: projectId,
+                title: newTaskTitle.trim(),
+                priority: newTaskPriority,
+                due_date: newTaskDueDate || undefined,
+                status: 'todo',
+            });
+            setTasks(prev => [res.data, ...prev]);
+            setNewTaskTitle('');
+            setNewTaskPriority('medium');
+            setNewTaskDueDate('');
+            setShowAddTaskRow(false);
         } catch (err: any) {
-            alert(err.response?.data?.error || "Failed to create task.");
+            setAddTaskError(err.response?.data?.error || 'Failed to create task.');
         } finally {
             setCreatingTask(false);
         }
@@ -231,12 +274,12 @@ export default function GroupPage() {
 
     if (error || !group) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="min-h-screen bg-white text-gray-900 font-sans p-8 flex flex-col items-center justify-center">
                     <div className="text-red-500 font-bold mb-4">{error || "Group not found"}</div>
                     <button onClick={() => router.push(`/scholar/courses/${courseId}`)} className="text-blue-600 hover:underline">Return to Course</button>
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
@@ -255,7 +298,7 @@ export default function GroupPage() {
     const canCreateTasks = isLeader || isAdmin;
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="h-full bg-slate-50 flex flex-col min-h-screen">
                 <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
                     
@@ -349,9 +392,9 @@ export default function GroupPage() {
                                         Consultation History
                                     </button>
                                 </div>
-                                {activeTab === 'tasks' && canCreateTasks && (
-                                    <button 
-                                        onClick={() => setShowTaskModal(true)}
+                                {activeTab === 'tasks' && canCreateTasks && projectId && (
+                                    <button
+                                        onClick={() => { setShowAddTaskRow(true); setAddTaskError(null); }}
                                         className="bg-white text-[#0095FF] px-4 py-1.5 rounded text-sm font-bold shadow hover:bg-gray-50 transition-colors my-2"
                                     >
                                         + Add Task
@@ -367,35 +410,124 @@ export default function GroupPage() {
 
                             <div className="p-6 flex-1 overflow-y-auto w-full max-h-[600px]">
                                 {activeTab === 'tasks' && (
-                                    tasks.length > 0 ? (
-                                        <div className="grid gap-4">
-                                            {tasks.map(task => (
-                                                <div key={task.taskID} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow relative overflow-hidden group">
-                                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#0095FF]"></div>
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h3 className="font-bold text-lg text-gray-800 break-words max-w-[70%]">{task.taskTitle}</h3>
-                                                        <div className="text-xs font-semibold px-2 py-1 bg-red-50 text-red-600 rounded whitespace-nowrap">
-                                                            Due: {task.taskDeadline || 'No date'}
-                                                        </div>
-                                                    </div>
-                                                    {task.taskInfo && (
-                                                        <p className="text-gray-600 text-sm mb-4 line-clamp-3">{task.taskInfo}</p>
-                                                    )}
-                                                    <div className="flex items-center gap-2 mt-auto">
-                                                        <span className="text-xs font-medium text-gray-500">Assigned to:</span>
-                                                        <span className="text-xs font-bold text-[#0095FF] bg-blue-50 px-2 py-1 rounded-full">{task.taskAssign}</span>
+                                    <div className="flex flex-col gap-3">
+                                        {/* No project linked */}
+                                        {!projectId && (
+                                            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <p className="font-medium text-sm">No project linked to this group yet.</p>
+                                                <p className="text-xs text-center max-w-xs">An admin or adviser can set up a project from the course Groups page.</p>
+                                            </div>
+                                        )}
+
+                                        {/* Inline add task row */}
+                                        {showAddTaskRow && projectId && (
+                                            <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 flex flex-col gap-3">
+                                                <input
+                                                    autoFocus
+                                                    value={newTaskTitle}
+                                                    onChange={e => setNewTaskTitle(e.target.value)}
+                                                    placeholder="Task title..."
+                                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                                                    onKeyDown={e => { if (e.key === 'Enter') handleAddTask(); if (e.key === 'Escape') setShowAddTaskRow(false); }}
+                                                />
+                                                <div className="flex items-center gap-3 flex-wrap">
+                                                    <select
+                                                        value={newTaskPriority}
+                                                        onChange={e => setNewTaskPriority(e.target.value as any)}
+                                                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                                                    >
+                                                        <option value="low">Low</option>
+                                                        <option value="medium">Medium</option>
+                                                        <option value="high">High</option>
+                                                    </select>
+                                                    <input
+                                                        type="date"
+                                                        value={newTaskDueDate}
+                                                        onChange={e => setNewTaskDueDate(e.target.value)}
+                                                        className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                                                    />
+                                                    <div className="flex gap-2 ml-auto">
+                                                        <button onClick={() => setShowAddTaskRow(false)} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">Cancel</button>
+                                                        <button onClick={handleAddTask} disabled={creatingTask} className="px-4 py-1.5 text-xs font-bold bg-[#0095FF] text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                                                            {creatingTask ? 'Adding…' : 'Add'}
+                                                        </button>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div className="h-full flex flex-col items-center justify-center text-gray-400 py-12">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                            <p>No tasks created yet.</p>
-                                        </div>
-                                    )
+                                                {addTaskError && <p className="text-xs text-red-600 font-semibold">{addTaskError}</p>}
+                                            </div>
+                                        )}
+
+                                        {/* Task list */}
+                                        {projectId && tasks.length === 0 && !showAddTaskRow && (
+                                            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                </svg>
+                                                <p className="font-medium text-sm">No tasks yet.</p>
+                                            </div>
+                                        )}
+
+                                        {projectId && tasks.map(task => (
+                                            <div key={task.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white relative overflow-hidden">
+                                                <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-lg ${
+                                                    task.status === 'completed' || task.status === 'done' ? 'bg-green-400' :
+                                                    task.status === 'in_progress' ? 'bg-blue-400' :
+                                                    task.status === 'review'      ? 'bg-purple-400' :
+                                                    'bg-gray-300'
+                                                }`} />
+                                                <div className="flex items-start justify-between gap-3 mb-2 pl-2">
+                                                    <h3 className="font-bold text-gray-800 text-sm leading-tight flex-1">{task.title}</h3>
+                                                    {/* Inline status select */}
+                                                    <select
+                                                        value={task.status}
+                                                        disabled={updatingTaskId === task.id}
+                                                        onChange={e => handleStatusChange(task.id, e.target.value)}
+                                                        className={`text-[11px] font-bold border rounded-full px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-100 ${
+                                                            task.status === 'completed' || task.status === 'done' ? 'bg-green-50  text-green-700  border-green-200'  :
+                                                            task.status === 'in_progress' ? 'bg-blue-50   text-blue-700   border-blue-200'   :
+                                                            task.status === 'review'     ? 'bg-purple-50 text-purple-700 border-purple-200' :
+                                                            'bg-gray-50 text-gray-500 border-gray-200'
+                                                        }`}
+                                                    >
+                                                        <option value="todo">Todo</option>
+                                                        <option value="in_progress">In Progress</option>
+                                                        <option value="review">Review</option>
+                                                        <option value="completed">Done</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex items-center gap-3 flex-wrap pl-2">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                                        task.priority === 'high'     ? 'bg-red-50    text-red-600'   :
+                                                        task.priority === 'critical' ? 'bg-red-100   text-red-700'   :
+                                                        task.priority === 'medium'   ? 'bg-amber-50  text-amber-600' :
+                                                        'bg-gray-50 text-gray-500'
+                                                    }`}>{task.priority}</span>
+                                                    {task.due_date && (
+                                                        <span className="text-[11px] text-gray-400 font-medium">{formatDateLabel(task.due_date)}</span>
+                                                    )}
+                                                    {task.assignee_name && (
+                                                        <span className="text-[11px] font-bold text-[#0095FF] bg-blue-50 px-2 py-0.5 rounded-full">{task.assignee_name}</span>
+                                                    )}
+                                                    {task.comment_count > 0 && (
+                                                        <span className="text-[11px] text-gray-400">{task.comment_count} comment{task.comment_count !== 1 ? 's' : ''}</span>
+                                                    )}
+                                                    <a
+                                                        href={`/tasks?project_id=${task.project_id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        onClick={e => e.stopPropagation()}
+                                                        className="ml-auto text-[10px] font-black uppercase tracking-wider text-indigo-500 hover:text-indigo-700 flex items-center gap-1"
+                                                        title="Open in SkyFlow"
+                                                    >
+                                                        Open <ExternalLink className="w-3 h-3" />
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
                                 )}
 
                                 {activeTab === 'journals' && (
@@ -610,82 +742,6 @@ export default function GroupPage() {
 
                     </div>
 
-                    {/* Task Creation Modal */}
-                    {showTaskModal && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm fixed">
-                            <div className="bg-white w-full max-w-md rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                <div className="bg-[#0095FF] px-6 py-4 flex justify-between items-center">
-                                    <h2 className="text-lg font-bold text-white">Create New Task</h2>
-                                    <button onClick={() => setShowTaskModal(false)} className="text-white/80 hover:text-white transition-colors text-xl leading-none">&times;</button>
-                                </div>
-                                <div className="p-6 flex flex-col gap-4">
-                                    
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Task Title <span className="text-red-500">*</span></label>
-                                        <input 
-                                            type="text" 
-                                            value={taskTitle} 
-                                            onChange={e => setTaskTitle(e.target.value)} 
-                                            placeholder="e.g., Database Schema Design"
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-[#0095FF] focus:ring-1 focus:ring-[#0095FF]"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Assign To <span className="text-red-500">*</span></label>
-                                        <select 
-                                            value={taskAssign}
-                                            onChange={e => setTaskAssign(e.target.value)}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-[#0095FF] focus:ring-1 focus:ring-[#0095FF]"
-                                        >
-                                            <option value="">Select a member...</option>
-                                            {membersList.map((m, i) => (
-                                                <option key={i} value={m.email!}>{m.email}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Deadline Date <span className="text-red-500">*</span></label>
-                                        <input 
-                                            type="date" 
-                                            value={taskDeadline} 
-                                            onChange={e => setTaskDeadline(e.target.value)} 
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-[#0095FF] focus:ring-1 focus:ring-[#0095FF]"
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-sm font-semibold text-gray-700 mb-1">Task Description</label>
-                                        <textarea 
-                                            value={taskInfo} 
-                                            onChange={e => setTaskInfo(e.target.value)} 
-                                            placeholder="Provide details about the task..."
-                                            rows={3}
-                                            className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-black focus:outline-none focus:border-[#0095FF] focus:ring-1 focus:ring-[#0095FF] resize-none"
-                                        />
-                                    </div>
-
-                                    <div className="mt-4 flex justify-end gap-3 pt-4 border-t border-gray-100">
-                                        <button 
-                                            onClick={() => setShowTaskModal(false)}
-                                            className="px-4 py-2 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
-                                        >
-                                            Cancel
-                                        </button>
-                                        <button 
-                                            onClick={handleCreateTask}
-                                            disabled={creatingTask}
-                                            className="bg-[#0095FF] text-white px-6 py-2 rounded text-sm font-bold shadow hover:bg-blue-600 transition-colors disabled:opacity-50"
-                                        >
-                                            {creatingTask ? 'Saving...' : 'Create Task'}
-                                        </button>
-                                    </div>
-
-                                </div>
-                            </div>
-                        </div>
-                    )}
                     {/* Journal Details Modal */}
                     {selectedJournal && (
                         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm fixed p-4">
@@ -832,6 +888,6 @@ export default function GroupPage() {
                 {canUseAI && showAIModal && <AIResultModal onClose={() => setShowAIModal(false)} />}
                 </main>
             </div>
-        </SidebarLayout>
+        </AppLayout>
     );
 }

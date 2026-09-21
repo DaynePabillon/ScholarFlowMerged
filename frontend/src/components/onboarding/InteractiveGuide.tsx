@@ -27,9 +27,9 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     image: "/mascot-happy.png"
   },
   // Academic Dashboard - shown to all, message varies by role
-  '/scholar/dashboard': {
-    title: "Welcome to the Academic Dashboard!",
-    text: "This is your Academic Dashboard! Here you can see insights about your courses, track consultation logs, and get personalized recommendations for your academic journey.",
+  '/dashboard': {
+    title: "Welcome to your Dashboard!",
+    text: "This is your unified Dashboard! Here you can see your project progress, team overview, and — if you have an academic profile — your courses, consultation logs, and role-specific insights all in one place.",
     image: "/mascot-happy.png"
   },
   // Courses - shown to all, same URL /scholar/courses
@@ -64,12 +64,6 @@ const PAGE_GUIDES: Record<string, GuideStep> = {
     text: "This is the Course Sync page for administrators! Here you can connect Google Workspace resources, manage shared drives, and configure automatic synchronization of documents and calendars across the academic portal.",
     image: "/mascot-thinking.png",
     roles: ['admin']
-  },
-  // PM Side - Dashboard
-  '/dashboard': {
-    title: "Welcome to Project Management!",
-    text: "Welcome to the Project Management workspace! This is where you manage your capstone or research projects. You can track tasks, collaborate with team members, and monitor project progress using our Kanban boards and AI-powered insights.",
-    image: "/mascot-happy.png"
   },
   // Boards
   '/boards': {

@@ -5,6 +5,7 @@ import logger from '../config/logger';
 import crypto from 'crypto';
 import { sendInvitationEmail } from '../services/email.service';
 import { WorkspaceSyncService } from '../services/workspace.service';
+import { syncScholarSyncAdminRole } from '../services/ssAccountSync.service';
 
 const router = Router();
 
@@ -36,6 +37,10 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
        VALUES ($1, $2, $3, $4, NOW())`,
       [organization.id, userId, 'admin', 'active']
     );
+
+    // The org creator is an Admin — immediately grant them ScholarSync Admin too
+    const creator = await query('SELECT name, email FROM users WHERE id = $1', [userId]);
+    await syncScholarSyncAdminRole(creator.rows[0]?.email, creator.rows[0]?.name, userId);
 
     logger.info(`Organization created: ${organization.id} by user ${userId}`);
     res.status(201).json(organization);
@@ -181,7 +186,7 @@ router.post('/:id/invite', authenticateToken, async (req: AuthRequest, res: Resp
       return res.status(400).json({ error: 'Email and role are required' });
     }
 
-    if (!['admin', 'manager', 'member'].includes(role)) {
+    if (!['admin', 'manager', 'member', 'adviser'].includes(role)) {
       return res.status(400).json({ error: 'Invalid role' });
     }
 
@@ -265,9 +270,20 @@ router.get('/:id/members', authenticateToken, async (req: AuthRequest, res: Resp
     }
 
     // Get real members (users with accounts)
+    // LEFT JOIN ss_account (via the user_id bridge from migration 038, falling back
+    // to a case-insensitive email match) so each member's ScholarSync academic role
+    // (Student / Adviser / Admin / External Leader) is unified alongside their
+    // SkyFlow organization role — e.g. a member can be shown as "Member & Student".
     const realMembers = await query(
-      `SELECT u.id, u.name, u.email, u.profile_picture, 
-              om.role, om.status, om.joined_at
+      `SELECT u.id, u.name, u.email, u.profile_picture,
+              om.role, om.status, om.joined_at,
+              (
+                SELECT sa."accountRole" FROM ss_account sa
+                WHERE sa.user_id = u.id
+                   OR LOWER(TRIM(sa."accountEmail")) = LOWER(TRIM(u.email))
+                ORDER BY (sa.user_id = u.id) DESC
+                LIMIT 1
+              ) as academic_role
        FROM organization_members om
        INNER JOIN users u ON om.user_id = u.id
        WHERE om.organization_id = $1
@@ -378,12 +394,12 @@ router.get('/:id/projects', authenticateToken, async (req: AuthRequest, res: Res
 router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { team_id } = req.query;
+    const { team_id, status, exclude_status, project_id, limit, offset } = req.query;
     const userId = req.user!.id;
 
-    // Check if user is member
+    // Check if user is member and capture their org role for visibility scoping
     const memberCheck = await query(
-      'SELECT 1 FROM organization_members WHERE organization_id = $1 AND user_id = $2 AND status = $3',
+      'SELECT role FROM organization_members WHERE organization_id = $1 AND user_id = $2 AND status = $3',
       [id, userId, 'active']
     );
 
@@ -391,26 +407,117 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Build team filter condition
+    const orgRole = memberCheck.rows[0].role as string;
+    // Email is needed to match sheet-task assignees and team-membership rows that
+    // key off email (campus vs. Google address) — mirrors the team-groups scoping.
+    const emailRow = await query('SELECT email FROM users WHERE id = $1', [userId]);
+    const userEmail: string | null = emailRow.rows[0]?.email || null;
+
+    // Build filter conditions, applied identically to both UNION branches
     let teamFilter = '';
     let teamFilterSheet = '';
+    let statusFilter = '';
+    let statusFilterSheet = '';
+    let excludeStatusFilter = '';
+    let excludeStatusFilterSheet = '';
+    let projectFilter = '';
+    let projectFilterSheet = '';
     let queryParams: any[] = [id];
-    
+
     if (team_id && team_id !== 'all') {
       // Strict team filter: only show tasks belonging to the selected team.
       // Null-team tasks are only visible when "All Teams" is selected.
-      teamFilter = `AND t.team_id = $2`;
-      teamFilterSheet = `AND COALESCE(st.team_id, ss.team_id) = $2`;
       queryParams.push(team_id);
+      const idx = queryParams.length;
+      teamFilter = `AND t.team_id = $${idx}`;
+      teamFilterSheet = `AND COALESCE(st.team_id, ss.team_id) = $${idx}`;
+    }
+
+    if (status) {
+      const statusList = String(status).split(',').map(s => s.trim()).filter(Boolean);
+      if (statusList.length > 0) {
+        queryParams.push(statusList);
+        const idx = queryParams.length;
+        statusFilter = `AND t.status = ANY($${idx})`;
+        statusFilterSheet = `AND st.status = ANY($${idx})`;
+      }
+    }
+
+    if (exclude_status) {
+      const excludeList = String(exclude_status).split(',').map(s => s.trim()).filter(Boolean);
+      if (excludeList.length > 0) {
+        queryParams.push(excludeList);
+        const idx = queryParams.length;
+        excludeStatusFilter = `AND t.status != ALL($${idx})`;
+        excludeStatusFilterSheet = `AND st.status != ALL($${idx})`;
+      }
+    }
+
+    if (project_id) {
+      queryParams.push(project_id);
+      const idx = queryParams.length;
+      projectFilter = `AND t.project_id = $${idx}`;
+      projectFilterSheet = `AND st.project_id = $${idx}`;
+    }
+
+    // ── Role-based visibility (Rev 1 members / Rev 6 team leaders) ──────────────
+    // admin & adviser oversee the whole org (no extra filter). A manager (team
+    // leader) is scoped to the team(s)/project(s) they belong to or lead; a member
+    // sees only tasks assigned to them.
+    let visibilityFilter = '';
+    let visibilityFilterSheet = '';
+    if (orgRole === 'member' || orgRole === 'manager') {
+      queryParams.push(userId);
+      const meIdx = queryParams.length;
+      queryParams.push(userEmail);
+      const emailIdx = queryParams.length;
+
+      // Teams the user belongs to / leads (matched by user_id OR email).
+      const myTeams = `SELECT team_group_id FROM team_group_members
+                       WHERE user_id = $${meIdx}
+                          OR ($${emailIdx}::text IS NOT NULL AND LOWER(email) = LOWER($${emailIdx}))`;
+
+      if (orgRole === 'member') {
+        visibilityFilter = `AND (t.assigned_to = $${meIdx}
+           OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${meIdx}))`;
+        visibilityFilterSheet = `AND ($${emailIdx}::text IS NOT NULL AND LOWER(st.assignee_email) = LOWER($${emailIdx}))`;
+      } else {
+        // Projects the manager is tied to: created, a member of, or linked to their teams.
+        const myProjects = `SELECT id FROM projects WHERE created_by = $${meIdx}
+           UNION SELECT project_id FROM project_members WHERE user_id = $${meIdx}
+           UNION SELECT project_id FROM team_groups WHERE project_id IS NOT NULL AND id IN (${myTeams})`;
+        visibilityFilter = `AND (t.created_by = $${meIdx}
+           OR t.assigned_to = $${meIdx}
+           OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${meIdx})
+           OR t.team_id IN (${myTeams})
+           OR t.project_id IN (${myProjects}))`;
+        visibilityFilterSheet = `AND (($${emailIdx}::text IS NOT NULL AND LOWER(st.assignee_email) = LOWER($${emailIdx}))
+           OR COALESCE(st.team_id, ss.team_id) IN (${myTeams})
+           OR st.project_id IN (${myProjects}))`;
+      }
+    }
+
+    let limitClause = '';
+    const parsedLimit = limit ? parseInt(String(limit), 10) : NaN;
+    const parsedOffset = offset ? parseInt(String(offset), 10) : NaN;
+    if (!isNaN(parsedLimit) && parsedLimit > 0) {
+      queryParams.push(parsedLimit);
+      limitClause += ` LIMIT $${queryParams.length}`;
+      if (!isNaN(parsedOffset) && parsedOffset >= 0) {
+        queryParams.push(parsedOffset);
+        limitClause += ` OFFSET $${queryParams.length}`;
+      }
     }
 
     // Query includes both regular tasks AND synced sheet_tasks
     const result = await query(
-      `SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.priority,
+      `SELECT * FROM (
+       SELECT t.id, t.project_id, t.team_id, t.title, t.description, t.status, t.priority,
               t.due_date, t.estimated_hours, t.actual_hours, t.assigned_to, t.created_by,
               t.created_at, t.updated_at, t.is_absolute, t.complexity_weight, t.wbs_code, t.parent_task_id,
               t.progress_percent, t.luxury_weight,
               p.name as project_name,
+              tg.name as team_name,
               u1.name as assigned_to_name,
               u1.email as assigned_to_email,
               u2.name as created_by_name,
@@ -420,10 +527,11 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
               (SELECT COUNT(*) FROM task_comments WHERE task_id = t.id)::integer as comment_count
        FROM tasks t
        LEFT JOIN projects p ON t.project_id = p.id
+       LEFT JOIN team_groups tg ON t.team_id = tg.id
        LEFT JOIN users u1 ON t.assigned_to = u1.id
        LEFT JOIN users u2 ON t.created_by = u2.id
-       WHERE p.organization_id = $1 ${teamFilter}
-       
+       WHERE p.organization_id = $1 ${teamFilter} ${statusFilter} ${excludeStatusFilter} ${projectFilter} ${visibilityFilter}
+
        UNION ALL
        
        SELECT 
@@ -448,6 +556,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
          st.progress_percent,
          st.luxury_weight,
          COALESCE(p.name, NULL) as project_name,
+         NULL as team_name,
          st.assignee_email as assigned_to_name,
          st.assignee_email as assigned_to_email,
          'Google Sheets' as created_by_name,
@@ -459,11 +568,32 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
        JOIN synced_sheets ss ON st.synced_sheet_id = ss.id
        JOIN workspaces w ON ss.workspace_id = w.id
        LEFT JOIN projects p ON st.project_id = p.id
-       WHERE w.organization_id = $1 ${teamFilterSheet}
-       
-       ORDER BY created_at DESC`,
+       WHERE w.organization_id = $1 ${teamFilterSheet} ${statusFilterSheet} ${excludeStatusFilterSheet} ${projectFilterSheet} ${visibilityFilterSheet}
+       ) combined
+       ORDER BY created_at DESC
+       ${limitClause}`,
       queryParams
     );
+
+    // Attach assignees from junction table to each app task
+    const taskIds = result.rows.filter(t => t.source_type === 'app').map((t: any) => t.id);
+    if (taskIds.length > 0) {
+      const assigneesResult = await query(
+        `SELECT ta.task_id, ta.user_id, u.name, u.email, u.profile_picture
+         FROM task_assignees ta
+         JOIN users u ON ta.user_id = u.id
+         WHERE ta.task_id = ANY($1)`,
+        [taskIds]
+      );
+      const byTask: Record<string, any[]> = {};
+      for (const a of assigneesResult.rows) {
+        if (!byTask[a.task_id]) byTask[a.task_id] = [];
+        byTask[a.task_id].push({ user_id: a.user_id, name: a.name, email: a.email, profile_picture: a.profile_picture });
+      }
+      for (const task of result.rows) {
+        task.assignees = byTask[task.id] || [];
+      }
+    }
 
     logger.debug(`Found ${result.rows.length} tasks for organization: ${id}`);
     res.json({ tasks: result.rows });
@@ -525,15 +655,20 @@ router.get('/:id/synced-sheets', authenticateToken, async (req: AuthRequest, res
 router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { 
-      title, description, status, priority, due_date, 
-      assigned_to, start_date, is_absolute, complexity_weight, 
-      wbs_code, parent_task_id, team_id 
+    const {
+      title, description, status, priority, due_date,
+      assigned_to, start_date, is_absolute, complexity_weight,
+      wbs_code, parent_task_id, team_id, project_id
     } = req.body;
     const userId = req.user!.id;
 
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
+    }
+
+    // Project is required — a task must belong to a specific project.
+    if (!project_id) {
+      return res.status(400).json({ error: 'Project is required' });
     }
 
     // Check if user is member
@@ -546,24 +681,39 @@ router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respo
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get or create default project for organization
-    let projectResult = await query(
-      'SELECT id FROM projects WHERE organization_id = $1 AND name = $2',
-      [id, 'General Tasks']
-    );
+    const orgRole = memberCheck.rows[0].role as string;
 
-    let projectId;
-    if (projectResult.rows.length === 0) {
-      // Create default project
-      const newProject = await query(
-        `INSERT INTO projects (organization_id, name, description, status, created_by)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [id, 'General Tasks', 'Default project for organization tasks', 'active', userId]
-      );
-      projectId = newProject.rows[0].id;
-    } else {
-      projectId = projectResult.rows[0].id;
+    // The chosen project must exist in this organization.
+    const projectCheck = await query(
+      'SELECT id FROM projects WHERE id = $1 AND organization_id = $2',
+      [project_id, id]
+    );
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found in this organization' });
     }
+
+    // A manager (team leader) may only assign tasks to projects they are under:
+    // ones they created, are a member of, or that are linked to a team they're in.
+    if (orgRole === 'manager') {
+      const scopedCheck = await query(
+        `SELECT 1 FROM projects p WHERE p.id = $1 AND (
+           p.created_by = $2
+           OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = $2)
+           OR EXISTS (
+             SELECT 1 FROM team_groups tg
+             JOIN team_group_members tgm ON tgm.team_group_id = tg.id
+             WHERE tg.project_id = p.id
+               AND (tgm.user_id = $2 OR LOWER(tgm.email) = LOWER((SELECT email FROM users WHERE id = $2)))
+           )
+         )`,
+        [project_id, userId]
+      );
+      if (scopedCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'You can only assign tasks to projects you are part of.' });
+      }
+    }
+
+    const projectId = project_id;
 
     // Resolve parent: it may live in `tasks` OR `sheet_tasks` (WBS).
     // tasks.parent_task_id has FK → tasks(id), so if parent is a sheet_task
@@ -624,7 +774,7 @@ router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respo
       RETURNING *`,
       [
         projectId, team_id || null, title, description, status || 'todo', priority || 'medium',
-        due_date, start_date, assigned_to, userId,
+        due_date || null, start_date || null, assigned_to || null, userId,
         is_absolute || false, complexity_weight || 1, finalWbsCode, effectiveParentTaskId
       ]
     );
@@ -821,8 +971,8 @@ router.patch('/:orgId/members/:memberId/role', authenticateToken, async (req: Au
     const { role } = req.body;
     const userId = req.user!.id;
 
-    if (!['admin', 'manager', 'member'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role. Must be admin, manager, or member' });
+    if (!['admin', 'manager', 'member', 'adviser'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be admin, manager, member, or adviser' });
     }
 
     // Check if current user is admin
@@ -856,11 +1006,107 @@ router.patch('/:orgId/members/:memberId/role', authenticateToken, async (req: Au
       return res.status(404).json({ error: 'Member not found' });
     }
 
+    // If the new role is 'adviser', sync to ss_account so ScholarSync recognises them
+    if (role === 'adviser') {
+      try {
+        const memberUser = await query('SELECT name, email FROM users WHERE id = $1', [memberId]);
+        const mu = memberUser.rows[0];
+        if (mu?.email) {
+          await query(
+            `INSERT INTO ss_account ("accountName", "accountEmail", "accountRole")
+             VALUES ($1, $2, 'Adviser')
+             ON CONFLICT ("accountEmail") DO UPDATE SET "accountRole" = 'Adviser'`,
+            [mu.name || '', mu.email]
+          );
+        }
+      } catch (ssErr) {
+        logger.warn('Could not upsert ss_account for adviser role change (table may not exist):', ssErr);
+      }
+    } else if (role === 'admin') {
+      // Becoming an Admin in the project-management side immediately grants
+      // ScholarSync (consultation) Admin status too — see ssAccountSync.service.ts
+      const memberUser = await query('SELECT name, email FROM users WHERE id = $1', [memberId]);
+      const mu = memberUser.rows[0];
+      await syncScholarSyncAdminRole(mu?.email, mu?.name, memberId);
+    }
+
     logger.info(`Role updated: user ${memberId} is now ${role} in org ${orgId}`);
     res.json({ success: true, role });
   } catch (error) {
     logger.error('Error updating member role:', error);
     res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+/**
+ * PATCH /api/organizations/:orgId/members/:memberId/academic-role
+ * Set a member's ScholarSync academic role (Student / Adviser / Admin / External Leader)
+ * directly from the org's Team → Role Management UI.
+ *
+ * This is intentionally a SEPARATE dimension from organization_members.role — per
+ * migration 053 ("unify roles, remove overwrite trigger"), the org role and the
+ * academic role are two independent systems that coexist for the same person and
+ * must NOT cascade/overwrite one another (e.g. an org "manager" who is also an
+ * academic "Student" should stay an org manager). This endpoint only ever touches
+ * ss_account.accountRole — it never writes to organization_members.
+ *
+ * Auth: gated the SAME way as the org-role route above (caller must be an org admin),
+ * NOT by verifyAdmin (which checks academic-admin status and would incorrectly 403
+ * an org-admin who isn't also an academic Admin).
+ */
+router.patch('/:orgId/members/:memberId/academic-role', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { orgId, memberId } = req.params;
+    const { academic_role } = req.body;
+    const userId = req.user!.id;
+
+    const VALID_ACADEMIC_ROLES = ['Student', 'Adviser', 'Admin', 'External Leader'];
+    if (!VALID_ACADEMIC_ROLES.includes(academic_role)) {
+      return res.status(400).json({ error: 'Invalid academic role. Must be Student, Adviser, Admin, or External Leader' });
+    }
+
+    // Check if current user is an org admin (same pattern as the org-role route)
+    const adminCheck = await query(
+      `SELECT role FROM organization_members WHERE organization_id = $1 AND user_id = $2 AND status = 'active'`,
+      [orgId, userId]
+    );
+
+    if (adminCheck.rows.length === 0 || adminCheck.rows[0].role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can change academic roles' });
+    }
+
+    // Confirm the target is actually a member of this org
+    const memberCheck = await query(
+      `SELECT u.id, u.name, u.email FROM organization_members om
+       INNER JOIN users u ON om.user_id = u.id
+       WHERE om.organization_id = $1 AND om.user_id = $2`,
+      [orgId, memberId]
+    );
+
+    if (memberCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    const member = memberCheck.rows[0];
+    if (!member.email) {
+      return res.status(400).json({ error: 'Member has no email on file — cannot link an academic account' });
+    }
+
+    // Upsert into ss_account — same pattern used for the adviser-role cascade above.
+    // This links/creates the academic account by email and sets its role, independent
+    // of (and without touching) the member's organization_members.role.
+    await query(
+      `INSERT INTO ss_account ("accountName", "accountEmail", "accountRole", user_id)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT ("accountEmail") DO UPDATE SET "accountRole" = $3, user_id = COALESCE(ss_account.user_id, $4)`,
+      [member.name || '', member.email, academic_role, memberId]
+    );
+
+    logger.info(`Academic role updated: user ${memberId} (${member.email}) is now academic "${academic_role}" — set by org admin ${userId} in org ${orgId}`);
+    res.json({ success: true, academic_role });
+  } catch (error) {
+    logger.error('Error updating member academic role:', error);
+    res.status(500).json({ error: 'Failed to update academic role' });
   }
 });
 

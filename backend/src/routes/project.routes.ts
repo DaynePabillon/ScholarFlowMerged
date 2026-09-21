@@ -72,16 +72,29 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
     const { organization_id, status } = req.query;
 
     let queryText = `
-      SELECT DISTINCT p.*, 
+      SELECT DISTINCT p.*,
+             (p.end_date < NOW() AND p.status NOT IN ('completed', 'archived')) AS is_overdue,
              o.name as organization_name,
              u.name as created_by_name,
-             pm.role as user_role
+             pm.role as user_role,
+             (SELECT COUNT(*) FROM tasks WHERE project_id = p.id) as task_count
       FROM projects p
       INNER JOIN organizations o ON p.organization_id = o.id
       INNER JOIN organization_members om ON o.id = om.organization_id
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
       WHERE om.user_id = $1 AND om.status = 'active'
+        AND (
+          om.role IN ('admin', 'adviser')
+          OR p.created_by = $1
+          OR EXISTS (SELECT 1 FROM project_members pm2 WHERE pm2.project_id = p.id AND pm2.user_id = $1)
+          OR EXISTS (
+            SELECT 1 FROM team_groups tg
+            JOIN team_group_members tgm ON tgm.team_group_id = tg.id
+            WHERE tg.project_id = p.id
+              AND (tgm.user_id = $1 OR LOWER(tgm.email) = LOWER((SELECT email FROM users WHERE id = $1)))
+          )
+        )
     `;
 
     const params: any[] = [userId];
@@ -129,7 +142,8 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 
     // Get project details
     const projectResult = await query(
-      `SELECT p.*, o.name as organization_name, u.name as created_by_name
+      `SELECT p.*, (p.end_date < NOW() AND p.status NOT IN ('completed', 'archived')) AS is_overdue,
+              o.name as organization_name, u.name as created_by_name
        FROM projects p
        INNER JOIN organizations o ON p.organization_id = o.id
        LEFT JOIN users u ON p.created_by = u.id
@@ -181,7 +195,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
 
     // Check if user is project lead or org admin/manager
     const roleCheck = await query(
-      `SELECT pm.role as project_role, om.role as org_role
+      `SELECT pm.role as project_role, om.role as org_role, p.status as current_status
        FROM projects p
        INNER JOIN organization_members om ON p.organization_id = om.organization_id
        LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $2
@@ -193,7 +207,7 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const { project_role, org_role } = roleCheck.rows[0];
+    const { project_role, org_role, current_status } = roleCheck.rows[0];
     if (project_role !== 'lead' && !['admin', 'manager'].includes(org_role)) {
       return res.status(403).json({ error: 'Permission denied' });
     }
@@ -212,7 +226,24 @@ router.put('/:id', authenticateToken, async (req: AuthRequest, res: Response) =>
       [name, description, status, priority, start_date, end_date, budget, id]
     );
 
-    res.json(result.rows[0]);
+    const updatedProject = result.rows[0];
+    let cascaded_task_count = 0;
+
+    const isNewlyCompletedOrArchived =
+      status && (status === 'completed' || status === 'archived') && status !== current_status;
+
+    if (isNewlyCompletedOrArchived) {
+      const cascadeResult = await query(
+        `UPDATE tasks
+         SET status = 'archived', updated_at = NOW()
+         WHERE project_id = $1 AND status NOT IN ('done', 'completed', 'archived')
+         RETURNING id`,
+        [id]
+      );
+      cascaded_task_count = cascadeResult.rowCount ?? cascadeResult.rows.length;
+    }
+
+    res.json({ ...updatedProject, cascaded_task_count });
   } catch (error) {
     logger.error('Error updating project:', error);
     res.status(500).json({ error: 'Failed to update project' });
@@ -337,6 +368,54 @@ router.post('/:id/members', authenticateToken, async (req: AuthRequest, res: Res
 });
 
 /**
+ * PATCH /api/projects/:id/members/:memberId/role
+ * Update a project member's role
+ */
+router.patch('/:id/members/:memberId/role', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id, memberId } = req.params;
+    const { role } = req.body;
+    const currentUserId = req.user!.id;
+
+    if (!['lead', 'member', 'viewer'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be lead, member, or viewer' });
+    }
+
+    const roleCheck = await query(
+      `SELECT pm.role as project_role, om.role as org_role
+       FROM projects p
+       INNER JOIN organization_members om ON p.organization_id = om.organization_id
+       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $2
+       WHERE p.id = $1 AND om.user_id = $2 AND om.status = $3`,
+      [id, currentUserId, 'active']
+    );
+
+    if (roleCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const { project_role, org_role } = roleCheck.rows[0];
+    if (project_role !== 'lead' && !['admin', 'manager'].includes(org_role)) {
+      return res.status(403).json({ error: 'Permission denied' });
+    }
+
+    const result = await query(
+      `UPDATE project_members SET role = $1 WHERE project_id = $2 AND user_id = $3 RETURNING *`,
+      [role, id, memberId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found in this project' });
+    }
+
+    res.json({ success: true, role });
+  } catch (error) {
+    logger.error('Error updating project member role:', error);
+    res.status(500).json({ error: 'Failed to update project member role' });
+  }
+});
+
+/**
  * DELETE /api/projects/:id/members/:userId
  * Remove member from project
  */
@@ -412,6 +491,44 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
   } catch (error) {
     logger.error('Error fetching project tasks:', error);
     res.status(500).json({ error: 'Failed to fetch project tasks' });
+  }
+});
+
+/**
+ * GET /api/projects/:id/teams
+ * Get all teams assigned to a project
+ */
+router.get('/:id/teams', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user!.id;
+
+    // Check access
+    const accessCheck = await query(
+      `SELECT 1 FROM projects p
+       INNER JOIN organization_members om ON p.organization_id = om.organization_id
+       WHERE p.id = $1 AND om.user_id = $2 AND om.status = $3`,
+      [id, userId, 'active']
+    );
+
+    if (accessCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const result = await query(
+      `SELECT tg.id, tg.team_number, tg.name, tg.team_code, tg.status,
+              tg.adviser_name, tg.leader_name, tg.proposed_project,
+              (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count
+       FROM team_groups tg
+       WHERE tg.project_id = $1
+       ORDER BY tg.team_number ASC`,
+      [id]
+    );
+
+    res.json({ teams: result.rows });
+  } catch (error) {
+    logger.error('Error fetching project teams:', error);
+    res.status(500).json({ error: 'Failed to fetch project teams' });
   }
 });
 

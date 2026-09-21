@@ -7,7 +7,7 @@ import { Building2, Users, ArrowRight, Loader2 } from "lucide-react"
 interface Organization {
   id: string
   name: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
   memberCount?: number
   logo_url?: string
 }

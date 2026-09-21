@@ -2,7 +2,7 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-import { X, Users, Award, User, Send, Plus, Trash2, CheckCircle2, MessageSquare, BarChart3, ClipboardList, Mail } from "lucide-react"
+import { X, Award, Send, Plus, Trash2, MessageSquare, BarChart3, ClipboardList, Mail, Layers, Check } from "lucide-react"
 import TeamProgressCharts from "./TeamProgressCharts"
 
 interface TeamGroup {
@@ -16,6 +16,16 @@ interface TeamGroup {
     status: string
     organization_id: string
     proposed_project: string | null
+    project_id?: string | null
+    project_name?: string | null
+    project_status?: string | null
+}
+
+interface AvailableProject {
+    id: string
+    name: string
+    status: string
+    priority: string
 }
 
 interface TeamMember {
@@ -65,17 +75,75 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
     // Add member form
     const [showAddMember, setShowAddMember] = useState(false)
     const [newMember, setNewMember] = useState({ name: '', email: '', student_id: '', member_number: 1 })
+    const [addMemberError, setAddMemberError] = useState('')
 
     // Add checkpoint form
     const [showAddCheckpoint, setShowAddCheckpoint] = useState(false)
     const [newCheckpoint, setNewCheckpoint] = useState({ title: '', description: '', due_date: '', member_id: '' })
 
+    // Project assignment
+    const [availableProjects, setAvailableProjects] = useState<AvailableProject[]>([])
+    const [currentProjectId, setCurrentProjectId] = useState<string | null>(team.project_id ?? null)
+    const [currentProjectName, setCurrentProjectName] = useState<string | null>(team.project_name ?? null)
+    const [savingProject, setSavingProject] = useState(false)
+    const [projectSaveError, setProjectSaveError] = useState('')
+    const [projectsLoading, setProjectsLoading] = useState(false)
+
     useEffect(() => {
         fetchTeamDetail()
         fetchComments()
+        if (userRole === 'admin' || userRole === 'manager') {
+            fetchAvailableProjects()
+        }
     }, [team.id])
 
     const getToken = () => localStorage.getItem('token')
+
+    const fetchAvailableProjects = async () => {
+        if (!team.organization_id) return
+        setProjectsLoading(true)
+        try {
+            const res = await fetch(`${API_URL}/api/projects?organization_id=${team.organization_id}`, {
+                headers: { 'Authorization': `Bearer ${getToken()}` }
+            })
+            if (res.ok) {
+                const data = await res.json()
+                setAvailableProjects(Array.isArray(data) ? data : [])
+            } else {
+                console.error('fetchAvailableProjects failed:', res.status, await res.text())
+            }
+        } catch (e) {
+            console.error('Error fetching projects:', e)
+        } finally {
+            setProjectsLoading(false)
+        }
+    }
+
+    const handleAssignProject = async (projectId: string | null) => {
+        setSavingProject(true)
+        setProjectSaveError('')
+        try {
+            const res = await fetch(`${API_URL}/api/team-groups/${team.id}/assign-project`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
+                body: JSON.stringify({ project_id: projectId })
+            })
+            if (res.ok) {
+                const project = availableProjects.find(p => p.id === projectId)
+                setCurrentProjectId(projectId)
+                setCurrentProjectName(project?.name || null)
+                onTeamUpdated()
+            } else {
+                const errData = await res.json().catch(() => ({}))
+                setProjectSaveError(errData.error || `Save failed (${res.status})`)
+            }
+        } catch (e) {
+            console.error('Error assigning project:', e)
+            setProjectSaveError('Network error — please try again.')
+        } finally {
+            setSavingProject(false)
+        }
+    }
 
     const fetchTeamDetail = async () => {
         try {
@@ -127,20 +195,26 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
 
     const handleAddMember = async () => {
         if (!newMember.name) return
+        setAddMemberError('')
         try {
             const res = await fetch(`${API_URL}/api/team-groups/${team.id}/members`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` },
-                body: JSON.stringify(newMember)
+                body: JSON.stringify({ name: newMember.name, email: newMember.email, student_id: newMember.student_id, is_leader: false })
             })
             if (res.ok) {
                 setShowAddMember(false)
-                setNewMember({ name: '', email: '', student_id: '', member_number: members.length + 1 })
+                setNewMember({ name: '', email: '', student_id: '', member_number: 1 })
+                setAddMemberError('')
                 fetchTeamDetail()
                 onTeamUpdated()
+            } else {
+                const data = await res.json().catch(() => ({}))
+                setAddMemberError(data.error || 'Failed to add member. Please try again.')
             }
         } catch (e) {
             console.error('Error adding member:', e)
+            setAddMemberError('Network error — please try again.')
         }
     }
 
@@ -286,6 +360,100 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                             )}
                         </div>
 
+                        {/* Assigned Project */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-4">
+                                <div className="h-px flex-1 bg-gradient-to-r from-transparent to-gray-200 dark:to-white/5" />
+                                <span className="text-[10px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-[0.2em]">Project</span>
+                                <div className="h-px flex-1 bg-gradient-to-l from-transparent to-gray-200 dark:to-white/5" />
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                {(userRole === 'admin' || userRole === 'manager') ? (
+                                    projectsLoading ? (
+                                        <div className="flex items-center gap-3 p-4 bg-white dark:bg-slate-900/60 rounded-3xl border border-gray-200 dark:border-white/5 shadow-md">
+                                            <div className="p-3 bg-indigo-500/10 rounded-2xl flex-shrink-0">
+                                                <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                            </div>
+                                            <div className="text-[11px] text-indigo-400 font-bold uppercase tracking-widest animate-pulse">Loading projects…</div>
+                                        </div>
+                                    ) : availableProjects.length === 0 ? (
+                                        <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-500/10 rounded-3xl border border-amber-200 dark:border-amber-500/20">
+                                            <div className="p-3 bg-amber-500/10 rounded-2xl flex-shrink-0">
+                                                <Layers size={20} className="text-amber-500" />
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest mb-1">No Projects Found</div>
+                                                <div className="text-[11px] text-amber-700 dark:text-amber-300 font-bold leading-relaxed">
+                                                    Create a project on the{' '}
+                                                    <a href="/projects" target="_blank" className="underline hover:text-amber-900 dark:hover:text-amber-100">
+                                                        Projects page
+                                                    </a>{' '}
+                                                    first, then return here and click Refresh.
+                                                </div>
+                                                <button
+                                                    onClick={fetchAvailableProjects}
+                                                    className="mt-2 px-3 py-1.5 bg-amber-100 dark:bg-amber-500/20 hover:bg-amber-200 dark:hover:bg-amber-500/30 text-amber-800 dark:text-amber-200 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all"
+                                                >
+                                                    ↻ Refresh
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-2">
+                                            <div className="text-[9px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest px-1">Assign Project</div>
+                                            <div className="relative">
+                                                <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                                                    {savingProject
+                                                        ? <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                                        : <Layers size={16} className="text-indigo-500" />
+                                                    }
+                                                </div>
+                                                <select
+                                                    value={currentProjectId ?? ''}
+                                                    onChange={(e) => handleAssignProject(e.target.value || null)}
+                                                    disabled={savingProject}
+                                                    className="w-full pl-10 pr-4 py-3 bg-white dark:bg-slate-900 border-2 border-indigo-200 dark:border-indigo-500/30 rounded-2xl text-[12px] font-black uppercase tracking-tight text-gray-900 dark:text-white focus:outline-none focus:border-indigo-500 dark:focus:border-indigo-400 disabled:opacity-50 cursor-pointer transition-colors hover:border-indigo-400 dark:hover:border-indigo-400 dark:[color-scheme:dark]"
+                                                >
+                                                    <option value="">— No project assigned —</option>
+                                                    {availableProjects.map(p => (
+                                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    )
+                                ) : (
+                                    /* Read-only view for members */
+                                    <div className="flex items-center gap-3 p-4 bg-white dark:bg-slate-900/60 rounded-3xl border border-gray-200 dark:border-white/5 shadow-md">
+                                        <div className="p-3 bg-indigo-500/10 rounded-2xl flex-shrink-0">
+                                            <Layers size={20} className="text-indigo-500" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[9px] font-black text-gray-500 dark:text-slate-500 uppercase tracking-widest mb-1">Assigned Project</div>
+                                            <div className={`text-[13px] font-black uppercase tracking-tight truncate ${currentProjectName ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-slate-600 italic'}`}>
+                                                {currentProjectName || 'No project assigned'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Error feedback */}
+                                {projectSaveError && (
+                                    <div className="px-4 py-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl text-rose-600 dark:text-rose-400 text-[11px] font-bold">
+                                        ⚠ {projectSaveError}
+                                    </div>
+                                )}
+
+                                {/* Save confirmation */}
+                                {!projectSaveError && !savingProject && currentProjectName && availableProjects.length > 0 && (
+                                    <div className="flex items-center gap-1.5 text-[10px] text-emerald-500 font-black uppercase tracking-widest px-1">
+                                        <Check size={12} /> Assigned: {currentProjectName}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         {/* Members */}
                         <div className="space-y-6">
                             <div className="flex justify-between items-center">
@@ -304,6 +472,11 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                             {/* Add member form */}
                             {showAddMember && (
                                 <div className="flex flex-col gap-3 p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-[2rem] shadow-2xl animate-in slide-in-from-top-4 duration-300">
+                                    {addMemberError && (
+                                        <div className="px-4 py-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-2xl text-rose-600 dark:text-rose-400 text-[11px] font-bold">
+                                            {addMemberError}
+                                        </div>
+                                    )}
                                     <input
                                         placeholder="Full Name *"
                                         value={newMember.name}
@@ -316,9 +489,15 @@ export default function TeamDetailModal({ team, userRole, onClose, onTeamUpdated
                                         onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
                                         className="w-full px-5 py-3.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-white/5 rounded-2xl text-gray-900 dark:text-white text-xs font-bold outline-none focus:border-blue-500/40 transition-all"
                                     />
+                                    <input
+                                        placeholder="Student ID (optional)"
+                                        value={newMember.student_id}
+                                        onChange={(e) => setNewMember({ ...newMember, student_id: e.target.value })}
+                                        className="w-full px-5 py-3.5 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-white/5 rounded-2xl text-gray-900 dark:text-white text-xs font-bold outline-none focus:border-blue-500/40 transition-all"
+                                    />
                                     <div className="flex gap-2">
                                         <button onClick={handleAddMember} className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all">Confirm</button>
-                                        <button onClick={() => setShowAddMember(false)} className="px-6 py-3.5 bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-white/10 transition-all">Cancel</button>
+                                        <button onClick={() => { setShowAddMember(false); setAddMemberError('') }} className="px-6 py-3.5 bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 dark:hover:bg-white/10 transition-all">Cancel</button>
                                     </div>
                                 </div>
                             )}

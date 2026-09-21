@@ -135,7 +135,7 @@ export default function MultiAssigneeSelect({
             {/* Selected Assignees Display */}
             <div
                 onClick={() => canModify && !disabled && setIsOpen(!isOpen)}
-                className={`min-h-[42px] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-xl flex flex-wrap gap-2 items-center ${canModify && !disabled ? 'cursor-pointer hover:border-blue-300 dark:hover:border-blue-500' : 'cursor-default bg-gray-50 dark:bg-slate-800/50'
+                className={`min-h-[42px] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-xl flex flex-wrap gap-2 items-center ${canModify && !disabled ? 'cursor-pointer hover:border-blue-300 dark:hover:border-blue-500' : 'cursor-default bg-gray-50 dark:bg-slate-800'
                     }`}
             >
                 {selectedIds.size === 0 ? (
@@ -198,7 +198,7 @@ export default function MultiAssigneeSelect({
                         <button
                             key={member.user_id}
                             onClick={() => toggleMember(member)}
-                            className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:bg-slate-800/50 dark:hover:bg-slate-700/50 flex items-center gap-3"
+                            className="w-full px-3 py-2 text-left hover:bg-gray-50 dark:bg-slate-800 dark:hover:bg-slate-700/50 flex items-center gap-3"
                         >
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 text-white flex items-center justify-center text-sm font-medium">
                                 {getInitials(member.name)}

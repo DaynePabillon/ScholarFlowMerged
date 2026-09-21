@@ -1,8 +1,8 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import SidebarLayout from '@/components/scholar/SidebarLayout';
+import AppLayout from '@/components/layout/AppLayout'
 import { API_URL } from '@/lib/api/client';
 import {
     Users,
@@ -19,6 +19,9 @@ type Account = {
 };
 
 export default function AdminAccountsPage() {
+    const [user, setUser] = useState<any>(null);
+    const [organizations, setOrganizations] = useState<any[]>([]);
+    const [selectedOrg, setSelectedOrg] = useState<any>(null);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [query, setQuery] = useState<string>('');
     const [loading, setLoading] = useState(true);
@@ -31,7 +34,17 @@ export default function AdminAccountsPage() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    useEffect(() => {
+  
+// Load user + org context for unified AppLayout sidebar
+  useEffect(() => {
+    const u = localStorage.getItem('user')
+    if (u) { try { setUser(JSON.parse(u)) } catch {} }
+    const orgs = localStorage.getItem('organizations')
+    const sel = localStorage.getItem('selectedOrganization')
+    if (orgs) { try { setOrganizations(JSON.parse(orgs)) } catch {} }
+    if (sel) { try { setSelectedOrg(JSON.parse(sel)) } catch {} }
+  }, [])
+  useEffect(() => {
         fetchAccounts();
     }, []);
 
@@ -88,16 +101,16 @@ export default function AdminAccountsPage() {
 
     if (loading) {
         return (
-            <SidebarLayout>
+            <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
                 <div className="flex items-center justify-center h-[60vh]">
                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
                 </div>
-            </SidebarLayout>
+            </AppLayout>
         );
     }
 
     return (
-        <SidebarLayout>
+        <AppLayout user={user} organizations={organizations} selectedOrg={selectedOrg} onOrgChange={setSelectedOrg}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="portal-panel-strong p-6 sm:p-8 mb-6">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -223,6 +236,6 @@ export default function AdminAccountsPage() {
                     {toast.message}
                 </div>
             )}
-        </SidebarLayout>
+        </AppLayout>
     );
 }

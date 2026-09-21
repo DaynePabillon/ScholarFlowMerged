@@ -22,7 +22,7 @@ interface DriveFile {
 interface Organization {
   id: string
   name: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
 }
 
 export default function DrivePage() {
@@ -316,7 +316,7 @@ export default function DrivePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Google Drive</h1>
-          <p className="text-gray-600 mt-1">Manage your files and folders</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Manage your files and folders</p>
         </div>
 
         <div className="mb-6 flex flex-col sm:flex-row gap-4">
@@ -327,7 +327,7 @@ export default function DrivePage() {
               placeholder="Search files..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
             />
           </div>
           <div className="flex gap-2">
@@ -338,7 +338,7 @@ export default function DrivePage() {
               <Plus className="w-5 h-5" />
               <span className="font-medium">New Folder</span>
             </button>
-            <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 text-blue-600 rounded-xl hover:bg-blue-50 transition-colors cursor-pointer">
+            <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-slate-700 text-blue-600 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors cursor-pointer">
               <Upload className="w-5 h-5" />
               <span className="font-medium">{uploading ? "Uploading..." : "Upload"}</span>
               <input
@@ -350,7 +350,7 @@ export default function DrivePage() {
             </label>
             <button
               onClick={() => setViewMode(viewMode === "list" ? "grid" : "list")}
-              className="p-2 border border-gray-200 rounded-xl hover:bg-blue-50 transition-colors"
+              className="p-2 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
             >
               {viewMode === "list" ? <Grid3x3 className="w-5 h-5 text-blue-600" /> : <List className="w-5 h-5 text-blue-600" />}
             </button>
@@ -362,15 +362,15 @@ export default function DrivePage() {
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
           </div>
         ) : filteredFiles.length === 0 ? (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-white/40 shadow-lg">
+          <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-12 text-center border border-white/40 dark:border-slate-700/40 shadow-lg">
             <FolderOpen className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-800 mb-2">No files found</h3>
-            <p className="text-gray-600">Upload your first file to get started</p>
+            <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">No files found</h3>
+            <p className="text-gray-600 dark:text-gray-300">Upload your first file to get started</p>
           </div>
         ) : viewMode === "list" ? (
-          <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+          <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
             <table className="w-full">
-              <thead className="bg-blue-50/50 border-b border-gray-200">
+              <thead className="bg-blue-50/50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-slate-700">
                 <tr>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-blue-600">Name</th>
                   <th className="text-left px-6 py-3 text-sm font-semibold text-blue-600">Owner</th>
@@ -384,21 +384,21 @@ export default function DrivePage() {
                   <tr
                     key={file.id}
                     onClick={() => handleFileClick(file)}
-                    className="border-b border-gray-100 hover:bg-blue-50/50 cursor-pointer transition-colors"
+                    className="border-b border-gray-100 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20/50 cursor-pointer transition-colors"
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         {getFileIcon(file.mimeType)}
-                        <span className="font-medium text-gray-800">{file.name}</span>
+                        <span className="font-medium text-gray-800 dark:text-gray-100">{file.name}</span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       {file.owners?.[0]?.displayName || "Me"}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       {formatDate(file.modifiedTime)}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">
                       {formatSize(file.size)}
                     </td>
                     <td className="px-6 py-4 text-right relative">
@@ -407,21 +407,21 @@ export default function DrivePage() {
                           e.stopPropagation()
                           setActionMenuId(actionMenuId === file.id ? null : file.id)
                         }}
-                        className="p-1 hover:bg-gray-100 rounded-lg"
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg"
                       >
-                        <MoreVertical className="w-5 h-5 text-gray-500" />
+                        <MoreVertical className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                       </button>
 
                       {/* Dropdown Menu */}
                       {actionMenuId === file.id && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50">
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 dark:border-slate-700 py-1 z-50">
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
                               window.open(file.webViewLink, '_blank')
                               setActionMenuId(null)
                             }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600"
                           >
                             <FolderOpen className="w-4 h-4" />
                             Open in Drive
@@ -433,7 +433,7 @@ export default function DrivePage() {
                                 handleFileClick(file)
                                 setActionMenuId(null)
                               }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600"
                             >
                               <Eye className="w-4 h-4" />
                               Preview
@@ -445,7 +445,7 @@ export default function DrivePage() {
                               window.open(`https://drive.google.com/uc?export=download&id=${file.id}`, '_blank')
                               setActionMenuId(null)
                             }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600"
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600"
                           >
                             <Upload className="w-4 h-4 rotate-180" />
                             Download
@@ -464,16 +464,16 @@ export default function DrivePage() {
               <div
                 key={file.id}
                 onClick={() => handleFileClick(file)}
-                className="bg-white/70 backdrop-blur-xl rounded-2xl p-4 border border-white/40 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
+                className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-4 border border-white/40 dark:border-slate-700/40 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer group"
               >
                 <div className="flex flex-col items-center text-center">
                   <div className="mb-3">
                     {getFileIcon(file.mimeType)}
                   </div>
-                  <p className="text-sm font-medium text-gray-800 truncate w-full mb-1">
+                  <p className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate w-full mb-1">
                     {file.name}
                   </p>
-                  <p className="text-xs text-gray-600">
+                  <p className="text-xs text-gray-600 dark:text-gray-300">
                     {formatDate(file.modifiedTime)}
                   </p>
                 </div>
@@ -485,19 +485,19 @@ export default function DrivePage() {
 
       {showFolderModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-2xl max-w-md w-full p-6 border border-white/40">
+          <div className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl max-w-md w-full p-6 border border-white/40 dark:border-slate-700/40">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">New Folder</h2>
               <button
                 onClick={() => setShowFolderModal(false)}
-                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-600 mb-2">
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-2">
                   Folder Name
                 </label>
                 <input
@@ -505,13 +505,13 @@ export default function DrivePage() {
                   value={folderName}
                   onChange={(e) => setFolderName(e.target.value)}
                   placeholder="Untitled folder"
-                  className="w-full px-4 py-2 bg-white/70 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+                  className="w-full px-4 py-2 bg-white/70 dark:bg-slate-800/70 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                 />
               </div>
               <div className="flex gap-3 pt-4">
                 <button
                   onClick={() => setShowFolderModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-200 text-blue-600 rounded-xl hover:bg-blue-50 transition-colors"
+                  className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 text-blue-600 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                 >
                   Cancel
                 </button>
@@ -532,24 +532,24 @@ export default function DrivePage() {
       {showFileModal && selectedFile && (
         <Portal>
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-            <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col border border-white/40">
-              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+            <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col border border-white/40 dark:border-slate-700/40">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
                 <div className="flex items-center gap-3">
                   {getFileIcon(selectedFile.mimeType)}
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-800 truncate max-w-md">{selectedFile.name}</h2>
-                    <p className="text-sm text-gray-500">{formatSize(selectedFile.size)} • Modified {formatDate(selectedFile.modifiedTime)}</p>
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100 truncate max-w-md">{selectedFile.name}</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{formatSize(selectedFile.size)} • Modified {formatDate(selectedFile.modifiedTime)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Preview/Edit Toggle for editable files */}
                   {canEdit(selectedFile) && (
-                    <div className="flex bg-gray-100 rounded-xl p-1">
+                    <div className="flex bg-gray-100 dark:bg-slate-700 rounded-xl p-1">
                       <button
                         onClick={() => setIsEditMode(false)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${!isEditMode
                           ? 'bg-white text-blue-600 shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-50'
+                          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600'
                           }`}
                       >
                         <Eye className="w-4 h-4" />
@@ -559,7 +559,7 @@ export default function DrivePage() {
                         onClick={() => setIsEditMode(true)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${isEditMode
                           ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm'
-                          : 'text-gray-600 hover:bg-gray-50'
+                          : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-600'
                           }`}
                       >
                         <Edit3 className="w-4 h-4" />
@@ -568,17 +568,17 @@ export default function DrivePage() {
                     </div>
                   )}
                   {selectedFile.webViewLink && (
-                    <a href={selectedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 transition-colors">
+                    <a href={selectedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-4 py-2 text-sm text-blue-600 border border-blue-200 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                       <Maximize2 className="w-4 h-4" />
                       Open in Drive
                     </a>
                   )}
-                  <button onClick={() => { setShowFileModal(false); setSelectedFile(null); setIsEditMode(false); }} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
-                    <X className="w-5 h-5 text-gray-500" />
+                  <button onClick={() => { setShowFileModal(false); setSelectedFile(null); setIsEditMode(false); }} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-xl transition-colors">
+                    <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                   </button>
                 </div>
               </div>
-              <div className="flex-1 bg-gray-100 overflow-hidden">
+              <div className="flex-1 bg-gray-100 dark:bg-slate-900 overflow-hidden">
                 {canPreview(selectedFile) ? (
                   selectedFile.mimeType.includes('image') ? (
                     <div className="w-full h-full flex items-center justify-center p-4">
@@ -595,8 +595,8 @@ export default function DrivePage() {
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center text-center p-8">
                     {getFileIcon(selectedFile.mimeType)}
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2 mt-4">Preview not available</h3>
-                    <p className="text-gray-600 mb-6">This file type cannot be previewed.</p>
+                    <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2 mt-4">Preview not available</h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">This file type cannot be previewed.</p>
                     {selectedFile.webViewLink && (
                       <a href={selectedFile.webViewLink} target="_blank" rel="noopener noreferrer" className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl">Open in Google Drive</a>
                     )}

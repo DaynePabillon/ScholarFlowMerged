@@ -233,7 +233,7 @@ export default function GoogleSheetImportModal({
                                 </div>
                             </div>
                             {/* Sync Mode Toggle */}
-                            <div className="flex p-1 bg-gray-100 dark:bg-slate-800/50 rounded-2xl">
+                            <div className="flex p-1 bg-gray-100 dark:bg-slate-800 rounded-2xl">
                                 <button
                                     onClick={() => setSyncMode('url')}
                                     className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${syncMode === 'url' ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
@@ -259,7 +259,7 @@ export default function GoogleSheetImportModal({
                                             placeholder="Paste Google Sheet URL here..."
                                             value={pastedUrl}
                                             onChange={(e) => setPastedUrl(e.target.value)}
-                                            className="w-full pl-16 pr-4 py-5 bg-gray-50 dark:bg-slate-800/50 border-2 border-transparent dark:border-slate-800/50 rounded-[1.5rem] text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder-gray-400 dark:placeholder-slate-500 font-bold text-lg"
+                                            className="w-full pl-16 pr-4 py-5 bg-gray-50 dark:bg-slate-800 border-2 border-transparent dark:border-slate-800/50 rounded-[1.5rem] text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder-gray-400 dark:placeholder-slate-500 font-bold text-lg"
                                         />
                                     </div>
                                     <div className="p-6 bg-blue-50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-[1.5rem]">
@@ -282,7 +282,7 @@ export default function GoogleSheetImportModal({
                                         placeholder="Search your Google Sheets..."
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-slate-800/50 border-2 border-transparent dark:border-slate-800/50 rounded-2xl text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder-gray-400 dark:placeholder-slate-500 font-medium"
+                                        className="w-full pl-12 pr-4 py-4 bg-gray-50 dark:bg-slate-800 border-2 border-transparent dark:border-slate-800/50 rounded-2xl text-slate-800 dark:text-slate-100 focus:outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all placeholder-gray-400 dark:placeholder-slate-500 font-medium"
                                     />
                                 </div>
                             )}
@@ -517,7 +517,7 @@ export default function GoogleSheetImportModal({
                 {/* Footer Progress Bar */}
                 {step === 'select' && (
                     <div className="p-1 px-8 pb-8">
-                        <div className="w-full bg-gray-100 dark:bg-slate-800/50 h-1 rounded-full overflow-hidden">
+                        <div className="w-full bg-gray-100 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
                             <div className="w-1/3 h-full bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                         </div>
                         <div className="flex items-center justify-between mt-6">

@@ -175,7 +175,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-sm text-gray-600 mt-8 font-light">
-          © 2025 SkyFlow. Built for organizational excellence.
+          © 2025 ScholarFlow. Built for organizational excellence.
         </p>
       </div>
     </div>

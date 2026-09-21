@@ -1205,6 +1205,366 @@ async function runMigrations(): Promise<void> {
         ALTER TABLE announcements
           ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
       `
+    },
+    // ─── SDD SkyFlow-ScholarSynch 2.0 Modules ───
+    {
+      name: '043_task_dependencies',
+      sql: `
+        CREATE TABLE IF NOT EXISTS task_dependencies (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          depends_on_task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          dependency_type VARCHAR(20) NOT NULL DEFAULT 'finish_to_start',
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (task_id, depends_on_task_id),
+          CHECK (task_id <> depends_on_task_id),
+          CHECK (dependency_type IN ('finish_to_start','start_to_start','finish_to_finish','start_to_finish'))
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_task_dependencies_task_id ON task_dependencies(task_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_task_dependencies_depends_on ON task_dependencies(depends_on_task_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '044_column_mappings',
+      sql: `
+        CREATE TABLE IF NOT EXISTS column_mappings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          synced_sheet_id UUID REFERENCES synced_sheets(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          sheet_column VARCHAR(255) NOT NULL,
+          kanban_column VARCHAR(100) NOT NULL,
+          is_active BOOLEAN DEFAULT true,
+          created_by UUID REFERENCES users(id),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (synced_sheet_id, sheet_column)
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_column_mappings_sheet ON column_mappings(synced_sheet_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_column_mappings_project ON column_mappings(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '045_sync_and_conflict_logs',
+      sql: `
+        CREATE TABLE IF NOT EXISTS sync_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          triggered_by UUID REFERENCES users(id),
+          status VARCHAR(20) NOT NULL DEFAULT 'success',
+          synced_count INTEGER DEFAULT 0,
+          error_message TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          CHECK (status IN ('success','failed','rate_limited','in_progress'))
+        );
+        CREATE TABLE IF NOT EXISTS conflict_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          field_name VARCHAR(100) NOT NULL,
+          sheet_value TEXT,
+          kanban_value TEXT,
+          merged_value TEXT,
+          resolution VARCHAR(20) NOT NULL,
+          resolved_by UUID REFERENCES users(id),
+          resolved_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          CHECK (resolution IN ('keep_sheet','keep_kanban','merged'))
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_sync_logs_project ON sync_logs(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_conflict_logs_task ON conflict_logs(task_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '046_billing_subscriptions',
+      sql: `
+        CREATE TABLE IF NOT EXISTS subscriptions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          stripe_customer_id VARCHAR(255),
+          stripe_subscription_id VARCHAR(255),
+          plan VARCHAR(20) NOT NULL DEFAULT 'free',
+          status VARCHAR(20) NOT NULL DEFAULT 'active',
+          seat_count INTEGER DEFAULT 5,
+          billing_cycle VARCHAR(10) DEFAULT 'monthly',
+          current_period_start TIMESTAMP WITH TIME ZONE,
+          current_period_end TIMESTAMP WITH TIME ZONE,
+          cancel_at_period_end BOOLEAN DEFAULT false,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (organization_id),
+          CHECK (plan IN ('free','standard','pro','enterprise')),
+          CHECK (status IN ('active','past_due','canceled','trialing','incomplete')),
+          CHECK (billing_cycle IN ('monthly','annual'))
+        );
+        CREATE TABLE IF NOT EXISTS billing_events (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          stripe_event_id VARCHAR(255) UNIQUE,
+          event_type VARCHAR(100) NOT NULL,
+          amount_cents INTEGER,
+          currency VARCHAR(10) DEFAULT 'usd',
+          invoice_url TEXT,
+          receipt_url TEXT,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+      `
+    },
+    {
+      name: '047_report_history',
+      sql: `
+        CREATE TABLE IF NOT EXISTS report_history (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          generated_by UUID REFERENCES users(id),
+          report_type VARCHAR(50) NOT NULL,
+          format VARCHAR(10) NOT NULL DEFAULT 'pdf',
+          title VARCHAR(255) NOT NULL,
+          sprint_label VARCHAR(100),
+          date_range_start DATE,
+          date_range_end DATE,
+          google_doc_id VARCHAR(255),
+          google_doc_url TEXT,
+          pdf_url TEXT,
+          status VARCHAR(20) DEFAULT 'completed',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          CHECK (format IN ('pdf','google_doc')),
+          CHECK (status IN ('pending','completed','failed'))
+        );
+        DO $$ BEGIN CREATE INDEX IF NOT EXISTS idx_report_history_project ON report_history(project_id); EXCEPTION WHEN others THEN NULL; END $$;
+      `
+    },
+    {
+      name: '048_ms365_tokens',
+      sql: `
+        CREATE TABLE IF NOT EXISTS ms365_tokens (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          expires_at TIMESTAMP WITH TIME ZONE,
+          scope TEXT,
+          ms_user_id VARCHAR(255),
+          ms_user_email VARCHAR(255),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (user_id, organization_id)
+        );
+        CREATE TABLE IF NOT EXISTS ms365_sync_configs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES users(id),
+          workbook_id VARCHAR(255),
+          workbook_name VARCHAR(255),
+          worksheet_id VARCHAR(255),
+          worksheet_name VARCHAR(255),
+          field_mappings JSONB DEFAULT '{}',
+          auto_sync_enabled BOOLEAN DEFAULT false,
+          sync_interval_minutes INTEGER DEFAULT 60,
+          last_synced_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          UNIQUE (project_id)
+        );
+      `
+    },
+    {
+      name: '049_fix_sync_logs_columns',
+      sql: `
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'project_id') THEN
+            ALTER TABLE sync_logs ADD COLUMN project_id UUID REFERENCES projects(id) ON DELETE CASCADE;
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'organization_id') THEN
+            ALTER TABLE sync_logs ADD COLUMN organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE;
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'triggered_by') THEN
+            ALTER TABLE sync_logs ADD COLUMN triggered_by UUID REFERENCES users(id);
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'status') THEN
+            ALTER TABLE sync_logs ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'success';
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'synced_count') THEN
+            ALTER TABLE sync_logs ADD COLUMN synced_count INTEGER DEFAULT 0;
+          END IF;
+        END $$;
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'sync_logs' AND column_name = 'error_message') THEN
+            ALTER TABLE sync_logs ADD COLUMN error_message TEXT;
+          END IF;
+        END $$;
+      `
+    },
+    {
+      name: '050_add_adviser_role',
+      sql: `
+        -- Drop and recreate the role CHECK constraint on organization_members to include 'adviser'
+        DO $$ BEGIN
+          ALTER TABLE organization_members DROP CONSTRAINT IF EXISTS organization_members_role_check;
+          ALTER TABLE organization_members ADD CONSTRAINT organization_members_role_check
+            CHECK (role IN ('admin', 'manager', 'member', 'adviser'));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+
+        -- Drop and recreate the role CHECK constraint on organization_invitations to include 'adviser'
+        DO $$ BEGIN
+          ALTER TABLE organization_invitations DROP CONSTRAINT IF EXISTS organization_invitations_role_check;
+          ALTER TABLE organization_invitations ADD CONSTRAINT organization_invitations_role_check
+            CHECK (role IN ('admin', 'manager', 'member', 'adviser'));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+      `
+    },
+    {
+      name: '051_add_progress_percent_to_tasks',
+      sql: `
+        -- Add columns missing from tasks table.
+        -- These may have been added via raw SQL files (022_kanban_role_enhancements.sql)
+        -- but were never tracked in the migration service. Using IF NOT EXISTS for safety.
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS progress_percent NUMERIC DEFAULT 0;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS complexity_weight INTEGER DEFAULT 1;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS wbs_code VARCHAR(100);
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS start_date TIMESTAMP;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS is_absolute BOOLEAN DEFAULT FALSE;
+
+        -- Also ensure task_assignees table exists (created in raw SQL file 022)
+        CREATE TABLE IF NOT EXISTS task_assignees (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          assigned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          UNIQUE(task_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_task_assignees_task_id ON task_assignees(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_assignees_user_id ON task_assignees(user_id);
+      `
+    },
+    {
+      name: '052_sheet_tasks_missing_columns',
+      sql: `
+        -- workspace.service.ts syncSheet() inserts progress_percent and luxury_weight into
+        -- sheet_tasks but these columns were never added to that table (migration 025 only
+        -- added complexity_weight, is_absolute, wbs_code, start_date, team_id).
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS progress_percent NUMERIC DEFAULT 0;
+        ALTER TABLE sheet_tasks ADD COLUMN IF NOT EXISTS luxury_weight INTEGER DEFAULT 1;
+      `
+    },
+    {
+      name: '053_unify_roles_remove_overwrite_trigger',
+      sql: `
+        -- Role unification: SkyFlow (organization_members.role) and ScholarSync
+        -- (ss_account.accountRole) are two independent role systems for the SAME
+        -- person. Migration 039 added a trigger that OVERWROTE a user's SkyFlow
+        -- org role whenever their academic role changed (e.g. an org 'manager'
+        -- who is also a ScholarSync 'Student' would silently get demoted to
+        -- 'member'). That conflicts with the goal of having both roles unified
+        -- and visible together (e.g. "Member & Student", "Admin & Adviser").
+        --
+        -- Drop the destructive overwrite trigger/function — both roles now
+        -- coexist independently and are surfaced together by the API/UI
+        -- (see GET /api/organizations/:id/members → academic_role, and
+        -- AppLayout.tsx → combinedRoleLabel()).
+        DROP TRIGGER IF EXISTS trg_sync_academic_role ON ss_account;
+        DROP FUNCTION IF EXISTS sync_academic_role_to_org();
+      `
+    },
+    {
+      name: '054_sync_logs_event_type_nullable',
+      sql: `
+        -- POST /api/sync/trigger has been failing with 500 ("null value in column
+        -- 'event_type' of relation 'sync_logs' violates not-null constraint").
+        --
+        -- Root cause: sync_logs was originally created in migration 016 with an
+        -- old workspace-event-log shape — (workspace_id, event_type NOT NULL,
+        -- event_data, details) — used by WorkspaceSyncService.logSync(). Migrations
+        -- 045/049 layered a SECOND, newer shape onto the SAME table — (project_id,
+        -- organization_id, triggered_by, status, synced_count, error_message) —
+        -- used by the /sync/trigger and /sync/status routes, because
+        -- "CREATE TABLE IF NOT EXISTS sync_logs" was a no-op (the table already
+        -- existed). Every INSERT from /sync/trigger omits event_type entirely,
+        -- so it always violated the inherited NOT NULL constraint and 500'd.
+        --
+        -- Fix: relax event_type to nullable. WorkspaceSyncService.logSync() still
+        -- always supplies it, so its rows are unaffected; rows written by the
+        -- newer /sync/trigger code path (which has no concept of "event type")
+        -- can now insert successfully with event_type = NULL.
+        ALTER TABLE sync_logs ALTER COLUMN event_type DROP NOT NULL;
+      `
+    },
+    {
+      name: '055_ss_courses_classroom_link',
+      sql: `
+        -- Link an ss_courses row to the Google Classroom course it was imported
+        -- from, so POST /api/classroom/import can find-or-create the matching
+        -- ScholarSync course and re-sync enrollments on subsequent imports
+        -- instead of creating duplicate course rows each time.
+        ALTER TABLE ss_courses ADD COLUMN IF NOT EXISTS "classroomCourseId" VARCHAR(255);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ss_courses_classroom_course_id
+          ON ss_courses("classroomCourseId") WHERE "classroomCourseId" IS NOT NULL;
+      `
+    },
+    {
+      name: '056_backfill_admin_to_scholarsync',
+      sql: `
+        -- "If a user is an admin, they are immediately admin for both the
+        -- project management and consultation part of the system."
+        --
+        -- Going forward, becoming an org admin (org creation, role change, or
+        -- invitation acceptance) upserts ss_account.accountRole = 'Admin'
+        -- (see ssAccountSync.service.ts). This backfills that for users who
+        -- were ALREADY an org admin before that sync existed: for every
+        -- active organization_members row with role = 'admin', upsert a
+        -- matching ss_account row (by email) with accountRole = 'Admin'.
+        INSERT INTO ss_account ("accountName", "accountEmail", "accountRole", user_id)
+        SELECT DISTINCT COALESCE(u.name, ''), u.email, 'Admin', u.id
+        FROM organization_members om
+        JOIN users u ON u.id = om.user_id
+        WHERE om.role = 'admin' AND om.status = 'active' AND u.email IS NOT NULL
+        ON CONFLICT ("accountEmail") DO UPDATE SET "accountRole" = 'Admin', user_id = COALESCE(ss_account.user_id, EXCLUDED.user_id);
+      `
+    },
+    {
+      name: '057_ss_consultation_validation_columns',
+      sql: `
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_status VARCHAR(20) DEFAULT 'not_requested';
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_requested_at TIMESTAMP;
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validated_by VARCHAR(255);
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP;
+        ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_notes TEXT;
+      `
+    },
+    {
+      name: '058_fix_tasks_status_check_include_archived',
+      sql: `
+        -- Archiving a task (PATCH /api/tasks/:id/status → 'archived', and the
+        -- cascade in PUT /api/projects/:id) was returning 500 with a
+        -- "tasks_status_check" violation: the raw SQL file
+        -- 022_kanban_role_enhancements.sql re-created that CHECK constraint WITHOUT
+        -- 'archived' (and without 'done'), overriding the earlier inline
+        -- 001_add_archived_status. Re-establish the full status set the app uses.
+        --
+        -- The DROP runs first and OUTSIDE the guarded block so that even if the
+        -- re-ADD somehow fails on a legacy status value, the stale constraint is
+        -- gone and archiving is unblocked.
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_status_check;
+        DO $$ BEGIN
+          ALTER TABLE tasks ADD CONSTRAINT tasks_status_check
+            CHECK (status IN ('todo', 'in_progress', 'review', 'done', 'completed', 'blocked', 'on_hold', 'archived'));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+      `
     }
   ];
 

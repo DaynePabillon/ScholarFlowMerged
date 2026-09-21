@@ -79,14 +79,42 @@ function AcceptInvitationContent() {
             if (response.ok) {
                 setStatus("accepted")
 
-                // Clear any stored user data to force refresh
-                localStorage.removeItem("user")
-                localStorage.removeItem("organizations")
-                localStorage.removeItem("selectedOrganization")
+                // Refetch fresh user data so the new org is in localStorage before redirect.
+                // This prevents a blank/broken state on the landing page (Bug 2).
+                try {
+                    const meRes = await fetch(`${API_URL}/api/auth/me`, {
+                        headers: { 'Authorization': `Bearer ${authToken}` }
+                    })
+                    if (meRes.ok) {
+                        const userData = await meRes.json()
+                        const { organizations: orgs, onboarding_data, ...userCore } = userData
+                        localStorage.setItem('user', JSON.stringify({ ...userCore, onboarding_data }))
+                        localStorage.setItem('organizations', JSON.stringify(orgs || []))
+                        // Auto-select the newly joined org
+                        if (invitation) {
+                            const newOrg = orgs?.find((o: any) => o.id === invitation.organizationId)
+                            if (newOrg) {
+                                localStorage.setItem('selectedOrganization', JSON.stringify(newOrg))
+                            } else if (orgs?.length > 0) {
+                                localStorage.setItem('selectedOrganization', JSON.stringify(orgs[orgs.length - 1]))
+                            }
+                        }
+                    }
+                } catch (_) {
+                    // Best-effort — pages have their own token→fetch fallback
+                    localStorage.removeItem('user')
+                    localStorage.removeItem('organizations')
+                    localStorage.removeItem('selectedOrganization')
+                }
 
-                // Redirect to dashboard after a short delay
+                // Ensure light mode for first-time visitors whose system prefers dark (Bug 3)
+                if (!localStorage.getItem('themeMode')) {
+                    localStorage.setItem('themeMode', 'light')
+                }
+
+                // Redirect to dashboard (has token fallback, shows correct org)
                 setTimeout(() => {
-                    router.push("/")
+                    router.push("/dashboard")
                 }, 2000)
             } else {
                 setStatus("error")
@@ -109,7 +137,7 @@ function AcceptInvitationContent() {
                         <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-4 shadow-lg">
                             <Cloud className="w-8 h-8 text-blue-500" />
                         </div>
-                        <h1 className="text-2xl font-bold text-white">SkyFlow Invitation</h1>
+                        <h1 className="text-2xl font-bold text-white">ScholarFlow Invitation</h1>
                     </div>
 
                     {/* Content */}

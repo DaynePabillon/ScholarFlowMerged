@@ -2,14 +2,16 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock } from "lucide-react"
+import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock, FolderKanban } from "lucide-react"
 import RoleManagement from "./RoleManagement"
+import ProjectTeamsSection from "./ProjectTeamsSection"
 
 interface TeamMember {
   id: string
   name: string
   email: string
-  role: 'admin' | 'manager' | 'member'
+  role: 'admin' | 'manager' | 'member' | 'adviser'
+  academic_role?: string | null
   profile_picture?: string | null
   joined_at: string
   status: string
@@ -35,6 +37,8 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteUrl, setInviteUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'members' | 'project-teams'>('members')
 
   useEffect(() => {
     fetchMembers()
@@ -82,9 +86,48 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
 
       if (response.ok) {
         fetchMembers() // Refresh member list
+        // If the current user's own role changed, update localStorage so AppLayout
+        // reflects the new role immediately (otherwise requires logout/login).
+        if (memberId === user.id) {
+          const stored = localStorage.getItem('selectedOrganization')
+          if (stored) {
+            const org = JSON.parse(stored)
+            localStorage.setItem('selectedOrganization', JSON.stringify({ ...org, role: newRole }))
+          }
+          window.location.reload()
+        }
       }
     } catch (error) {
       console.error('Error changing role:', error)
+    }
+  }
+
+  // Sets a member's ScholarFlow Academics-side role (Student / Adviser / Admin /
+  // External Leader) from the SAME Team → Role Management picker as the org role —
+  // so admins no longer need to visit the separate /scholar/admin/accounts page.
+  const handleAcademicRoleChange = async (memberId: string, newAcademicRole: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(
+        `${API_URL}/api/organizations/${organization.id}/members/${memberId}/academic-role`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ academic_role: newAcademicRole })
+        }
+      )
+
+      if (response.ok) {
+        fetchMembers() // Refresh member list so the new academic role badge shows
+      } else {
+        const data = await response.json().catch(() => ({}))
+        console.error('Error changing academic role:', data?.error || response.statusText)
+      }
+    } catch (error) {
+      console.error('Error changing academic role:', error)
     }
   }
 
@@ -171,6 +214,14 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
     return badges[role as keyof typeof badges] || badges.member
   }
 
+  // Unified role label — combines this member's SkyFlow org role with their
+  // ScholarSync academic role (Student / Adviser / Admin / External Leader),
+  // e.g. "Member & Student", so both systems' role assignments are visible together.
+  const formatMemberRole = (member: TeamMember) => {
+    const base = getRoleBadge(member.role).label
+    return member.academic_role ? `${base} & ${member.academic_role}` : base
+  }
+
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -185,13 +236,13 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onClick={() => setOpenActionMenu(null)}>
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Team Members</h1>
-            <p className="text-gray-600 mt-1">Manage members in {organization.name}</p>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">Manage members in {organization.name}</p>
           </div>
           <button
             onClick={() => setIsInviteModalOpen(true)}
@@ -202,8 +253,36 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-1 p-1 bg-gray-100 dark:bg-slate-800 rounded-xl w-fit mb-6">
+          <button
+            onClick={() => setActiveTab('members')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'members'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Members
+          </button>
+          <button
+            onClick={() => setActiveTab('project-teams')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'project-teams'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <FolderKanban className="w-4 h-4" />
+            Project Teams
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'members' && (<>
         {/* Search and Filter */}
-        <div className="flex gap-4">
+        <div className="mb-8 flex gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -211,76 +290,76 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
               placeholder="Search members..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent"
             />
           </div>
           <select
             value={filterRole}
             onChange={(e) => setFilterRole(e.target.value)}
-            className="px-4 py-2 bg-white/70 backdrop-blur-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="px-4 py-2 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400"
           >
             <option value="all">All Roles</option>
             <option value="admin">Admin</option>
             <option value="manager">Manager</option>
             <option value="member">Member</option>
+            <option value="adviser">Adviser</option>
             <option value="invited">Invited</option>
           </select>
         </div>
-      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 dark:border-slate-700/40 shadow-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-red-100 rounded-lg">
               <Crown className="w-5 h-5 text-red-600" />
             </div>
-            <span className="text-sm font-medium text-gray-600">Admins</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Admins</span>
           </div>
-          <p className="text-3xl font-bold text-gray-800">
+          <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
             {members.filter(m => m.role === 'admin').length}
           </p>
         </div>
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 dark:border-slate-700/40 shadow-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-blue-100 rounded-lg">
               <Briefcase className="w-5 h-5 text-blue-600" />
             </div>
-            <span className="text-sm font-medium text-gray-600">Managers</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Managers</span>
           </div>
-          <p className="text-3xl font-bold text-gray-800">
+          <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
             {members.filter(m => m.role === 'manager').length}
           </p>
         </div>
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 dark:border-slate-700/40 shadow-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-green-100 rounded-lg">
               <User className="w-5 h-5 text-green-600" />
             </div>
-            <span className="text-sm font-medium text-gray-600">Members</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Members</span>
           </div>
-          <p className="text-3xl font-bold text-gray-800">
+          <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
             {members.filter(m => m.role === 'member' && m.status !== 'invited').length}
           </p>
         </div>
-        <div className="bg-white/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 shadow-lg">
+        <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl p-6 border border-white/40 dark:border-slate-700/40 shadow-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 bg-amber-100 rounded-lg">
               <Clock className="w-5 h-5 text-amber-600" />
             </div>
-            <span className="text-sm font-medium text-gray-600">Invited</span>
+            <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Invited</span>
           </div>
-          <p className="text-3xl font-bold text-gray-800">
+          <p className="text-3xl font-bold text-gray-800 dark:text-gray-100">
             {members.filter(m => m.status === 'invited').length}
           </p>
         </div>
       </div>
 
       {/* Members List */}
-      <div className="bg-white/70 backdrop-blur-xl rounded-2xl border border-white/40 shadow-lg overflow-hidden">
+      <div className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-xl rounded-2xl border border-white/40 dark:border-slate-700/40 shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-blue-50/50 border-b border-gray-200">
+            <thead className="bg-blue-50/50 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-blue-600 uppercase tracking-wider">
                   Member
@@ -299,7 +378,7 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
               {filteredMembers.map((member) => {
                 const isInvited = member.status === 'invited'
                 return (
@@ -327,21 +406,21 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                       )}
                       <div className="ml-4">
                         <div className={`text-sm font-medium ${
-                          isInvited ? 'text-gray-400 italic' : 'text-gray-800'
+                          isInvited ? 'text-gray-400 italic' : 'text-gray-800 dark:text-gray-100'
                         }`}>
                           {isInvited ? member.email : member.name}
                         </div>
-                        <div className="text-sm text-gray-500">{member.email}</div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">{member.email}</div>
                       </div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadge(member.role).color}`}>
                       {getRoleIcon(member.role)}
-                      {getRoleBadge(member.role).label}
+                      {formatMemberRole(member)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
                     {member.joined_at ? new Date(member.joined_at).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -358,9 +437,44 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {!isInvited && (
-                      <button className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-                        <MoreVertical className="w-5 h-5 text-gray-500" />
-                      </button>
+                      <div className="relative flex justify-end">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setOpenActionMenu(prev => prev === member.id ? null : member.id)
+                          }}
+                          className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                        >
+                          <MoreVertical className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                        </button>
+                        {openActionMenu === member.id && (
+                          <div className="absolute right-0 top-8 z-50 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl shadow-lg py-1 min-w-[160px]">
+                            <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider border-b border-gray-100 dark:border-slate-700">
+                              Change Role
+                            </div>
+                            {(['admin', 'manager', 'member', 'adviser'] as const)
+                              .filter(r => r !== member.role)
+                              .map(r => (
+                                <button
+                                  key={r}
+                                  onClick={() => { handleRoleChange(member.id, r); setOpenActionMenu(null) }}
+                                  className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 capitalize transition-colors"
+                                >
+                                  Set as {r.charAt(0).toUpperCase() + r.slice(1)}
+                                </button>
+                              ))
+                            }
+                            <div className="border-t border-gray-100 dark:border-slate-700 mt-1">
+                              <button
+                                onClick={() => { handleRemoveMember(member.id); setOpenActionMenu(null) }}
+                                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                              >
+                                Remove Member
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -385,24 +499,40 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
             id: m.id,
             name: m.name,
             email: m.email,
-            role: m.role
+            role: m.role,
+            // Surface the linked ScholarSync academic role (Student / Adviser /
+            // Admin / External Leader) so it can be set from this same picker —
+            // unifying both "sides" of a member's identity in one place.
+            academic_role: m.academic_role
           }))}
           organizationId={organization.id}
           currentUserId={user.id}
           onRoleChange={handleRoleChange}
+          onAcademicRoleChange={handleAcademicRoleChange}
           onRemoveMember={handleRemoveMember}
         />
       </div>
+      </>)}
+
+      {activeTab === 'project-teams' && (
+        <ProjectTeamsSection
+          organizationId={organization.id}
+          orgMembers={members
+            .filter(m => m.status !== 'invited')
+            .map(m => ({ id: m.id, name: m.name, email: m.email, role: m.role }))}
+          canManage={true}
+        />
+      )}
 
       {/* Invite Member Modal */}
       {isInviteModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-          <div className="bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <div className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
                 👋 Invite Team Member
               </h2>
-              <button onClick={closeInviteModal} className="p-2 hover:bg-gray-100 rounded-lg">
+              <button onClick={closeInviteModal} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -410,7 +540,7 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
             {!inviteUrl ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Email Address
                   </label>
                   <input
@@ -418,27 +548,28 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="colleague@example.com"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
                     Role
                   </label>
                   <select
                     value={inviteRole}
                     onChange={(e) => setInviteRole(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-400"
+                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-blue-400"
                   >
                     <option value="member">👤 Member</option>
                     <option value="manager">💼 Manager</option>
                     <option value="admin">👑 Admin</option>
+                    <option value="adviser">🎓 Adviser</option>
                   </select>
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button
                     onClick={closeInviteModal}
-                    className="flex-1 py-3 border border-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-50"
+                    className="flex-1 py-3 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-slate-700"
                   >
                     Cancel
                   </button>
@@ -462,13 +593,13 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
                     type="text"
                     value={inviteUrl}
                     readOnly
-                    className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono truncate"
+                    className="flex-1 px-4 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm font-mono truncate"
                   />
                   <button
                     onClick={handleCopyUrl}
                     className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 ${copied
                         ? 'bg-green-500 text-white'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-slate-600'
                       }`}
                   >
                     {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}

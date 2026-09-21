@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, User, Award, BarChart3 } from "lucide-react"
+import { Users, Award, BarChart3, Layers } from "lucide-react"
 
 interface TeamCardProps {
     team: {
@@ -16,6 +16,8 @@ interface TeamCardProps {
         total_checkpoints: number
         completed_checkpoints: number
         proposed_project: string | null
+        project_id?: string | null
+        project_name?: string | null
     }
     onClick: () => void
 }
@@ -62,6 +64,17 @@ export default function TeamCard({ team, onClick }: TeamCardProps) {
 
             {/* Info Metrics */}
             <div className="grid grid-cols-1 gap-4 mb-8">
+                {team.project_name && (
+                    <div className="flex items-center gap-4 bg-indigo-50/80 dark:bg-indigo-500/10 p-3 rounded-2xl border border-indigo-200/60 dark:border-indigo-500/20">
+                        <div className="p-2 bg-indigo-500/10 rounded-xl">
+                            <Layers className="w-4 h-4 text-indigo-500" />
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[8px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-widest">Project</span>
+                            <span className="text-[11px] text-indigo-700 dark:text-indigo-300 font-bold uppercase truncate">{team.project_name}</span>
+                        </div>
+                    </div>
+                )}
                 {team.adviser_name && (
                     <div className="flex items-center gap-4 bg-gray-100/50 dark:bg-slate-950/40 p-3 rounded-2xl border border-gray-200 dark:border-slate-700/50 group/metric">
                         <div className="p-2 bg-amber-500/10 rounded-xl">

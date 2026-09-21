@@ -210,7 +210,8 @@ export class WorkspaceSyncService {
   async parseSheetTasks(
     userId: string,
     sheetId: string,
-    columnMapping: ColumnMapping
+    columnMapping: ColumnMapping,
+    statusOverrides?: Record<string, string>
   ): Promise<SheetTask[]> {
     const auth = await this.getAuthClient(userId);
     const sheets = google.sheets({ version: 'v4', auth });
@@ -272,7 +273,7 @@ export class WorkspaceSyncService {
         sheetRowIndex: i,
         title: cleanTitle || String(rawTitle).trim(),
         wbs_code: wbs || undefined,
-        status: this.normalizeStatus(statusRaw),
+        status: this.normalizeStatusWithOverrides(statusRaw, statusOverrides),
         priority: this.normalizePriority(priorityRaw),
         assigneeEmail: assigneeRaw ? String(assigneeRaw).trim() : undefined,
         startDate: columnMapping.startDate !== undefined && columnMapping.startDate !== -1 
@@ -303,7 +304,7 @@ export class WorkspaceSyncService {
   /**
    * Sync a sheet's tasks to database
    */
-  async syncSheet(syncedSheetId: string): Promise<SyncResult> {
+  async syncSheet(syncedSheetId: string, statusOverrides?: Record<string, string>): Promise<SyncResult> {
     try {
       // Get synced sheet info
       const sheetResult = await query(
@@ -330,8 +331,8 @@ export class WorkspaceSyncService {
         [JSON.stringify(columnMapping), syncedSheetId]
       );
 
-      // Parse tasks from Google Sheet
-      const sheetTasks = await this.parseSheetTasks(sheet.created_by, sheet.sheet_id, columnMapping);
+      // Parse tasks from Google Sheet (pass optional status overrides from column_mappings table)
+      const sheetTasks = await this.parseSheetTasks(sheet.created_by, sheet.sheet_id, columnMapping, statusOverrides);
 
       // Map wbs_code -> task ID for parent resolution
       const wbsToId: Record<string, string> = {};
@@ -752,6 +753,18 @@ export class WorkspaceSyncService {
   }
 
   // === Helper Methods ===
+
+  /** Checks user-defined column_mappings overrides first, then falls back to auto-detection */
+  private normalizeStatusWithOverrides(
+    status: string | undefined,
+    overrides?: Record<string, string>
+  ): string {
+    if (status && overrides) {
+      const key = status.toLowerCase().trim();
+      if (overrides[key]) return overrides[key];
+    }
+    return this.normalizeStatus(status);
+  }
 
   private normalizeStatus(status: string | undefined): string {
     if (!status) return 'todo';

@@ -96,7 +96,7 @@ export default function ProfessionalDashboard({ tasks, projects, organizationNam
                         </p>
                     </div>
                     {organizationName && (
-                        <div className="px-4 py-2 bg-gray-100 dark:bg-slate-700/50 rounded-xl border border-transparent dark:border-slate-600">
+                        <div className="px-4 py-2 bg-gray-100 dark:bg-slate-800 rounded-xl border border-transparent dark:border-slate-600">
                             <span className="text-sm font-bold text-gray-600 dark:text-slate-300 uppercase tracking-wider">{organizationName}</span>
                         </div>
                     )}
@@ -162,7 +162,7 @@ export default function ProfessionalDashboard({ tasks, projects, organizationNam
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-slate-700 p-6 transition-all cursor-pointer group">
                     <div className="flex items-center gap-4 mb-3">
-                        <div className="p-3 bg-gray-100 dark:bg-slate-700 rounded-2xl group-hover:scale-110 transition-transform">
+                        <div className="p-3 bg-gray-100 dark:bg-slate-800 rounded-2xl group-hover:scale-110 transition-transform">
                             <TrendingUp className="w-6 h-6 text-blue-500" />
                         </div>
                         <div>
@@ -173,7 +173,7 @@ export default function ProfessionalDashboard({ tasks, projects, organizationNam
                 </div>
                 <div className="bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-slate-700 p-6 transition-all cursor-pointer group">
                     <div className="flex items-center gap-4 mb-3">
-                        <div className="p-3 bg-gray-100 dark:bg-slate-700 rounded-2xl group-hover:scale-110 transition-transform">
+                        <div className="p-3 bg-gray-100 dark:bg-slate-800 rounded-2xl group-hover:scale-110 transition-transform">
                             <Users className="w-6 h-6 text-purple-500" />
                         </div>
                         <div>
@@ -184,7 +184,7 @@ export default function ProfessionalDashboard({ tasks, projects, organizationNam
                 </div>
                 <div className="bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 backdrop-blur-sm rounded-2xl border border-gray-200 dark:border-slate-700 p-6 transition-all cursor-pointer group">
                     <div className="flex items-center gap-4 mb-3">
-                        <div className="p-3 bg-gray-100 dark:bg-slate-700 rounded-2xl group-hover:scale-110 transition-transform">
+                        <div className="p-3 bg-gray-100 dark:bg-slate-800 rounded-2xl group-hover:scale-110 transition-transform">
                             <FolderKanban className="w-6 h-6 text-emerald-500" />
                         </div>
                         <div>

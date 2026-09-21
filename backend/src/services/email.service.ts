@@ -131,6 +131,92 @@ export const sendInvitationEmail = async (params: {
   }
 };
 
+// ─── Module 1.4: Task Comment Email Alert ───
+
+const createCommentAlertEmailHtml = (params: {
+  commenterName: string;
+  taskTitle: string;
+  commentText: string;
+  taskUrl: string;
+}) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New comment on your task</title>
+</head>
+<body style="margin:0;padding:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background-color:#f0f9ff;">
+  <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
+    <div style="background:linear-gradient(135deg,#0ea5e9 0%,#06b6d4 100%);border-radius:16px 16px 0 0;padding:32px;text-align:center;">
+      <h1 style="color:white;margin:0;font-size:24px;font-weight:600;">ScholarFlow</h1>
+      <p style="color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:13px;">Task Comment Alert</p>
+    </div>
+    <div style="background:white;border-radius:0 0 16px 16px;padding:36px;box-shadow:0 4px 6px rgba(0,0,0,0.08);">
+      <h2 style="color:#1e293b;margin:0 0 16px;font-size:20px;">New comment on your task</h2>
+      <p style="color:#64748b;font-size:15px;line-height:1.6;margin:0 0 20px;">
+        <strong style="color:#0ea5e9;">${params.commenterName}</strong> left a comment on
+        <strong style="color:#1e293b;">${params.taskTitle}</strong>:
+      </p>
+      <div style="background:#f8fafc;border-left:4px solid #0ea5e9;border-radius:4px;padding:16px 20px;margin:0 0 24px;">
+        <p style="color:#334155;font-size:15px;line-height:1.6;margin:0;">${params.commentText}</p>
+      </div>
+      <div style="text-align:center;margin:28px 0;">
+        <a href="${params.taskUrl}" style="display:inline-block;background:linear-gradient(135deg,#0ea5e9 0%,#06b6d4 100%);color:white;text-decoration:none;padding:12px 28px;border-radius:50px;font-weight:600;font-size:15px;">
+          View Task
+        </a>
+      </div>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+      <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0;">
+        You received this email because you are assigned to this task on ScholarFlow.
+      </p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+export const sendCommentAlertEmail = async (params: {
+  to: string;
+  commenterName: string;
+  taskTitle: string;
+  taskId: string;
+  commentText: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  const frontendUrl = process.env.FRONTEND_URL || 'https://skyflow.fun';
+  const taskUrl = `${frontendUrl}/tasks`;
+
+  if (!isEmailConfigured()) {
+    logger.info(`📧 [DEV] Comment alert: to=${params.to}, task="${params.taskTitle}", by=${params.commenterName}`);
+    return { success: true };
+  }
+
+  try {
+    const { data, error } = await resend!.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'ScholarFlow <noreply@skyflow.fun>',
+      to: [params.to],
+      subject: `${params.commenterName} commented on "${params.taskTitle}"`,
+      html: createCommentAlertEmailHtml({
+        commenterName: params.commenterName,
+        taskTitle: params.taskTitle,
+        commentText: params.commentText,
+        taskUrl
+      })
+    });
+
+    if (error) {
+      logger.error('Error sending comment alert email:', error);
+      return { success: false, error: error.message };
+    }
+
+    logger.info(`✉️ Comment alert email sent to ${params.to} (ID: ${data?.id})`);
+    return { success: true };
+  } catch (error: any) {
+    logger.error('Failed to send comment alert email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // ─── ScholarFlow Team Import Invitation ───
 
 const createTeamImportEmailHtml = (params: {

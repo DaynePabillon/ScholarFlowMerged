@@ -64,7 +64,7 @@ export default function LoginPage() {
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-fantastic to-abyssal-anchorfish rounded-xl mb-4 shadow-lg">
               <Cloud className="w-8 h-8 text-burning-flame" />
             </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-fantastic to-abyssal-anchorfish bg-clip-text text-transparent mb-2">SkyFlow</h1>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-fantastic to-abyssal-anchorfish bg-clip-text text-transparent mb-2">ScholarFlow</h1>
             <p className="text-lg text-truffle-trouble">Organizational Project Management Platform</p>
           </div>
 
@@ -73,7 +73,7 @@ export default function LoginPage() {
             <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 border border-oatmeal shadow-lg">
               <div className="mb-6">
                 <h2 className="text-2xl font-bold text-blue-fantastic mb-2">
-                  Sign in to SkyFlow
+                  Sign in to ScholarFlow
                 </h2>
                 <p className="text-sm text-truffle-trouble">
                   Connect with your Google Workspace account
