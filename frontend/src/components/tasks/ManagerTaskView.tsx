@@ -10,6 +10,8 @@ import ProfessionalKanban from "./ProfessionalKanban"
 import DependencyDialog from "./DependencyDialog"
 import TaskTimeline from "./TaskTimeline"
 import MultiAssigneeSelect from "./MultiAssigneeSelect"
+import DescriptionEditor from "./DescriptionEditor"
+import RecycleTasksModal from "./RecycleTasksModal"
 import GoogleSheetImportModal from "./GoogleSheetImportModal"
 import TeamSelector from "../shared/TeamSelector"
 import { FileSpreadsheet, ShieldCheck } from "lucide-react"
@@ -50,9 +52,10 @@ interface ManagerTaskViewProps {
     name: string
     role: string
   }
+  initialProjectId?: string | null
 }
 
-export default function ManagerTaskView({ user, organization }: ManagerTaskViewProps) {
+export default function ManagerTaskView({ user, organization, initialProjectId = null }: ManagerTaskViewProps) {
   const router = useRouter()
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -82,7 +85,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
   const [isGoogleSyncModalOpen, setIsGoogleSyncModalOpen] = useState(false)
   const [dependencyTask, setDependencyTask] = useState<Task | null>(null)
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null)
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId)
   const [showCompleted, setShowCompleted] = useState(false)
   const [completedCount, setCompletedCount] = useState<number>(0)
   const ARCHIVE_PAGE_SIZE = 12
@@ -90,6 +93,14 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
   const [archiveTasks, setArchiveTasks] = useState<Task[]>([])
   const [archiveHasMore, setArchiveHasMore] = useState(false)
   const [isArchiveLoading, setIsArchiveLoading] = useState(false)
+  const [selectedArchiveIds, setSelectedArchiveIds] = useState<string[]>([])
+  const [isRecycleOpen, setIsRecycleOpen] = useState(false)
+
+  const toggleArchiveSelection = (taskId: string) => {
+    setSelectedArchiveIds(prev =>
+      prev.includes(taskId) ? prev.filter(id => id !== taskId) : [...prev, taskId]
+    )
+  }
 
   useEffect(() => {
     fetchTasks()
@@ -252,6 +263,12 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
   }
 
   const handleCreateTask = async () => {
+    // Project is required — a task must belong to a specific project.
+    if (!newTask.project_id) {
+      setCreateError('Please choose a project for this task.')
+      return
+    }
+
     // Start date must comply with "latest date is today" — block creation
     // entirely (rather than silently dropping/clearing the date) when violated.
     if (newTask.start_date && newTask.start_date > getTodayLocalDateString()) {
@@ -435,6 +452,9 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
         setIsEditModalOpen(false)
         setEditingTask(null)
         fetchTasks()
+        // Archived tasks are excluded from fetchTasks(), so refresh the archive
+        // grid too — otherwise edits to an archived task appear to have no effect.
+        if (isArchiveExpanded) fetchArchivedTasks(0, false)
       } else {
         console.error('Failed to update task')
       }
@@ -679,9 +699,43 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
 
         {isArchiveExpanded && (
           <>
+            {archiveTasks.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 p-3 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() =>
+                      setSelectedArchiveIds(
+                        selectedArchiveIds.length === archiveTasks.length ? [] : archiveTasks.map(t => t.id)
+                      )
+                    }
+                    className="text-xs font-medium text-indigo-600 dark:text-indigo-300 hover:underline"
+                  >
+                    {selectedArchiveIds.length === archiveTasks.length ? 'Clear selection' : 'Select all'}
+                  </button>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{selectedArchiveIds.length} selected</span>
+                </div>
+                <button
+                  onClick={() => setIsRecycleOpen(true)}
+                  disabled={selectedArchiveIds.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:from-indigo-600 hover:to-violet-600 transition-all"
+                >
+                  <RotateCcw className="w-4 h-4" /> Recycle to new project
+                </button>
+              </div>
+            )}
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {archiveTasks.map((task) => (
                 <div key={task.id} className="relative">
+                  <div className="absolute top-2 left-2 z-20">
+                    <input
+                      type="checkbox"
+                      checked={selectedArchiveIds.includes(task.id)}
+                      onChange={() => toggleArchiveSelection(task.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer shadow"
+                      title="Select for recycling"
+                    />
+                  </div>
                   <div className="absolute top-2 right-2 z-20">
                     <button
                       onClick={() => { handleStatusChange(task.id, 'todo'); setArchiveTasks(prev => prev.filter(t => t.id !== task.id)) }}
@@ -821,11 +875,10 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Description</label>
-                <textarea
+                <DescriptionEditor
                   value={newTask.description}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-400 dark:bg-slate-800/70 dark:text-white"
-                  rows={3}
+                  onChange={(description) => setNewTask({ ...newTask, description })}
+                  placeholder="Describe the task, or use “Fill from file” to import from a .txt/.md/.csv/.docx/.pdf"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -894,15 +947,22 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Project (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">
+                  Project <span className="text-red-500">*</span>
+                </label>
                 <select
                   value={newTask.project_id || ''}
                   onChange={(e) => setNewTask({ ...newTask, project_id: e.target.value || null })}
                   className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-400 dark:bg-slate-800/70 dark:text-white"
                 >
-                  <option value="">No project</option>
+                  <option value="" disabled>Select a project…</option>
                   {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
+                {projects.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                    No projects available to you yet — you can only assign tasks to projects you belong to.
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-3 p-3 bg-indigo-50/50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-800/50">
@@ -926,7 +986,7 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
 
               <button
                 onClick={handleCreateTask}
-                disabled={!newTask.title.trim()}
+                disabled={!newTask.title.trim() || !newTask.project_id}
                 className="w-full py-3 bg-gradient-to-r from-indigo-500 to-violet-500 text-white rounded-xl font-medium disabled:opacity-50 hover:from-blue-600 hover:to-cyan-600 transition-all"
               >
                 Create Task
@@ -966,11 +1026,10 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Description</label>
-                  <textarea
+                  <DescriptionEditor
                     value={editingTask.description || ''}
-                    onChange={(e) => setEditingTask({ ...editingTask, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-400 dark:bg-slate-800/70 dark:text-white"
-                    rows={3}
+                    onChange={(description) => setEditingTask({ ...editingTask, description })}
+                    placeholder="Describe the task, or use “Fill from file” to import from a .txt/.md/.csv/.docx/.pdf"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -1106,6 +1165,20 @@ export default function ManagerTaskView({ user, organization }: ManagerTaskViewP
           onClose={() => setDependencyTask(null)}
         />
       )}
+
+      {/* Recycle Tasks Modal (Rev 4) */}
+      <RecycleTasksModal
+        isOpen={isRecycleOpen}
+        onClose={() => setIsRecycleOpen(false)}
+        organizationId={organization.id}
+        sourceTaskIds={selectedArchiveIds}
+        onRecycled={() => {
+          setSelectedArchiveIds([])
+          fetchArchivedTasks(0, false)
+          fetchTasks()
+          fetchProjects()
+        }}
+      />
     </div>
   )
 }

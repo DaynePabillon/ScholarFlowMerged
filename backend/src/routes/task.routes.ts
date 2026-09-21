@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateToken } from '../middleware/auth.middleware';
-import { query } from '../config/database';
+import { query, transaction } from '../config/database';
 import logger from '../config/logger';
 import notificationService from '../services/notification.service';
 import { WorkspaceSyncService } from '../services/workspace.service';
@@ -151,6 +151,152 @@ router.post('/', authenticateToken, async (req: AuthRequest, res: Response) => {
   } catch (error) {
     logger.error('Error creating task:', error);
     res.status(500).json({ error: 'Failed to create task' });
+  }
+});
+
+/**
+ * POST /api/tasks/recycle
+ * Recycle completed/archived tasks into a NEW (or existing) project assigned to a
+ * NEW (or existing) team, cloned as fresh `todo` tasks. Admin/manager only. (Rev 4)
+ *
+ * Body: {
+ *   organization_id: string,
+ *   source_task_ids: string[],
+ *   project: { id?: string } | { name: string, description?: string },
+ *   team:    { id?: string } | { name: string, description?: string, members?: [...] }
+ * }
+ */
+router.post('/recycle', authenticateToken, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { organization_id, source_task_ids, project, team } = req.body;
+
+    if (!organization_id || !Array.isArray(source_task_ids) || source_task_ids.length === 0) {
+      return res.status(400).json({ error: 'organization_id and a non-empty source_task_ids[] are required' });
+    }
+    if (!project || (!project.id && !project.name)) {
+      return res.status(400).json({ error: 'A target project (existing id or new name) is required' });
+    }
+    if (!team || (!team.id && !team.name)) {
+      return res.status(400).json({ error: 'A target team (existing id or new name) is required' });
+    }
+
+    // Only admins and managers can recycle tasks / create projects & teams
+    const roleCheck = await query(
+      'SELECT role FROM organization_members WHERE organization_id = $1 AND user_id = $2 AND status = $3',
+      [organization_id, userId, 'active']
+    );
+    if (roleCheck.rows.length === 0 || !['admin', 'manager'].includes(roleCheck.rows[0].role)) {
+      return res.status(403).json({ error: 'Manager or admin access required' });
+    }
+
+    const result = await transaction(async (client: any) => {
+      // 1. Load source tasks — must belong to this organization
+      const srcRes = await client.query(
+        `SELECT t.* FROM tasks t
+         JOIN projects p ON t.project_id = p.id
+         WHERE t.id = ANY($1::uuid[]) AND p.organization_id = $2`,
+        [source_task_ids, organization_id]
+      );
+      const sourceTasks = srcRes.rows;
+      if (sourceTasks.length === 0) {
+        throw Object.assign(new Error('No matching source tasks found in this organization'), { statusCode: 404 });
+      }
+
+      // 2. Resolve or create the target project
+      let projectRow;
+      if (project.id) {
+        const pRes = await client.query(
+          'SELECT * FROM projects WHERE id = $1 AND organization_id = $2',
+          [project.id, organization_id]
+        );
+        if (pRes.rows.length === 0) throw Object.assign(new Error('Target project not found in this organization'), { statusCode: 404 });
+        projectRow = pRes.rows[0];
+      } else {
+        const pRes = await client.query(
+          `INSERT INTO projects (organization_id, name, description, status, priority, created_by)
+           VALUES ($1, $2, $3, 'planning', 'medium', $4) RETURNING *`,
+          [organization_id, project.name, project.description || null, userId]
+        );
+        projectRow = pRes.rows[0];
+        await client.query(
+          `INSERT INTO project_members (project_id, user_id, role, assigned_by)
+           VALUES ($1, $2, 'lead', $3) ON CONFLICT (project_id, user_id) DO NOTHING`,
+          [projectRow.id, userId, userId]
+        );
+      }
+      const projectId = projectRow.id;
+
+      // 3. Resolve or create the target team, and link it to the project
+      let teamRow;
+      if (team.id) {
+        const tRes = await client.query(
+          'SELECT * FROM team_groups WHERE id = $1 AND organization_id = $2',
+          [team.id, organization_id]
+        );
+        if (tRes.rows.length === 0) throw Object.assign(new Error('Target team not found in this organization'), { statusCode: 404 });
+        teamRow = tRes.rows[0];
+        await client.query('UPDATE team_groups SET project_id = $1, updated_at = NOW() WHERE id = $2', [projectId, team.id]);
+        teamRow.project_id = projectId;
+      } else {
+        const numRes = await client.query(
+          'SELECT COALESCE(MAX(team_number), 0) + 1 AS next FROM team_groups WHERE organization_id = $1',
+          [organization_id]
+        );
+        const nextNumber = numRes.rows[0].next;
+        const tRes = await client.query(
+          `INSERT INTO team_groups (organization_id, team_number, name, description, project_id, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+          [organization_id, nextNumber, team.name, team.description || null, projectId, userId]
+        );
+        teamRow = tRes.rows[0];
+        if (Array.isArray(team.members)) {
+          let n = 1;
+          for (const m of team.members) {
+            if (!m || (!m.email && !m.name)) continue;
+            await client.query(
+              `INSERT INTO team_group_members (team_group_id, member_number, name, email, student_id, is_leader)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [teamRow.id, n, m.name || m.email, m.email || null, m.student_id || null, m.is_leader || (n === 1)]
+            );
+            n++;
+          }
+        }
+      }
+      const teamId = teamRow.id;
+
+      // 4. Clone each source task into the target project/team as a fresh todo task.
+      //    Assignees, dates, progress and completion are intentionally cleared;
+      //    is_absolute is reset so the new team can freely manage the tasks.
+      const rootCountRes = await client.query(
+        'SELECT COUNT(*) FROM tasks WHERE parent_task_id IS NULL AND project_id = $1',
+        [projectId]
+      );
+      let rootCount = parseInt(rootCountRes.rows[0].count, 10);
+      const created: any[] = [];
+      for (const src of sourceTasks) {
+        rootCount += 1;
+        const wbs = String(rootCount);
+        const ins = await client.query(
+          `INSERT INTO tasks (
+             project_id, title, description, status, priority,
+             created_by, is_absolute, complexity_weight, wbs_code, luxury_weight, team_id
+           ) VALUES ($1, $2, $3, 'todo', $4, $5, false, $6, $7, $8, $9)
+           RETURNING *`,
+          [projectId, src.title, src.description, src.priority || 'medium', userId,
+           src.complexity_weight || 1, wbs, src.luxury_weight || 1, teamId]
+        );
+        created.push(ins.rows[0]);
+      }
+
+      return { project: projectRow, team: teamRow, created_task_count: created.length, tasks: created };
+    });
+
+    logger.info(`Recycled ${result.created_task_count} task(s) into project ${result.project.id} / team ${result.team.id} by user ${userId}`);
+    return res.status(201).json(result);
+  } catch (error: any) {
+    logger.error('Error recycling tasks:', error);
+    return res.status(error.statusCode || 500).json({ error: error.message || 'Failed to recycle tasks' });
   }
 });
 

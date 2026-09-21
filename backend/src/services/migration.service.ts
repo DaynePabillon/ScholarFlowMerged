@@ -1544,6 +1544,27 @@ async function runMigrations(): Promise<void> {
         ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validated_at TIMESTAMP;
         ALTER TABLE ss_consultation ADD COLUMN IF NOT EXISTS validation_notes TEXT;
       `
+    },
+    {
+      name: '058_fix_tasks_status_check_include_archived',
+      sql: `
+        -- Archiving a task (PATCH /api/tasks/:id/status → 'archived', and the
+        -- cascade in PUT /api/projects/:id) was returning 500 with a
+        -- "tasks_status_check" violation: the raw SQL file
+        -- 022_kanban_role_enhancements.sql re-created that CHECK constraint WITHOUT
+        -- 'archived' (and without 'done'), overriding the earlier inline
+        -- 001_add_archived_status. Re-establish the full status set the app uses.
+        --
+        -- The DROP runs first and OUTSIDE the guarded block so that even if the
+        -- re-ADD somehow fails on a legacy status value, the stale constraint is
+        -- gone and archiving is unblocked.
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_status_check;
+        DO $$ BEGIN
+          ALTER TABLE tasks ADD CONSTRAINT tasks_status_check
+            CHECK (status IN ('todo', 'in_progress', 'review', 'done', 'completed', 'blocked', 'on_hold', 'archived'));
+        EXCEPTION WHEN others THEN NULL;
+        END $$;
+      `
     }
   ];
 

@@ -84,6 +84,17 @@ router.get('/', authenticateToken, async (req: AuthRequest, res: Response) => {
       LEFT JOIN users u ON p.created_by = u.id
       LEFT JOIN project_members pm ON p.id = pm.project_id AND pm.user_id = $1
       WHERE om.user_id = $1 AND om.status = 'active'
+        AND (
+          om.role IN ('admin', 'adviser')
+          OR p.created_by = $1
+          OR EXISTS (SELECT 1 FROM project_members pm2 WHERE pm2.project_id = p.id AND pm2.user_id = $1)
+          OR EXISTS (
+            SELECT 1 FROM team_groups tg
+            JOIN team_group_members tgm ON tgm.team_group_id = tg.id
+            WHERE tg.project_id = p.id
+              AND (tgm.user_id = $1 OR LOWER(tgm.email) = LOWER((SELECT email FROM users WHERE id = $1)))
+          )
+        )
     `;
 
     const params: any[] = [userId];

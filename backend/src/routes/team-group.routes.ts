@@ -39,8 +39,8 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
 
         let result;
 
-        if (role === 'manager' || role === 'adviser') {
-            // manager/adviser: see ALL teams (same as admin — they oversee the full org)
+        if (role === 'adviser') {
+            // adviser: see ALL teams (they oversee the full org)
             result = await query(
                 `SELECT tg.*, p.name as project_name, p.status as project_status,
                   (SELECT COUNT(*) FROM team_group_members WHERE team_group_id = tg.id) as member_count,
@@ -56,8 +56,9 @@ router.get('/organizations/:orgId/team-groups', authenticateToken, async (req: A
            ORDER BY tg.team_number ASC`,
                 [orgId]
             );
-        } else if (role === 'member') {
-            // member: see only their own team (match by email OR user_id to handle campus vs Google email mismatch)
+        } else if (role === 'member' || role === 'manager') {
+            // member & manager (team leader): see only the team(s) they belong to / lead
+            // (match by email OR user_id to handle campus vs Google email mismatch)
             const userResult = await query('SELECT email FROM users WHERE id = $1', [userId]);
             const userEmail = userResult.rows[0]?.email;
 
