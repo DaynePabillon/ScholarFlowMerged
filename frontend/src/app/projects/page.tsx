@@ -763,7 +763,7 @@ export default function ProjectsPage() {
                     {/* Actions */}
                     <div className="mt-auto flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-700">
                       <a
-                        href="/tasks"
+                        href={`/tasks?project_id=${project.id}`}
                         className="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
                       >
                         <CheckSquare className="w-3.5 h-3.5" />

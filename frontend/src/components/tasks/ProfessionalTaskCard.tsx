@@ -136,7 +136,7 @@ const ProfessionalTaskCard = memo(({
                             className="p-2.5 bg-white/90 dark:bg-slate-900/80 hover:bg-emerald-500 rounded-xl shadow-xl transition-all border border-gray-200 dark:border-white/10 group/btn"
                             title="Archive"
                         >
-                            <Archive className="w-4 h-4 text-white group-hover/btn:scale-110 transition-transform" />
+                            <Archive className="w-4 h-4 text-emerald-500 group-hover/btn:text-white group-hover/btn:scale-110 transition-all" />
                         </button>
                     )}
                     {onDelete && (
@@ -145,7 +145,7 @@ const ProfessionalTaskCard = memo(({
                             className="p-2.5 bg-white/90 dark:bg-slate-900/80 hover:bg-rose-500 rounded-xl shadow-xl transition-all border border-gray-200 dark:border-white/10 group/btn"
                             title="Delete"
                         >
-                            <Trash2 className="w-4 h-4 text-white group-hover/btn:scale-110 transition-transform" />
+                            <Trash2 className="w-4 h-4 text-rose-500 group-hover/btn:text-white group-hover/btn:scale-110 transition-all" />
                         </button>
                     )}
                 </div>

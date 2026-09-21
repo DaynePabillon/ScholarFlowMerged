@@ -19,6 +19,16 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  webpack: (config) => {
+    // pdfjs-dist references an optional Node-only 'canvas' dependency used only for
+    // server-side rasterizing. We extract PDF *text* in the browser (Rev 5), so this
+    // must not be bundled — alias it off to avoid "Module not found: canvas".
+    config.resolve.alias = {
+      ...(config.resolve.alias || {}),
+      canvas: false,
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig

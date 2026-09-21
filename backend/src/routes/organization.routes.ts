@@ -397,15 +397,21 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
     const { team_id, status, exclude_status, project_id, limit, offset } = req.query;
     const userId = req.user!.id;
 
-    // Check if user is member
+    // Check if user is member and capture their org role for visibility scoping
     const memberCheck = await query(
-      'SELECT 1 FROM organization_members WHERE organization_id = $1 AND user_id = $2 AND status = $3',
+      'SELECT role FROM organization_members WHERE organization_id = $1 AND user_id = $2 AND status = $3',
       [id, userId, 'active']
     );
 
     if (memberCheck.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied' });
     }
+
+    const orgRole = memberCheck.rows[0].role as string;
+    // Email is needed to match sheet-task assignees and team-membership rows that
+    // key off email (campus vs. Google address) — mirrors the team-groups scoping.
+    const emailRow = await query('SELECT email FROM users WHERE id = $1', [userId]);
+    const userEmail: string | null = emailRow.rows[0]?.email || null;
 
     // Build filter conditions, applied identically to both UNION branches
     let teamFilter = '';
@@ -454,6 +460,43 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
       projectFilterSheet = `AND st.project_id = $${idx}`;
     }
 
+    // ── Role-based visibility (Rev 1 members / Rev 6 team leaders) ──────────────
+    // admin & adviser oversee the whole org (no extra filter). A manager (team
+    // leader) is scoped to the team(s)/project(s) they belong to or lead; a member
+    // sees only tasks assigned to them.
+    let visibilityFilter = '';
+    let visibilityFilterSheet = '';
+    if (orgRole === 'member' || orgRole === 'manager') {
+      queryParams.push(userId);
+      const meIdx = queryParams.length;
+      queryParams.push(userEmail);
+      const emailIdx = queryParams.length;
+
+      // Teams the user belongs to / leads (matched by user_id OR email).
+      const myTeams = `SELECT team_group_id FROM team_group_members
+                       WHERE user_id = $${meIdx}
+                          OR ($${emailIdx}::text IS NOT NULL AND LOWER(email) = LOWER($${emailIdx}))`;
+
+      if (orgRole === 'member') {
+        visibilityFilter = `AND (t.assigned_to = $${meIdx}
+           OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${meIdx}))`;
+        visibilityFilterSheet = `AND ($${emailIdx}::text IS NOT NULL AND LOWER(st.assignee_email) = LOWER($${emailIdx}))`;
+      } else {
+        // Projects the manager is tied to: created, a member of, or linked to their teams.
+        const myProjects = `SELECT id FROM projects WHERE created_by = $${meIdx}
+           UNION SELECT project_id FROM project_members WHERE user_id = $${meIdx}
+           UNION SELECT project_id FROM team_groups WHERE project_id IS NOT NULL AND id IN (${myTeams})`;
+        visibilityFilter = `AND (t.created_by = $${meIdx}
+           OR t.assigned_to = $${meIdx}
+           OR EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.user_id = $${meIdx})
+           OR t.team_id IN (${myTeams})
+           OR t.project_id IN (${myProjects}))`;
+        visibilityFilterSheet = `AND (($${emailIdx}::text IS NOT NULL AND LOWER(st.assignee_email) = LOWER($${emailIdx}))
+           OR COALESCE(st.team_id, ss.team_id) IN (${myTeams})
+           OR st.project_id IN (${myProjects}))`;
+      }
+    }
+
     let limitClause = '';
     const parsedLimit = limit ? parseInt(String(limit), 10) : NaN;
     const parsedOffset = offset ? parseInt(String(offset), 10) : NaN;
@@ -487,7 +530,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
        LEFT JOIN team_groups tg ON t.team_id = tg.id
        LEFT JOIN users u1 ON t.assigned_to = u1.id
        LEFT JOIN users u2 ON t.created_by = u2.id
-       WHERE p.organization_id = $1 ${teamFilter} ${statusFilter} ${excludeStatusFilter} ${projectFilter}
+       WHERE p.organization_id = $1 ${teamFilter} ${statusFilter} ${excludeStatusFilter} ${projectFilter} ${visibilityFilter}
 
        UNION ALL
        
@@ -525,7 +568,7 @@ router.get('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respon
        JOIN synced_sheets ss ON st.synced_sheet_id = ss.id
        JOIN workspaces w ON ss.workspace_id = w.id
        LEFT JOIN projects p ON st.project_id = p.id
-       WHERE w.organization_id = $1 ${teamFilterSheet} ${statusFilterSheet} ${excludeStatusFilterSheet} ${projectFilterSheet}
+       WHERE w.organization_id = $1 ${teamFilterSheet} ${statusFilterSheet} ${excludeStatusFilterSheet} ${projectFilterSheet} ${visibilityFilterSheet}
        ) combined
        ORDER BY created_at DESC
        ${limitClause}`,
@@ -612,15 +655,20 @@ router.get('/:id/synced-sheets', authenticateToken, async (req: AuthRequest, res
 router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { 
-      title, description, status, priority, due_date, 
-      assigned_to, start_date, is_absolute, complexity_weight, 
-      wbs_code, parent_task_id, team_id 
+    const {
+      title, description, status, priority, due_date,
+      assigned_to, start_date, is_absolute, complexity_weight,
+      wbs_code, parent_task_id, team_id, project_id
     } = req.body;
     const userId = req.user!.id;
 
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
+    }
+
+    // Project is required — a task must belong to a specific project.
+    if (!project_id) {
+      return res.status(400).json({ error: 'Project is required' });
     }
 
     // Check if user is member
@@ -633,24 +681,39 @@ router.post('/:id/tasks', authenticateToken, async (req: AuthRequest, res: Respo
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    // Get or create default project for organization
-    let projectResult = await query(
-      'SELECT id FROM projects WHERE organization_id = $1 AND name = $2',
-      [id, 'General Tasks']
-    );
+    const orgRole = memberCheck.rows[0].role as string;
 
-    let projectId;
-    if (projectResult.rows.length === 0) {
-      // Create default project
-      const newProject = await query(
-        `INSERT INTO projects (organization_id, name, description, status, created_by)
-         VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [id, 'General Tasks', 'Default project for organization tasks', 'active', userId]
-      );
-      projectId = newProject.rows[0].id;
-    } else {
-      projectId = projectResult.rows[0].id;
+    // The chosen project must exist in this organization.
+    const projectCheck = await query(
+      'SELECT id FROM projects WHERE id = $1 AND organization_id = $2',
+      [project_id, id]
+    );
+    if (projectCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Project not found in this organization' });
     }
+
+    // A manager (team leader) may only assign tasks to projects they are under:
+    // ones they created, are a member of, or that are linked to a team they're in.
+    if (orgRole === 'manager') {
+      const scopedCheck = await query(
+        `SELECT 1 FROM projects p WHERE p.id = $1 AND (
+           p.created_by = $2
+           OR EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = $2)
+           OR EXISTS (
+             SELECT 1 FROM team_groups tg
+             JOIN team_group_members tgm ON tgm.team_group_id = tg.id
+             WHERE tg.project_id = p.id
+               AND (tgm.user_id = $2 OR LOWER(tgm.email) = LOWER((SELECT email FROM users WHERE id = $2)))
+           )
+         )`,
+        [project_id, userId]
+      );
+      if (scopedCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'You can only assign tasks to projects you are part of.' });
+      }
+    }
+
+    const projectId = project_id;
 
     // Resolve parent: it may live in `tasks` OR `sheet_tasks` (WBS).
     // tasks.parent_task_id has FK → tasks(id), so if parent is a sheet_task

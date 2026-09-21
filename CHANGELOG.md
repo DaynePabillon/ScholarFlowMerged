@@ -5,6 +5,186 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-09-14 · Task Visibility by Role, Roster Rename, Archive/Recycle & File-to-Description
+
+Six stakeholder revisions tightening task visibility, sidebar clarity, the archive
+lifecycle, task reuse, and description input.
+
+### Rev 1 & 6 — Role-Based Task/Project Visibility (server-enforced)
+
+**Problem**
+Members received every task in the organization (the frontend only hid others'
+tasks client-side), and managers ("team leaders") saw the entire org. Personal
+assignments were not actually private.
+
+**Changed**
+- `backend/src/routes/organization.routes.ts` — `GET /:id/tasks` now scopes rows by
+  the caller's org role. **Members** see only tasks assigned to them (`assigned_to`,
+  `task_assignees`, or sheet `assignee_email`). **Managers** (team leaders) are scoped
+  to the team(s)/project(s) they belong to or lead (teams via `team_group_members`
+  matched by `user_id`/email; projects via `created_by`, `project_members`, or
+  `team_groups.project_id`). **Admin/adviser** keep full visibility. Applied to both
+  the `tasks` and `sheet_tasks` UNION branches.
+- `backend/src/routes/project.routes.ts` — `GET /` scopes the project list the same
+  way (admin/adviser see all; members/managers see created/member/team-linked projects).
+- `backend/src/routes/team-group.routes.ts` — `GET /organizations/:orgId/team-groups`
+  moves `manager` from the full-visibility branch into the scoped branch (own teams only).
+- `frontend/src/components/tasks/MemberTaskView.tsx` — relaxed the client filter so
+  secondary-assignee tasks are no longer hidden.
+
+**Result**
+A member sees only their own tasks everywhere (board, dashboard, table). A team
+leader sees only their team's work. This also scopes the dashboard and boards for
+those roles. A manager with no assigned team/project sees nothing until assigned one.
+
+---
+
+### Rev 2 — Rename Sidebar "Team" → "Roster"
+
+**Problem**
+The `/team` sidebar link was labelled "Team", colliding with the org switcher's
+"Your Teams".
+
+**Changed**
+- `frontend/src/components/layout/AppLayout.tsx` — desktop and mobile nav label
+  changed to "Roster" (route unchanged at `/team`).
+
+---
+
+### Rev 3 — Archive Done Tasks from the Board
+
+**Problem**
+The Archived section + restore existed, but the board's task cards never received
+the archive handler, so there was no way to archive a Done card from the board.
+
+**Changed**
+- `frontend/src/components/tasks/ProfessionalKanban.tsx` — forwards `onArchiveTask`
+  and `onDeleteTask` to `ProfessionalTaskCard` (card already supported them), so
+  admins/managers get the hover Archive button. Members pass no handler (correct).
+
+---
+
+### Rev 4 — Recycle Completed/Archived Tasks into a New Project for a New Team
+
+**Problem**
+No way to reuse finished tasks as a template for a fresh project/team.
+
+**Changed**
+- `backend/src/routes/task.routes.ts` — new `POST /api/tasks/recycle` (admin/manager).
+  In one transaction it resolves-or-creates the target project, resolves-or-creates the
+  target team (and links it to the project via `team_groups.project_id`), then clones the
+  selected tasks as fresh `todo` items — copying title/description/priority/weights,
+  regenerating `wbs_code`, and clearing assignees, dates, progress and `is_absolute`.
+- `frontend/src/components/tasks/RecycleTasksModal.tsx` — new modal to pick/create the
+  project and team and submit.
+- `frontend/src/components/tasks/{Manager,Admin}TaskView.tsx` — multi-select checkboxes
+  and a "Recycle to new project" button in the Archived section.
+
+---
+
+### Rev 5 — Large Description + File-to-Text Auto-Fill
+
+**Problem**
+The description was a small 3-row textarea with no way to import content from a file.
+(The `tasks.description` column was already `TEXT`, so capacity was never the limit.)
+
+**Changed**
+- `frontend/src/components/tasks/DescriptionEditor.tsx` — new reusable field: larger
+  resizable textarea with a character count and a "Fill from file" control that extracts
+  text in-browser from `.txt/.md/.csv` (FileReader), `.docx` (mammoth) and `.pdf`
+  (pdfjs-dist); extracted text is appended and stays editable. No upload/storage.
+- `frontend/src/components/tasks/{Manager,Admin}TaskView.tsx` — create/edit modals use
+  `DescriptionEditor`.
+- `frontend/package.json` — added `mammoth` and `pdfjs-dist@3.11.174`.
+- `frontend/next.config.js` — added `webpack: resolve.alias.canvas = false` so pdfjs's
+  optional Node `canvas` dependency isn't bundled for the browser.
+
+**Result**
+Task descriptions handle large content and can be populated from an uploaded document
+without manual copy-paste.
+
+---
+
+### Follow-up — "View Tasks" Deep-Links to the Project's Tasks
+
+**Problem**
+The Projects page "View Tasks" link went to a generic `/tasks`, ignoring which
+project was clicked.
+
+**Changed**
+- `frontend/src/app/projects/page.tsx` — the link is now `/tasks?project_id=<id>`.
+- `frontend/src/app/tasks/page.tsx` — reads `project_id` from the URL and passes it as
+  `initialProjectId` to the task views.
+- `frontend/src/components/tasks/{Admin,Manager}TaskView.tsx` — seed `selectedProjectId`
+  from `initialProjectId`, so the board/table/archive load pre-filtered to that project.
+- `frontend/src/components/tasks/MemberTaskView.tsx` — filters the member's tasks to the
+  project when the param is present.
+
+**Result**
+Clicking "View Tasks" on a project opens the Tasks page already filtered to that
+project's tasks.
+
+---
+
+### Fix — Archiving a Task 500'd (`tasks_status_check` constraint)
+
+**Problem**
+Clicking Archive (`PATCH /api/tasks/:id/status` with `archived`, and the project
+completion cascade) returned 500. The raw SQL file `022_kanban_role_enhancements.sql`
+had re-created the `tasks_status_check` CHECK constraint **without** `'archived'`,
+overriding the earlier inline `001_add_archived_status`. Every other status still
+worked (they were all in 022's list), so only archiving failed.
+
+**Changed**
+- `backend/src/services/migration.service.ts` — new inline migration
+  `058_fix_tasks_status_check_include_archived` drops and re-adds the constraint with
+  the full status set (`todo, in_progress, review, done, completed, blocked, on_hold,
+  archived`). The DROP runs outside the guarded block so archiving is unblocked even if
+  the re-ADD ever fails on legacy data. Applies automatically on backend startup.
+
+**Result**
+Archiving works from the board and the archived section (requires a backend restart so
+the migration runs).
+
+---
+
+### Fix — Editing an Archived Task Appeared to Do Nothing
+
+**Problem**
+Editing a task from the Archived section saved to the DB, but the archive grid never
+refreshed (`handleUpdateTask` only called `fetchTasks()`, which excludes archived), so
+the change looked like it didn't apply.
+
+**Changed**
+- `frontend/src/components/tasks/{Manager,Admin}TaskView.tsx` — after a successful edit,
+  also `fetchArchivedTasks(0, false)` when the archive section is open.
+
+---
+
+### Change — Project Is Required (and Actually Used) When Creating a Task
+
+**Problem**
+The task-create form's Project field was optional **and ignored** — the endpoint always
+filed new tasks under a "General Tasks" default project, regardless of the selection.
+
+**Changed**
+- `backend/src/routes/organization.routes.ts` — `POST /:id/tasks` now reads `project_id`,
+  **requires** it (400 if missing), verifies it belongs to the org, and inserts the task
+  into that project (the "General Tasks" auto-create fallback is removed). A **manager**
+  may only create tasks in projects they're under (created / member / team-linked),
+  else 403.
+- `frontend/src/components/tasks/{Manager,Admin}TaskView.tsx` — Project field labelled
+  required (`*`), placeholder "Select a project…", Create button disabled until a project
+  is chosen, and a guard in `handleCreateTask`. The dropdown is already limited to the
+  caller's own projects for managers (via the role-scoped `GET /api/projects`).
+
+**Result**
+Every new task lands in the project you pick, project is mandatory, and a team leader can
+only assign to their own projects. (Multi-project assignment was considered but declined
+in favor of keeping one task = one project.)
+
+---
+
 ## [Unreleased] — 2026-06-22 · Kanban Performance, Overdue Handling & Course-Integrated Project Management
 
 ### Task 1 — Kanban Performance: Backend Task Filtering & Pagination

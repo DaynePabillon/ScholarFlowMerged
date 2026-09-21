@@ -27,9 +27,10 @@ interface MemberTaskViewProps {
     name: string
     role: string
   }
+  initialProjectId?: string | null
 }
 
-export default function MemberTaskView({ user, organization }: MemberTaskViewProps) {
+export default function MemberTaskView({ user, organization, initialProjectId = null }: MemberTaskViewProps) {
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -50,9 +51,14 @@ export default function MemberTaskView({ user, organization }: MemberTaskViewPro
       })
       if (response.ok) {
         const data = await response.json()
-        // Filter to only tasks assigned to this user (by ID or by email for synced tasks)
-        const myTasks = (data.tasks || []).filter((t: any) => 
-          t.assigned_to === user.id || 
+        // The server now scopes members to their own tasks (Rev 1). This client
+        // filter is a light safety net that also keeps tasks where the member is a
+        // secondary assignee (junction table) or a synced-sheet assignee by email.
+        const myEmail = (user.email || '').toLowerCase()
+        const myTasks = (data.tasks || []).filter((t: any) =>
+          t.assigned_to === user.id ||
+          (Array.isArray(t.assignees) && t.assignees.some((a: any) => a.user_id === user.id)) ||
+          (myEmail && typeof t.assigned_to_email === 'string' && t.assigned_to_email.toLowerCase() === myEmail) ||
           (t.synced && t.assigned_to_name === user.email)
         )
         setTasks(myTasks)
@@ -100,6 +106,7 @@ export default function MemberTaskView({ user, organization }: MemberTaskViewPro
 
   const filteredTasks = tasks.filter(task =>
     task.status !== 'archived' &&
+    (!initialProjectId || task.project_id === initialProjectId) &&
     task.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 

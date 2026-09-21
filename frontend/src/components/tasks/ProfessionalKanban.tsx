@@ -198,6 +198,8 @@ export default function ProfessionalKanban({
                                                         <ProfessionalTaskCard
                                                             task={task}
                                                             onClick={() => onTaskClick?.(task)}
+                                                            onArchive={onArchiveTask}
+                                                            onDelete={onDeleteTask}
                                                             onDependency={onDependency ? () => onDependency(task) : undefined}
                                                             role={role}
                                                         />

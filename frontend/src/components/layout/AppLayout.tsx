@@ -276,7 +276,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                     <Layers className="w-4 h-4" /><span className="text-sm font-medium">Projects</span>
                   </a>
                   <a href="/team" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
-                    <Users className="w-4 h-4" /><span className="text-sm font-medium">Team</span>
+                    <Users className="w-4 h-4" /><span className="text-sm font-medium">Roster</span>
                   </a>
                   <a href="/gantt" className="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-xl transition-all ml-2">
                     <BarChart3 className="w-4 h-4" /><span className="text-sm font-medium">Timeline</span>
@@ -447,7 +447,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                   </a>
                   <a href="/team" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <Users className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
-                    <span>Team</span>
+                    <span>Roster</span>
                   </a>
                   <a href="/gantt" className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-gradient-to-r hover:from-blue-500 hover:to-cyan-500 hover:text-white transition-all duration-300 group shadow-sm hover:shadow-md" style={{ color: 'var(--color-text)' }}>
                     <BarChart3 className="w-4 h-4 group-hover:text-white transition-colors" style={{ color: 'var(--color-text)' }} />
