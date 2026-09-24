@@ -2,7 +2,7 @@
 
 import { API_URL } from '@/lib/api/client'
 import { useState, useEffect } from "react"
-import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock, FolderKanban } from "lucide-react"
+import { Users, UserPlus, Search, Mail, Shield, MoreVertical, Crown, Briefcase, User, Settings, X, Copy, Check, Clock, FolderKanban, Link2, RefreshCw, Trash2 } from "lucide-react"
 import RoleManagement from "./RoleManagement"
 import ProjectTeamsSection from "./ProjectTeamsSection"
 
@@ -39,9 +39,16 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
   const [copied, setCopied] = useState(false)
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'members' | 'project-teams'>('members')
+  const [joinCodes, setJoinCodes] = useState<any[]>([])
+  const [generatingRole, setGeneratingRole] = useState<string | null>(null)
+  const [copiedCode, setCopiedCode] = useState<string | null>(null)
+  const [joinProjectId, setJoinProjectId] = useState<string>('')
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([])
 
   useEffect(() => {
     fetchMembers()
+    fetchJoinCodes()
+    fetchProjects()
   }, [organization.id])
 
   const fetchMembers = async () => {
@@ -67,6 +74,71 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
       setMembers([])
       setIsLoading(false)
     }
+  }
+
+  const fetchProjects = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL}/api/projects?organization_id=${organization.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setProjects(data.projects || data || [])
+      }
+    } catch (_) {}
+  }
+
+  const fetchJoinCodes = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL}/api/join-codes/${organization.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setJoinCodes(data.codes || [])
+      }
+    } catch (_) {}
+  }
+
+  const generateJoinCode = async (role: 'manager' | 'member') => {
+    setGeneratingRole(role)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_URL}/api/join-codes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          organization_id: organization.id,
+          role,
+          label: `${role} link`,
+          project_id: joinProjectId || undefined
+        })
+      })
+      if (res.ok) {
+        await fetchJoinCodes()
+      }
+    } catch (_) {}
+    setGeneratingRole(null)
+  }
+
+  const revokeJoinCode = async (codeId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`${API_URL}/api/join-codes/${codeId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      await fetchJoinCodes()
+    } catch (_) {}
+  }
+
+  const copyJoinLink = (code: string) => {
+    const url = `${window.location.origin}/join?code=${code}`
+    navigator.clipboard.writeText(url)
+    setCopiedCode(code)
+    setTimeout(() => setCopiedCode(null), 2000)
   }
 
   const handleRoleChange = async (memberId: string, newRole: string) => {
@@ -241,7 +313,7 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Team Members</h1>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Roster</h1>
             <p className="text-gray-600 dark:text-gray-300 mt-1">Manage members in {organization.name}</p>
           </div>
           <button
@@ -281,6 +353,100 @@ export default function AdminTeamView({ user, organization }: AdminTeamViewProps
       </div>
 
       {activeTab === 'members' && (<>
+        {/* Join Links — reusable role-based invite codes for testing / onboarding */}
+        <div className="mb-6 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border border-gray-200 dark:border-slate-700 rounded-2xl p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Link2 className="w-5 h-5 text-blue-500" />
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Join Links</h3>
+            <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">Anyone with the link joins this org with the assigned role</span>
+          </div>
+
+          {/* Project selector — links new members to a project automatically */}
+          {projects.length > 0 && (
+            <div className="mb-4">
+              <label className="text-xs font-medium text-gray-600 dark:text-gray-400 block mb-1">
+                Auto-add to project (optional)
+              </label>
+              <select
+                value={joinProjectId}
+                onChange={e => {
+                  setJoinProjectId(e.target.value)
+                  setJoinCodes([]) // reset codes so user re-generates with new project
+                  fetchJoinCodes()
+                }}
+                className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700 dark:text-gray-200"
+              >
+                <option value="">No project</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              {joinProjectId && (
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  Members who join will be added to this project automatically.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(['manager', 'member'] as const).map(role => {
+              const existing = joinCodes.find(c => c.role === role)
+              const joinUrl = existing ? `${window.location.origin}/join?code=${existing.code}` : null
+              return (
+                <div key={role} className="border border-gray-200 dark:border-slate-600 rounded-xl p-4 bg-gray-50/50 dark:bg-slate-700/40">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {role === 'manager' ? <Briefcase className="w-4 h-4 text-blue-500" /> : <User className="w-4 h-4 text-green-500" />}
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200 capitalize">{role} Link</span>
+                    </div>
+                    {existing && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500">{existing.use_count} use{existing.use_count !== 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                  {existing?.project_name && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mb-2">
+                      → {existing.project_name}
+                    </p>
+                  )}
+                  {joinUrl ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={joinUrl}
+                        className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg px-3 py-2 text-gray-600 dark:text-gray-300 truncate"
+                      />
+                      <button
+                        onClick={() => copyJoinLink(existing.code)}
+                        className="flex-shrink-0 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                        title="Copy link"
+                      >
+                        {copiedCode === existing.code ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-blue-500" />}
+                      </button>
+                      <button
+                        onClick={() => revokeJoinCode(existing.id)}
+                        className="flex-shrink-0 p-2 rounded-lg bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                        title="Revoke link"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => generateJoinCode(role)}
+                      disabled={generatingRole === role}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-lg hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all"
+                    >
+                      {generatingRole === role ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                      Generate {role} link
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Search and Filter */}
         <div className="mb-8 flex gap-4">
           <div className="flex-1 relative">

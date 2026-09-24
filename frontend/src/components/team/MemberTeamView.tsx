@@ -93,7 +93,7 @@ export default function MemberTeamView({ user, organization }: MemberTeamViewPro
       {/* Header */}
       <div className="mb-8">
         <div className="mb-4">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Team Members</h1>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">Roster</h1>
           <p className="text-gray-600 dark:text-gray-300 mt-1">View team in {organization.name}</p>
         </div>
 

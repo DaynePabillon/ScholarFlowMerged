@@ -38,6 +38,10 @@ export default function OrganizationGateway({
     const router = useRouter()
     const [isLoading, setIsLoading] = useState(false)
     const [acceptingInvite, setAcceptingInvite] = useState<string | null>(null)
+    const [showCreateForm, setShowCreateForm] = useState(false)
+    const [newOrgName, setNewOrgName] = useState('')
+    const [creating, setCreating] = useState(false)
+    const [createError, setCreateError] = useState('')
 
     // Auto-select if only one organization
     useEffect(() => {
@@ -76,10 +80,41 @@ export default function OrganizationGateway({
         }
     }
 
-    const handleCreateOrg = () => {
-        if (onCreateOrg) {
-            onCreateOrg()
+    const handleCreateOrg = async () => {
+        if (!newOrgName.trim()) {
+            setCreateError('Please enter an organization name.')
+            return
         }
+        setCreating(true)
+        setCreateError('')
+        try {
+            const token = localStorage.getItem('token')
+            const res = await fetch(`${API_URL}/api/organizations`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ name: newOrgName.trim() })
+            })
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                setCreateError(err.error || 'Failed to create organization.')
+                setCreating(false)
+                return
+            }
+            const data = await res.json()
+            const newOrg = { id: data.id, name: data.name, role: 'admin' as const }
+            // Update localStorage
+            const stored = JSON.parse(localStorage.getItem('organizations') || '[]')
+            stored.push(newOrg)
+            localStorage.setItem('organizations', JSON.stringify(stored))
+            localStorage.setItem('selectedOrganization', JSON.stringify(newOrg))
+            onSelectOrg(newOrg)
+            if (onCreateOrg) onCreateOrg()
+            // Go straight to team page so join links are ready to generate
+            router.push('/team')
+        } catch (_) {
+            setCreateError('Something went wrong. Please try again.')
+        }
+        setCreating(false)
     }
 
     // If we have exactly one org, show loading while auto-selecting
@@ -182,15 +217,51 @@ export default function OrganizationGateway({
 
                 {/* Empty State / Create New */}
                 <div className="space-y-3">
-                    {user?.scholarsyncRole !== 'Student' && (
+                    {user?.scholarsyncRole !== 'Student' && !showCreateForm && (
                         <button
-                            onClick={handleCreateOrg}
+                            onClick={() => setShowCreateForm(true)}
                             className="w-full p-4 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl flex items-center justify-center gap-2 hover:from-blue-600 hover:to-cyan-600 transition-all shadow-lg hover:shadow-xl font-medium"
                         >
                             <Plus className="w-5 h-5" />
                             Create New Organization
                         </button>
                     )}
+
+                    {showCreateForm && (
+                        <div className="bg-white rounded-2xl shadow-xl p-5 space-y-3">
+                            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                                <Plus className="w-4 h-4 text-blue-500" />
+                                New Organization
+                            </h3>
+                            <input
+                                type="text"
+                                placeholder="e.g. MVP Testing Group"
+                                value={newOrgName}
+                                onChange={e => { setNewOrgName(e.target.value); setCreateError('') }}
+                                onKeyDown={e => e.key === 'Enter' && handleCreateOrg()}
+                                autoFocus
+                                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-800"
+                            />
+                            {createError && <p className="text-sm text-red-500">{createError}</p>}
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleCreateOrg}
+                                    disabled={creating}
+                                    className="flex-1 py-2.5 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-medium hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                                >
+                                    {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                    {creating ? 'Creating...' : 'Create & Go to Team'}
+                                </button>
+                                <button
+                                    onClick={() => { setShowCreateForm(false); setNewOrgName(''); setCreateError('') }}
+                                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
 
                     {organizations.length === 0 && (
                         <div className="text-center text-gray-500 text-sm bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-3">

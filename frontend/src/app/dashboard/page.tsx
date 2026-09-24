@@ -450,7 +450,7 @@ export default function Home() {
         {/* ═══════════ QUICK ACTIONS ═══════════ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
           <QuickAction href="/boards" icon={<FolderKanban className="w-4 h-4" />} label="Project Boards" color="blue" />
-          <QuickAction href="/team" icon={<Users className="w-4 h-4" />} label="Team Members" color="cyan" />
+          <QuickAction href="/team" icon={<Users className="w-4 h-4" />} label="Roster" color="cyan" />
           <QuickAction href="/gantt" icon={<Calendar className="w-4 h-4" />} label="Timeline" color="cyan" />
           <QuickAction href="/reports" icon={<FileText className="w-4 h-4" />} label="Reports" color="orange" />
           <QuickAction href="/integrations" icon={<Plug className="w-4 h-4" />} label="Integrations" color="violet" />
