@@ -169,7 +169,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
                   {isOrgDropdownOpen && (
                     <div className="absolute top-full mt-2 right-0 w-64 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/40 dark:border-slate-700 py-2 z-[9999]">
                       <div className="px-3 py-2 border-b border-gray-200 dark:border-slate-700">
-                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Your Teams</p>
+                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Your Organizations</p>
                       </div>
                       {organizations
                         .filter(org => org.id !== selectedOrg?.id)
@@ -229,7 +229,7 @@ export default function AppLayout({ user, organizations = [], selectedOrg = null
 
             {/* Organizations in Mobile Menu */}
             <div className="mb-8">
-              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">Your Teams</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3 px-2">Your Organizations</p>
               <div className="space-y-1">
                 {organizations
                   .filter(org => org.id !== selectedOrg?.id)

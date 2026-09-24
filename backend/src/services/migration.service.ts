@@ -1565,6 +1565,32 @@ async function runMigrations(): Promise<void> {
         EXCEPTION WHEN others THEN NULL;
         END $$;
       `
+    },
+    {
+      name: '059_org_join_codes',
+      sql: `
+        CREATE TABLE IF NOT EXISTS org_join_codes (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+          code VARCHAR(16) UNIQUE NOT NULL,
+          role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'manager', 'member', 'adviser')),
+          label VARCHAR(100),
+          max_uses INTEGER DEFAULT NULL,
+          use_count INTEGER NOT NULL DEFAULT 0,
+          created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+          expires_at TIMESTAMP DEFAULT NULL,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_org_join_codes_code ON org_join_codes(code);
+        CREATE INDEX IF NOT EXISTS idx_org_join_codes_org ON org_join_codes(organization_id);
+      `
+    },
+    {
+      name: '060_org_join_codes_project_id',
+      sql: `
+        ALTER TABLE org_join_codes ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+      `
     }
   ];
 

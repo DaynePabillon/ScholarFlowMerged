@@ -113,7 +113,45 @@ function AuthCallbackContent() {
             return
           }
 
-          // 4. For normal logins: auto-select first org if none is already selected
+          // 4. Handle pending join code — stored when unauthenticated user hit /join
+          const pendingJoinCode = localStorage.getItem('pendingJoinCode')
+          if (pendingJoinCode) {
+            localStorage.removeItem('pendingJoinCode')
+            setMessage('Joining your organization...')
+            try {
+              const joinRes = await fetch(`${API_URL}/api/join-codes/redeem`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code: pendingJoinCode })
+              })
+              if (joinRes.ok) {
+                const joinData = await joinRes.json()
+                const meRes2 = await fetch(`${API_URL}/api/auth/me`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+                if (meRes2.ok) {
+                  const freshData = await meRes2.json()
+                  const { organizations: freshOrgs, onboarding_data: freshOD, ...freshUser } = freshData
+                  localStorage.setItem('user', JSON.stringify({ ...freshUser, onboarding_data: freshOD }))
+                  localStorage.setItem('organizations', JSON.stringify(freshOrgs || []))
+                  const joined = (freshOrgs || []).find((o: any) => o.id === joinData.organization?.id)
+                  if (joined) localStorage.setItem('selectedOrganization', JSON.stringify(joined))
+                  else if (freshOrgs?.length > 0) localStorage.setItem('selectedOrganization', JSON.stringify(freshOrgs[freshOrgs.length - 1]))
+                }
+              }
+            } catch (_) {
+              // Best-effort
+            }
+            setStatus('success')
+            setMessage('Welcome to ScholarFlow!')
+            router.push('/dashboard')
+            return
+          }
+
+          // 5. For normal logins: auto-select first org if none is already selected
           if (organizations?.length > 0 && !localStorage.getItem('selectedOrganization')) {
             localStorage.setItem('selectedOrganization', JSON.stringify(organizations[0]))
           }

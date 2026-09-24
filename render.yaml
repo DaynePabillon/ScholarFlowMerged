@@ -30,6 +30,12 @@ services:
         sync: false
       - key: BACKEND_URL
         value: https://api.wildcatinnovationlabs.com
+      - key: MS365_CLIENT_ID
+        sync: false
+      - key: MS365_CLIENT_SECRET
+        sync: false
+      - key: MS365_TENANT_ID
+        value: common # Change to your Azure tenant ID if using a single-tenant app registration
 
   # 2. Frontend Service
   - type: web

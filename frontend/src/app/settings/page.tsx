@@ -197,15 +197,15 @@ export default function SettingsPage() {
                 <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden mt-6">
                     <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                         <div>
-                            <h2 className="text-lg font-semibold text-gray-900">Workspaces</h2>
-                            <p className="text-sm text-gray-500 mt-1">Manage your workspaces</p>
+                            <h2 className="text-lg font-semibold text-gray-900">Organizations</h2>
+                            <p className="text-sm text-gray-500 mt-1">Manage your organizations</p>
                         </div>
                         <button
                             onClick={() => setIsCreateModalOpen(true)}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                         >
                             <Plus className="w-4 h-4" />
-                            New Workspace
+                            New Organization
                         </button>
                     </div>
                     <div className="divide-y divide-gray-100">
@@ -231,7 +231,7 @@ export default function SettingsPage() {
                                     <button
                                         onClick={() => setLeaveConfirmOrg(org)}
                                         className="p-2 text-gray-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                                        title="Leave Workspace"
+                                        title="Leave Organization"
                                     >
                                         <LogOut className="w-4 h-4" />
                                     </button>
@@ -239,7 +239,7 @@ export default function SettingsPage() {
                                         <button
                                             onClick={() => setDeleteConfirmOrg(org)}
                                             className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                            title="Delete Workspace"
+                                            title="Delete Organization"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -250,7 +250,7 @@ export default function SettingsPage() {
                         {organizations.length === 0 && (
                             <div className="p-8 text-center text-gray-500">
                                 <Building2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                                <p>No workspaces yet. Create one to get started!</p>
+                                <p>No organizations yet. Create one to get started!</p>
                             </div>
                         )}
                     </div>
@@ -261,7 +261,7 @@ export default function SettingsPage() {
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
                         <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-gray-900">Create New Workspace</h3>
+                                <h3 className="text-lg font-semibold text-gray-900">Create New Organization</h3>
                                 <button onClick={() => setIsCreateModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                                     <X className="w-5 h-5" />
                                 </button>
@@ -270,7 +270,7 @@ export default function SettingsPage() {
                                 type="text"
                                 value={newWorkspaceName}
                                 onChange={(e) => setNewWorkspaceName(e.target.value)}
-                                placeholder="Workspace name"
+                                placeholder="Organization name"
                                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400 mb-4"
                                 autoFocus
                             />
@@ -301,10 +301,10 @@ export default function SettingsPage() {
                                 <div className="p-2 bg-orange-100 rounded-full">
                                     <AlertTriangle className="w-6 h-6 text-orange-500" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Leave Workspace?</h3>
+                                <h3 className="text-lg font-semibold text-gray-900">Leave Organization?</h3>
                             </div>
                             <p className="text-gray-600 mb-4">
-                                Are you sure you want to leave <strong>{leaveConfirmOrg.name}</strong>? You will lose access to all projects and tasks in this workspace.
+                                Are you sure you want to leave <strong>{leaveConfirmOrg.name}</strong>? You will lose access to all projects and tasks in this organization.
                             </p>
                             <div className="flex gap-3">
                                 <button
@@ -317,7 +317,7 @@ export default function SettingsPage() {
                                     onClick={() => handleLeaveWorkspace(leaveConfirmOrg)}
                                     className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600"
                                 >
-                                    Leave Workspace
+                                    Leave Organization
                                 </button>
                             </div>
                         </div>
@@ -332,7 +332,7 @@ export default function SettingsPage() {
                                 <div className="p-2 bg-red-100 rounded-full">
                                     <Trash2 className="w-6 h-6 text-red-500" />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900">Delete Workspace?</h3>
+                                <h3 className="text-lg font-semibold text-gray-900">Delete Organization?</h3>
                             </div>
                             <p className="text-gray-600 mb-4">
                                 Are you sure you want to permanently delete <strong>{deleteConfirmOrg.name}</strong>? This action cannot be undone and will delete all projects, tasks, and member associations.
@@ -348,7 +348,7 @@ export default function SettingsPage() {
                                     onClick={() => handleDeleteWorkspace(deleteConfirmOrg)}
                                     className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
                                 >
-                                    Delete Workspace
+                                    Delete Organization
                                 </button>
                             </div>
                         </div>
